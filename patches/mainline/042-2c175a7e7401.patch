@@ -1,0 +1,2921 @@
+From 2c175a7e7401fb1a05d047e493cd2ae098dc1513 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 23 Oct 2026 12:03:54 +0000
+Subject: [PATCH] feat: localize mod settings and prompts into Chinese
+
+---
+ docs/chinese-mod-settings-2026-10-23.md       |  35 +
+ localization/zh-Hans.json                     | 678 ++++++++++++++++++
+ scripts/generate-localization.py              |  30 +
+ scripts/test-localization.py                  |  48 ++
+ scripts/test-lyrics-identity.py               |   1 +
+ tweak/Sources/App/About/AboutSettings.m       |   6 +-
+ tweak/Sources/App/About/AppIcon.m             |   4 +-
+ tweak/Sources/App/About/Backup.m              |   8 +-
+ tweak/Sources/App/About/Certificate.m         |   2 +-
+ tweak/Sources/App/About/Compatibility.m       |  16 +-
+ tweak/Sources/App/About/Signing.m             |  12 +-
+ tweak/Sources/App/About/Update.m              |   2 +-
+ tweak/Sources/App/About/UpdateNotice.m        |  12 +-
+ tweak/Sources/App/About/UpdatePage.m          |  10 +-
+ tweak/Sources/App/ModSettings.x               |   2 +-
+ tweak/Sources/App/Onboarding/Tour.m           |  10 +-
+ tweak/Sources/App/Pages.m                     |   8 +-
+ .../Sources/App/Performance/PerformancePage.m |   4 +-
+ tweak/Sources/App/Sheet/SGCardSheet.m         |   5 +-
+ tweak/Sources/Core/SGChinese.inc              | 677 +++++++++++++++++
+ tweak/Sources/Core/SGCore.h                   |   3 +
+ tweak/Sources/Core/SGLocalization.h           |   4 +
+ tweak/Sources/Core/SGLocalization.m           |  18 +
+ tweak/Sources/Core/SGLocalizationUI.h         |  10 +
+ tweak/Sources/Core/SGLocalizationUI.m         |  14 +
+ .../Native/Appearance/AppearanceSettings.m    |   8 +-
+ tweak/Sources/Native/Navbar/NavbarSettings.m  |  28 +-
+ .../Redesigned/Kit/SGRAppearanceSettings.m    |   8 +-
+ .../Sources/Redesigned/Lyrics/SingSettings.m  |  44 +-
+ .../Redesigned/Navbar/NavbarSettings.m        |  28 +-
+ tweak/Sources/Settings/SGGlowSwitch.m         |   3 +-
+ tweak/Sources/Settings/SGModPage.m            |  36 +-
+ tweak/Sources/Settings/SGOrderPage.m          |   2 +-
+ tweak/Sources/Settings/SGPage.m               |   2 +
+ tweak/Sources/Settings/SGPageStyle.h          |   2 +
+ tweak/Sources/Settings/SGPageStyle.m          |  14 +-
+ .../Shared/ArtistBlock/ArtistBlockSettings.m  |  14 +-
+ .../AudioEffects/AudioEffectsLibraryPage.m    |  12 +-
+ .../Shared/AudioEffects/AudioEffectsPage.m    |  18 +-
+ tweak/Sources/Shared/Flags/FlagsPage.m        |  22 +-
+ .../Shared/Gestures/GesturesSettings.m        |  10 +-
+ .../LockScreenArtworkSettings.m               |   6 +-
+ .../Shared/LyricsSources/LyricsDiagnostics.m  |   4 +-
+ 43 files changed, 1705 insertions(+), 175 deletions(-)
+ create mode 100644 docs/chinese-mod-settings-2026-10-23.md
+ create mode 100644 localization/zh-Hans.json
+ create mode 100644 scripts/generate-localization.py
+ create mode 100644 scripts/test-localization.py
+ create mode 100644 tweak/Sources/Core/SGChinese.inc
+ create mode 100644 tweak/Sources/Core/SGLocalization.h
+ create mode 100644 tweak/Sources/Core/SGLocalization.m
+ create mode 100644 tweak/Sources/Core/SGLocalizationUI.h
+ create mode 100644 tweak/Sources/Core/SGLocalizationUI.m
+
+diff --git a/docs/chinese-mod-settings-2026-10-23.md b/docs/chinese-mod-settings-2026-10-23.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..8e3ff6f235878a2a21e6c7db52affef5a939846b
+--- /dev/null
++++ b/docs/chinese-mod-settings-2026-10-23.md
+@@ -0,0 +1,35 @@
++# Chinese Mod Settings
++
++Based on the tested lyric timeline fix `0d93ca0`. In a Chinese preferred-language
++environment (`zh`, including `zh-Hans` and `zh-Hant`), mod-owned settings text now
++uses a Simplified Chinese catalogue. Other languages retain the original English.
++The language follows iOS's app language preference and is read at presentation;
++there is no new preference key or migration.
++
++The compiled catalogue includes the main settings entry, page titles, grouped
++headers/footers, options, dynamic status labels, alerts and actions, restart/reset
++prompts, lyrics/source/translation/meaning controls, player/background settings,
++navbar editing, audio effects, privacy/labs/flags, updates/backup and diagnostics.
++Formatting templates are translated before interpolation, preserving parameter
++ordering and types. Footer measurement uses the translated text. Artist names,
++custom navbar titles and imported file names use an explicit raw presentation
++path. Preference keys, flag identifiers, URIs, keys and saved values are unchanged.
++Legal license texts and external release notes retain their original wording.
++
++`localization/zh-Hans.json` is the editable source. Run
++`python3 scripts/generate-localization.py` after edits. The generated
++`Core/SGChinese.inc` is compiled into the tweak, so packaging requires no extra
++resource bundle. Only mod-owned settings use the localized alert factories;
++Spotify's UIKit classes are not swizzled.
++
++`python3 scripts/test-localization.py` checks catalogue consistency and format
++arguments, and on macOS compiles the production Foundation lookup to verify
++Chinese language selection, fallback, nil/unknown text, identifiers and dynamic
++formatting. It is called by the existing identity-regression workflow entry.
++Layer checks and the existing lyric/layout regression also remain in place.
++
++Device acceptance: install the resulting IPA using the normal signer, restart,
++and open Mod Settings with Spotify/iOS configured for Chinese. Check the main
++page, Lyrics > Sources, Player > Background, Audio effects, reset/restart prompts,
++and long descriptions. Switch the app language to English and restart to verify
++the original English fallback. Existing options should retain their saved state.
+diff --git a/localization/zh-Hans.json b/localization/zh-Hans.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..a7622bd6761d9606f9e181074392024bddaa15b0
+--- /dev/null
++++ b/localization/zh-Hans.json
+@@ -0,0 +1,678 @@
++{
++  "Mod Settings": "模组设置",
++  "Mod": "关于模组",
++  "Appearance": "外观",
++  "Redesigned UI": "重新设计界面",
++  "Redesigned": "重新设计",
++  "Legacy": "经典界面",
++  "Navbar": "导航栏",
++  "Player": "播放器",
++  "Lyrics": "歌词",
++  "Audio effects": "音效",
++  "Live Activity": "实时活动",
++  "Albums": "专辑",
++  "Album": "专辑",
++  "Artist": "艺人",
++  "Artists": "艺人",
++  "Home & Library": "首页与音乐库",
++  "Karaoke": "卡拉 OK",
++  "Privacy & clutter": "隐私与界面精简",
++  "Labs": "实验功能",
++  "All flags": "全部功能开关",
++  "Performance diagnostics": "性能诊断",
++  "Join the Discord": "加入 Discord 社区",
++  "Release pings, help and previews": "版本通知、帮助与功能预览",
++  "Changes apply after you restart Spotify.": "更改将在重启 Spotify 后生效。",
++  "Restart Spotify": "重启 Spotify",
++  "Restart now": "立即重启",
++  "Later": "稍后",
++  "Not now": "暂不",
++  "OK": "好",
++  "Cancel": "取消",
++  "Save": "保存",
++  "Remove": "移除",
++  "Reset": "重置",
++  "Add": "添加",
++  "Download": "下载",
++  "Off": "关闭",
++  "On": "开启",
++  "None": "无",
++  "Not set": "未设置",
++  "Rejected": "已拒绝",
++  "Display": "显示",
++  "Sources": "来源",
++  "Lyrics sources": "歌词来源",
++  "Lyrics diagnostics": "歌词诊断",
++  "Lyrics preview": "歌词预览",
++  "Show the current line below the cover": "在封面下方显示当前歌词",
++  "Lyrics for every track": "为所有歌曲获取歌词",
++  "Even where Spotify has none": "也为 Spotify 未提供歌词的歌曲获取歌词",
++  "Show source": "显示歌词来源",
++  "Lock screen lyrics": "锁屏歌词",
++  "Current line in place of the artist": "在艺人位置显示当前歌词",
++  "Translation language": "翻译语言",
++  "Used when the lyrics come with translations. Any shows the first.": "用于选择歌词附带的翻译语言。“任意”会显示第一种可用翻译。",
++  "Simulate word timing": "模拟逐字歌词时间",
++  "Text sizes": "文字大小",
++  "Pronunciation and translation are turned on from the button in the lyrics' corner.": "可通过歌词角落的按钮开启注音和翻译。",
++  "Largest first": "按字号从大到小排列",
++  "Largest": "最大",
++  "Smaller": "较小",
++  "Smallest": "最小",
++  "Pronunciation": "注音",
++  "Translation": "翻译",
++  "Any": "任意",
++  "English": "英语",
++  "Chinese": "中文",
++  "Japanese": "日语",
++  "Korean": "韩语",
++  "Spanish": "西班牙语",
++  "French": "法语",
++  "German": "德语",
++  "Portuguese": "葡萄牙语",
++  "Italian": "意大利语",
++  "Russian": "俄语",
++  "Arabic": "阿拉伯语",
++  "Hindi": "印地语",
++  "Spicy Lyrics key": "Spicy Lyrics 密钥",
++  "Paste the publishable key (sl_pk_…) of your application on Spicy Lyrics' developer platform.": "粘贴你在 Spicy Lyrics 开发者平台创建的应用的可公开密钥（sl_pk_…）。",
++  "Asked in this order": "按此顺序获取",
++  "None on": "尚未启用来源",
++  "Asked top to bottom until one has synced lyrics. Sources get only the track, never your account.": "从上到下依次获取，直到找到同步歌词。来源仅接收歌曲信息，不会收到你的账户信息。",
++  "Asked top to bottom until one has a clip. Apple Music gets only the artist and album name.": "从上到下依次获取，直到找到视频。仅向 Apple Music 发送艺人和专辑名称。",
++  "Collect lyrics debug logs": "收集歌词调试日志",
++  "Applies immediately. Logs stay on this device.": "立即生效，日志仅保存在此设备。",
++  "Export lyrics debug logs": "导出歌词调试日志",
++  "Share the log after reproducing the problem.": "复现问题后分享日志。",
++  "No lyrics debug logs": "暂无歌词调试日志",
++  "Enable collection, play a different song and then return to the problem song.": "先开启日志收集，播放另一首歌曲，再返回有问题的歌曲。",
++  "Clear lyrics debug logs": "清除歌词调试日志",
++  "Remove the collected logs from this device.": "从此设备删除已收集的日志。",
++  "Records song metadata, search candidates, timing checks, network status and the chosen source. Keeps up to 1 MiB. Contains no lyric text or account credentials. If a song was already cached, restart Spotify before reproducing it.": "记录歌曲信息、搜索候选、时间校验、网络状态和选用来源，最多保留 1 MiB。不包含歌词正文或账户凭据。如果歌曲已缓存，请重启 Spotify 后再复现问题。",
++  "Blocked artists": "已屏蔽艺人",
++  "Blocked Artists": "已屏蔽艺人",
++  "Skip when the artist is": "跳过歌曲的条件",
++  "Blocked": "已屏蔽",
++  "Skip blocked artists": "跳过已屏蔽艺人的歌曲",
++  "Main or featured": "主要艺人或合作艺人",
++  "The main artist": "仅主要艺人",
++  "Any credit on the track": "歌曲署名中的任意艺人",
++  "The first name on the track": "歌曲署名中的第一位艺人",
++  "Block from what's playing…": "屏蔽当前歌曲的艺人…",
++  "No one yet": "暂无已屏蔽艺人",
++  "Unblock": "取消屏蔽",
++  "Nothing playing": "暂无正在播放的歌曲",
++  "Play a track by the artist first, then come back here.": "请先播放该艺人的歌曲，然后返回此处。",
++  "Block": "屏蔽",
++  "%@ (featured)": "%@（合作艺人）",
++  "Gestures": "手势",
++  "Spotify's own buttons keep their taps.": "Spotify 原有按钮仍响应正常点按。",
++  "Double tap here": "双击此区域",
++  "Split": "分割",
++  "Seek step": "快进与快退步长",
++  "Double tap the player": "双击播放器",
++  "Tap a cell to set it": "点按区域以设置动作",
++  "%@ seconds": "%@ 秒",
++  "Start over": "恢复初始布局",
++  "Now playing bar": "迷你播放器",
++  "Queue & devices": "播放队列与设备",
++  "Lock screen widget": "锁屏小组件",
++  "Controls": "控制按钮",
++  "Like and dislike buttons": "喜欢与不喜欢按钮",
++  "Skip button on podcasts": "播客跳过按钮",
++  "Chapter skip controls": "章节跳转按钮",
++  "Burst skip": "连续跳过",
++  "Artwork": "封面",
++  "Companion content": "相关内容",
++  "Animated lock screen": "锁屏动态封面",
++  "Animated artwork is the lock screen's own, and iOS takes one only from 26 on. This phone runs iOS %@, where the cover stays still.": "动态封面由系统锁屏提供，仅支持 iOS 26 及以上版本。此设备运行 iOS %@，因此显示静态封面。",
++  "The track's own clip": "歌曲自带的短视频",
++  "The album's animated cover": "专辑动态封面",
++  "Artwork sources": "封面来源",
++  "Needs iOS 26": "需要 iOS 26",
++  "Needs iOS 27": "需要 iOS 27",
++  "A moving cover behind the lock screen's controls": "在锁屏控制按钮后显示动态封面",
++  "Queue": "播放队列",
++  "Control menu": "控制菜单",
++  "Shows": "显示内容",
++  "Everything": "全部",
++  "Beat": "节拍",
++  "Bass": "低音",
++  "A tap on each kick and snare, and a rumble under the bass": "随底鼓和军鼓轻触振动，随低音持续振动",
++  "A tap on each kick and snare, no rumble": "仅随底鼓和军鼓轻触振动",
++  "A tap on each kick, and a rumble under the bass": "随底鼓轻触振动，随低音持续振动",
++  "Strength": "强度",
++  "Music Haptics": "音乐触感",
++  "Follows": "跟随声音",
++  "Vibrations": "振动",
++  "Accent colour": "主题色",
++  "Pick a colour": "选择颜色",
++  "Spotify's green": "Spotify 绿色",
++  "AMOLED background": "纯黑背景",
++  "Speed": "速度",
++  "Warp": "扭曲",
++  "Blur": "模糊",
++  "Saturation": "饱和度",
++  "Brightness": "亮度",
++  "Fluid artwork": "流动封面",
++  "Animated artwork": "动态封面",
++  "The cover itself, blurred and slowly warped": "将专辑封面模糊并缓慢扭曲",
++  "The track's Canvas or the album's animated cover, looping": "循环播放歌曲 Canvas 或专辑动态封面",
++  "Background": "背景",
++  "A paused song holds the background still.": "暂停歌曲时，背景也会停止运动。",
++  "The player follows these as they move. Brightness past 100% can make white text harder to read on a light cover.": "调整会实时应用到播放器。亮度超过 100% 时，浅色封面上的白色文字可能不易阅读。",
++  "A track without a clip shows Fluid artwork, and so does every track in Low Power Mode or with Reduce Motion on.": "没有视频的歌曲会显示流动封面；低电量模式或开启“减弱动态效果”时也会使用流动封面。",
++  "Header": "页眉",
++  "Animated cover": "动态封面",
++  "Apple Music's, where the album has one": "显示 Apple Music 提供的专辑动态封面（如有）",
++  "Apple Music gets only the artist and album name. Nothing is downloaded in Low Data or Low Power Mode.": "仅向 Apple Music 发送艺人和专辑名称。低数据模式或低电量模式下不会下载内容。",
++  "Home": "首页",
++  "Search": "搜索",
++  "Your Library": "音乐库",
++  "Liked Songs": "已点赞的歌曲",
++  "Playlists": "歌单",
++  "Podcasts": "播客",
++  "Audiobooks": "有声书",
++  "Downloads": "已下载",
++  "Your Episodes": "你的单集",
++  "Browse": "浏览",
++  "New Releases": "最新发行",
++  "Made For You": "为你推荐",
++  "Concerts": "演唱会",
++  "Create": "创建",
++  "Add a Tab": "添加标签页",
++  "Name": "名称",
++  "Customize": "自定义",
++  "Link": "链接",
++  "Choose a Spotify page or enter a custom link": "选择 Spotify 页面或输入自定义链接",
++  "Icon": "图标",
++  "Choose a Link": "选择链接",
++  "Spotify's pages": "Spotify 页面",
++  "Custom link": "自定义链接",
++  "Enter a custom link…": "输入自定义链接…",
++  "Paste a Spotify share link or spotify: URI": "粘贴 Spotify 分享链接或 spotify: URI",
++  "Paste a Spotify share link or enter a spotify: URI.": "粘贴 Spotify 分享链接，或输入 spotify: URI。",
++  "Use Link": "使用此链接",
++  "Enter a Spotify share link or spotify: URI.": "请输入 Spotify 分享链接或 spotify: URI。",
++  "Spotify has nowhere to open %@.": "Spotify 无法打开 %@。",
++  "Can't use that link": "无法使用此链接",
++  "Choose an Icon": "选择图标",
++  "Use search to find any SF Symbol": "通过搜索查找 SF Symbol 图标",
++  "Search all icons": "搜索所有图标",
++  "Drag to reorder, tap to show or hide.": "拖动调整顺序，点按显示或隐藏。",
++  "Tabs": "标签页",
++  "Apple Music style player": "Apple Music 风格播放器",
++  "Moves in beside the tabs on scroll. Restart to apply": "滚动时移入标签页旁边，重启后生效",
++  "Hide labels": "隐藏文字标签",
++  "Custom navbar": "自定义导航栏",
++  "Icons only": "仅显示图标",
++  "Hidden": "已隐藏",
++  "Spotify's own tab": "Spotify 原有标签页",
++  "Add a tab…": "添加标签页…",
++  "Use Spotify's order": "恢复 Spotify 默认顺序",
++  "Every tab of Spotify's comes back where Spotify put it, and the tabs you added go.": "恢复 Spotify 原有标签页及其顺序，并移除你添加的标签页。",
++  "Hide the device button": "隐藏设备按钮",
++  "Spotify's flags": "Spotify 功能开关",
++  "Two lines of track info": "双行歌曲信息",
++  "Save button": "保存按钮",
++  "Queue badge": "队列角标",
++  "Hold and drag to resize": "长按并拖动调整大小",
++  "Video in the mini player": "迷你播放器中的视频",
++  "Bar to cover art animation": "迷你播放器展开至封面的动画",
++  "Mini player transition animations": "迷你播放器过渡动画",
++  "Player screen": "播放器界面",
++  "Artwork background": "封面背景",
++  "Glass header buttons": "玻璃效果顶部按钮",
++  "Disable Canvas": "禁用 Canvas",
++  "Sheet style player": "卡片式播放器",
++  "Redesigned header": "新版页眉",
++  "New progress slider": "新版进度条",
++  "Expand the sticky header on tap": "点按展开吸顶页眉",
++  "Hide cards below the player": "隐藏播放器下方卡片",
++  "About the artist": "关于艺人",
++  "Related videos": "相关视频",
++  "Live events": "现场活动",
++  "Explore the artist": "探索艺人",
++  "Credits": "制作人员",
++  "Merch": "周边商品",
++  "Recommendations": "推荐内容",
++  "Hide on the player": "在播放器中隐藏",
++  "Shuffle": "随机播放",
++  "Repeat": "循环播放",
++  "Add to playlist": "添加到歌单",
++  "Share": "分享",
++  "Connect to a device": "连接设备",
++  "Glass lyrics": "玻璃效果歌词",
++  "Bottom sheets": "底部弹出面板",
++  "Queue as a bottom sheet": "以底部面板显示队列",
++  "Connect as a bottom sheet": "以底部面板显示设备连接",
++  "Connect sheet from the video switcher": "从视频切换器打开设备面板",
++  "Queue flip transition": "队列翻转过渡动画",
++  "Play next in the context menu": "在菜单中显示“下一首播放”",
++  "Gradient": "渐变背景",
++  "Turning it on or off applies after you restart Spotify.": "开启或关闭后，需重启 Spotify 才会生效。",
++  "Show": "显示",
++  "Colour": "颜色",
++  "Height": "高度",
++  "Library": "音乐库",
++  "Denser rows": "紧凑列表",
++  "Sort playlists by recently updated": "按最近更新排序歌单",
++  "Sort artists by recently updated": "按最近更新排序艺人",
++  "Recents": "最近播放",
++  "Recents sort order": "最近播放排序方式",
++  "Library settings": "音乐库设置",
++  "Library Pro": "增强音乐库",
++  "Pull to refresh": "下拉刷新",
++  "Hide on Home": "在首页隐藏",
++  "Filter pills": "筛选标签",
++  "Shortcuts grid": "快捷入口网格",
++  "Promo cards": "推广卡片",
++  "Preview cards": "预览卡片",
++  "DJ card": "DJ 卡片",
++  "DJ button": "DJ 按钮",
++  "DJ beta badge": "DJ 测试版标识",
++  "Hide in the header": "在页眉隐藏",
++  "Explore (video deck)": "探索（视频卡片）",
++  "Add to library": "添加到音乐库",
++  "More options": "更多选项",
++  "Hide on the page": "在页面隐藏",
++  "More by the artist": "艺人的更多作品",
++  "Related music videos": "相关音乐视频",
++  "You might also like": "你可能也喜欢",
++  "Works only with Spotify in English.": "仅适用于英文界面的 Spotify。",
++  "Photo": "照片",
++  "Fade into a blur": "渐变为模糊背景",
++  "Follow": "关注",
++  "Verified badge": "认证标识",
++  "Monthly listeners": "每月听众数",
++  "Hide the tab bar": "隐藏标签栏",
++  "Songs you liked": "你点赞的歌曲",
++  "Popular": "热门歌曲",
++  "Artist pick": "艺人精选",
++  "Popular releases": "热门发行",
++  "Featuring": "参与作品",
++  "Music videos": "音乐视频",
++  "About": "关于",
++  "Artist playlists": "艺人歌单",
++  "Fans also like": "粉丝也喜欢",
++  "Appears on": "收录于",
++  "Discovered on": "发现于",
++  "Spotify's own": "Spotify 默认",
++  "Share button in the header": "页眉分享按钮",
++  "More options in the navigation bar": "导航栏中的更多选项",
++  "Top collaborators": "主要合作艺人",
++  "Artist facts": "艺人资讯",
++  "Hide in the playlist header": "在歌单页眉隐藏",
++  "Cover artwork": "封面图片",
++  "Description": "简介",
++  "Creator and collaborators": "创建者与协作者",
++  "Length and saves": "时长与收藏数",
++  "Hide playlist buttons": "隐藏歌单按钮",
++  "Video": "视频",
++  "More": "更多",
++  "Hide above the tracks": "在歌曲列表上方隐藏",
++  "Curation pills": "歌单筛选标签",
++  "Find and sort bar": "查找与排序栏",
++  "Tips": "提示",
++  "Reduce interventions": "减少提示打扰",
++  "Tooltips": "操作提示",
++  "Hide the smart shuffle helper": "隐藏智能随机播放提示",
++  "Hide the data saver tip": "隐藏流量节省提示",
++  "Hide the AI playlist creation tip": "隐藏 AI 歌单创建提示",
++  "Hide the watch feed explorer tip": "隐藏视频动态探索提示",
++  "Hide the account switching tip": "隐藏切换账户提示",
++  "Hide the concert notifications tip": "隐藏演唱会通知提示",
++  "Hide the live event tip": "隐藏现场活动提示",
++  "Hide the live event venue tip": "隐藏现场活动场地提示",
++  "Hide the Puffin nudge": "隐藏 Puffin 提醒",
++  "Total": "总计",
++  "Reset the telemetry counters": "重置遥测拦截计数",
++  "Telemetry blocked so far": "已拦截的遥测请求",
++  "Privacy": "隐私",
++  "Block telemetry": "拦截遥测",
++  "Spotify's own events still go out, since Recents is built from them": "仍会发送 Spotify 自身事件，以维持最近播放记录",
++  "Clutter": "界面精简",
++  "Hide the video carousel in Search": "隐藏搜索页的视频轮播",
++  "Hide social proof in Search": "隐藏搜索页的社交推荐信息",
++  "About this switch": "关于此开关",
++  "Overridden by another setting": "已由其他设置接管",
++  "Another switch is forcing this flag, so the row shows what it forces instead of taking a value of its own.": "另一个设置正在强制控制此功能，因此这里显示其实际状态，无法单独更改。",
++  "Open GitHub": "打开 GitHub",
++  " is unstable": "尚不稳定",
++  "Updates": "更新",
++  "Version": "版本",
++  "Website": "网站",
++  "Licenses": "开源许可",
++  "Welcome tour": "欢迎引导",
++  "Export settings": "导出设置",
++  "Import settings": "导入设置",
++  "Reset all settings": "重置所有设置",
++  "Reset all settings?": "重置所有设置？",
++  "Every switch goes off, flag overrides and the tab bar layout are cleared, and Spotify restarts as it came, with the mod doing nothing until asked. Spotify's own settings are untouched.": "所有模组开关将关闭，功能覆盖与导航栏布局将清除，并重启 Spotify。重置后模组功能默认关闭。Spotify 自身设置不会改变。",
++  "Reset and restart": "重置并重启",
++  "Not a settings file": "不是有效的设置文件",
++  "Pick a file made by Export settings.": "请选择通过“导出设置”生成的文件。",
++  "Your settings are replaced by the file's, exported from version %@. Anything it does not have goes back to its default, and Spotify restarts.": "当前设置将替换为此文件中的设置（导出自版本 %@）。文件中未包含的设置将恢复默认，然后重启 Spotify。",
++  "Import settings?": "导入设置？",
++  "Import and restart": "导入并重启",
++  "App icon": "应用图标",
++  "Glass": "玻璃",
++  "Green": "绿色",
++  "White": "白色",
++  "Pink": "粉色",
++  "Blue": "蓝色",
++  "Purple": "紫色",
++  "Orange": "橙色",
++  "Lime": "青柠色",
++  "Liquid Glass": "液态玻璃",
++  "The icon did not change": "图标未能更改",
++  "iOS confirms each change in an alert of its own. The name under the icon is set when the app is signed: rename it in Feather, Sideloadly or whatever signs it.": "每次更改图标时，iOS 都会弹出确认提示。图标下方的应用名称由签名工具设定，可在 Feather、Sideloadly 等工具中修改。",
++  "Signed until %@": "签名有效期至 %@",
++  "Signed with a free Apple ID": "使用免费 Apple ID 签名",
++  "A free Apple ID signs for 7 days, a certificate for a year": "免费 Apple ID 签名有效期为 7 天，证书签名通常为 1 年",
++  "The lock screen cannot open Spotify": "锁屏无法打开 Spotify",
++  "Copy the bundle id": "复制应用标识符",
++  "Read more": "了解更多",
++  "Tap for the fix": "点按查看修复方法",
++  "Please don't open issues or report bugs on Discord from this setup.": "此配置不受支持，请勿基于此配置提交问题或向 Discord 报告错误。",
++  "Spotify %@ isn't supported": "不支持 Spotify %@",
++  "The mod is made for %@ only": "此模组仅适用于 %@",
++  "EeveeSpotify isn't supported": "不支持同时运行 EeveeSpotify",
++  "It is injected alongside spoti.pw": "检测到它与 spoti.pw 同时注入",
++  "Changes": "更新内容",
++  " is out": " 已发布",
++  "up to date": "已是最新版本",
++  "not checked": "尚未检查",
++  "asked too often": "请求过于频繁",
++  "check failed": "检查失败",
++  "no release in the reply": "响应中没有版本信息",
++  "This build is %s.": "当前版本为 %s。",
++  "%@ is out": "%@ 已发布",
++  "What's new": "更新内容",
++  "Get it": "下载更新",
++  "Check now": "立即检查",
++  "Get ": "下载 ",
++  "All releases": "所有版本",
++  "The release on GitHub, where its .deb is": "在 GitHub 查看此版本及其 .deb 安装包",
++  "Every version, this one and the ones before it": "查看当前版本及所有历史版本",
++  "Auto check updates": "自动检查更新",
++  "Nothing written down": "暂无更新说明",
++  "Tap to read the release on GitHub": "点按前往 GitHub 查看版本说明",
++  "This build is %s. Nothing has been asked of GitHub yet.": "当前版本为 %s，尚未向 GitHub 检查更新。",
++  " came out on ": " 发布于 ",
++  "%@%@, and this build is %s. Everything in between is below.": "%@%@，当前版本为 %s。下方列出了期间的所有更新。",
++  "This build, %s, is GitHub's newest release; it%@. What went into it is below.": "当前版本 %s 已是 GitHub 上的最新版本，%@。下方为本次更新内容。",
++  "Support spoti.pw": "支持 spoti.pw",
++  "Buy the student behind it a coffee": "请开发它的学生喝杯咖啡",
++  "A STUDENT PROJECT": "学生开发的项目",
++  "Enjoying spoti.pw?": "喜欢 spoti.pw 吗？",
++  "I'm a student and I build it for free, in my spare time. If it made your music better, a coffee helps me keep going.": "我是一名学生，利用课余时间免费开发这个项目。如果它改善了你的听歌体验，请我喝杯咖啡能帮助我继续开发。",
++  "Buy me a coffee": "请我喝杯咖啡",
++  "Maybe later": "以后再说",
++  "Pick your look.": "选择你喜欢的界面。",
++  "Looks like Apple Music. Better lyrics, Live Activity.": "Apple Music 风格界面，提供增强歌词和实时活动。",
++  "More options, still looks like Spotify.": "更多自定义选项，保留 Spotify 原有外观。",
++  "Start listening": "开始听歌",
++  "Hold Home to open settings.": "长按首页按钮打开模组设置。",
++  "Report a bug": "报告问题",
++  "Ask on Discord": "在 Discord 寻求帮助",
++  "The redesign is a beta. Expect lags, freezes and bugs, and if you find one, please report it.": "重新设计界面仍处于测试阶段，可能出现卡顿、无响应或其他问题，欢迎反馈。",
++  "The newest version of spoti.pw, leaning towards Apple Music's style. It is not compatible with the legacy look's settings.\n\nThe legacy look gives you more freedom, yet still looks like Spotify.": "spoti.pw 的新版界面，采用接近 Apple Music 的风格。它与经典界面的设置相互独立。\n\n经典界面提供更多自定义选项，同时保留 Spotify 的外观。",
++  "The redesign is made for iOS 26 and has not been tested on iOS %@ at all. Expect bugs and freezes. If Spotify stops opening, delete and reinstall it.": "重新设计界面针对 iOS 26 开发，尚未在 iOS %@ 上测试，可能出现错误或无响应。如果 Spotify 无法启动，请删除后重新安装。",
++  "The redesign takes over when Spotify starts again. Spotify closes now; open it again to see it.": "重启 Spotify 后将使用重新设计界面。应用将关闭，请重新打开以查看更改。",
++  "Spotify's own look comes back when Spotify starts again. Spotify closes now; open it again to see it.": "重启 Spotify 后将恢复原有界面。应用将关闭，请重新打开以查看更改。",
++  "Not tested on this iOS": "尚未在此 iOS 版本上测试",
++  "about %lld MB": "约 %lld MB",
++  "Downloaded · ": "已下载 · ",
++  "Checking…": "正在检查…",
++  "Downloading %lld %% · %lld of %@": "正在下载 %lld %% · %lld / %@",
++  "Download failed": "下载失败",
++  "Paused · %lld of %@": "已暂停 · %lld / %@",
++  "Not downloaded": "尚未下载",
++  "Voice model": "人声模型",
++  "It takes %@ on this iPhone. Remove it to free the space; Sing is unavailable without it.": "模型在此 iPhone 上占用 %@。移除可释放空间，但移除后无法使用伴唱功能。",
++  " Download goes on from where it stopped.": " 下载将从上次中断的位置继续。",
++  "Sing needs its voice model, %@, before its microphone shows in the lyrics.": "伴唱功能需要先下载人声模型（%@），下载后歌词中才会显示麦克风按钮。",
++  "The download goes on while Spotify is in the background. Sing's microphone shows in the lyrics once it is in.": "Spotify 在后台时仍会继续下载。下载完成后，歌词中将显示伴唱麦克风按钮。",
++  "Not enough space": "存储空间不足",
++  "No internet connection": "无网络连接",
++  "Connect to Wi-Fi to download Sing's voice model.": "请连接 Wi-Fi 以下载人声模型。",
++  "Download over cellular?": "使用蜂窝网络下载？",
++  "This iPhone isn't on Wi-Fi, and Sing's voice model is %@.": "此 iPhone 未连接 Wi-Fi，人声模型大小为 %@。",
++  "Remove the voice model?": "移除人声模型？",
++  "Sing is unavailable until it is downloaded again (%@).": "移除后需重新下载模型（%@）才能使用伴唱功能。",
++  "The %@ downloaded so far are deleted, and the next download starts over.": "目前已下载的 %@ 将被删除，下次下载会从头开始。",
++  "Sing": "伴唱",
++  "The microphone in the lyrics": "歌词中的麦克风",
++  "Download voice model": "下载人声模型",
++  "Cancel download": "取消下载",
++  "Remove voice model": "移除人声模型",
++  "No model": "尚无模型",
++  "Record performance": "记录性能",
++  "Applies now. Samples every 2 seconds while Spotify is active.": "立即生效。Spotify 位于前台时每 2 秒采样一次。",
++  "Test scenario": "测试场景",
++  "Use the same activity when comparing builds.": "比较不同版本时，请使用相同场景。",
++  "General use": "日常使用",
++  "Home scrolling": "首页滚动",
++  "Idle playback": "静置播放",
++  "Save current baseline": "保存当前基准",
++  "After a minute of representative use, save the current window.": "在典型使用场景下运行一分钟后，保存当前采样窗口。",
++  "Baseline saved": "基准已保存",
++  "More samples needed": "需要更多样本",
++  "Compare the same scenario and device conditions after your next change.": "下次修改后，请在相同场景和设备条件下进行比较。",
++  "Enable recording and keep Spotify active in one scenario for at least 62 seconds.": "请开启记录，并让 Spotify 在同一场景下保持前台运行至少 62 秒。",
++  "Export performance history": "导出性能记录",
++  "JSON with build, device conditions, samples and baseline.": "导出包含版本、设备条件、样本和基准的 JSON 文件。",
++  "Export failed": "导出失败",
++  "Could not write the performance report. Try again.": "无法写入性能报告，请重试。",
++  "Current one-minute window": "当前一分钟窗口",
++  "Status": "状态",
++  "Process CPU": "进程 CPU 占用",
++  "% of one core": "相对于单个核心的百分比",
++  "Playback state": "播放状态",
++  "Waiting for player": "等待播放器",
++  "Waiting for samples": "等待采样",
++  "Loading": "正在加载",
++  "Paused": "已暂停",
++  "Playing": "正在播放",
++  "Idle": "空闲",
++  "Memory footprint": "内存占用",
++  "Main queue delay p95": "主线程延迟 P95",
++  "Retained samples": "保留样本数",
++  "Repeated operations": "重复操作",
++  "Bar passes / requests": "迷你播放器执行 / 请求次数",
++  "Lyrics passes / requests": "歌词布局执行 / 请求次数",
++  "Stale lyric checks skipped": "已跳过的过期歌词检查",
++  "Counts for this process while recording is active. Multiple layout requests in one pass share one application. Counts reset when history is cleared.": "统计此进程在开启记录期间的次数。同一轮中的多个布局请求仅执行一次。清除记录后计数会重置。",
++  "Baseline build": "基准版本",
++  "Clear history and baseline": "清除记录与基准",
++  "Remove local measurements and start a fresh window.": "删除本地测量记录并开始新的采样窗口。",
++  "Output control": "输出控制",
++  "Gain and limiter, always on": "增益与限幅器（始终开启）",
++  "Post gain": "输出增益",
++  "Limiter threshold": "限幅阈值",
++  "Limiter release": "限幅释放时间",
++  "Multiband compander": "多频段动态压扩器",
++  "Evens out or livens up the dynamics": "平衡或增强声音动态",
++  "Release": "释放时间",
++  "Bass boost": "低音增强",
++  "Lifts the low end": "增强低频",
++  "Maximum gain": "最大增益",
++  "Equalizer": "均衡器",
++  "15 bands, with presets": "15 频段，支持预设",
++  "Graphic EQ": "图形均衡器",
++  "Any curve, like AutoEq's corrections": "自定义响应曲线，例如 AutoEq 校正曲线",
++  "Response": "响应曲线",
++  "Convolver": "卷积器",
++  "Recorded rooms and speakers": "模拟录制的空间与扬声器效果",
++  "Impulse response": "脉冲响应",
++  "Optimization": "优化方式",
++  "Headphone correction files": "耳机校正文件",
++  "DDC file": "DDC 文件",
++  "Effects written as EEL scripts": "使用 EEL 脚本编写的音效",
++  "Script": "脚本",
++  "Reverb": "混响",
++  "A room around the music": "为音乐添加空间感",
++  "Room": "空间",
++  "Stereo widening": "立体声扩展",
++  "A wider or narrower stereo image": "扩展或收窄立体声声场",
++  "Crossfeed": "交叉馈送",
++  "Softer stereo on headphones": "让耳机中的立体声更自然柔和",
++  "Preset": "预设",
++  "Analog modelling": "模拟电路建模",
++  "Tube amplifier warmth": "模拟电子管放大器的温暖音色",
++  "Drive": "驱动强度",
++  "Width": "宽度",
++  "1 effect": "1 项音效",
++  "%lu effects": "%lu 项音效",
++  "%lu points": "%lu 个节点",
++  "Changes apply straight away.": "更改立即生效。",
++  "Effects": "音效",
++  "Reset all effects": "重置所有音效",
++  "Not applied": "未应用",
++  "Reset all effects?": "重置所有音效？",
++  "Every effect goes off, and every value, curve and file choice back to its default. The Effects switch and your imported files stay.": "关闭所有单项音效，并将参数、曲线和文件选择恢复默认。音效总开关和已导入的文件会保留。",
++  "Original": "原始",
++  "Trimmed": "裁剪",
++  "Minimum phase": "最小相位",
++  "Default (700 Hz, 4.5 dB)": "默认（700 Hz，4.5 dB）",
++  "Ambience": "环境",
++  "Small room": "小房间",
++  "Medium room": "中等房间",
++  "Large room": "大房间",
++  "Chamber": "室内空间",
++  "Plate": "板式混响",
++  "Small hall": "小型大厅",
++  "Large hall": "大型大厅",
++  "Cathedral": "大教堂",
++  "Flat": "平直",
++  "Loudness": "响度增强",
++  "Treble": "高音",
++  "Vocal": "人声",
++  "Warm": "温暖",
++  "Bright": "明亮",
++  "Rock": "摇滚",
++  "Electronic": "电子",
++  "Acoustic": "原声",
++  "Classical": "古典",
++  "Podcast": "播客",
++  "Impulse responses": "脉冲响应",
++  "DDC files": "DDC 文件",
++  "Scripts": "脚本",
++  "Choosing a file uses it straight away. Swipe left on one to delete it.": "选择文件后立即应用，向左轻扫文件可将其删除。",
++  "A %@ file from Files": "从“文件”中选择 %@ 文件",
++  "Import file…": "导入文件…",
++  "No files yet": "暂无文件",
++  "Delete": "删除",
++  "Could not delete the file": "无法删除文件",
++  "Not a file this effect takes": "此音效不支持该文件",
++  "Pick a %@ file.": "请选择 %@ 文件。",
++  "Could not import the file": "无法导入文件",
++  "AutoEq's GraphicEQ format: \"GraphicEQ:\", then a frequency and a gain in dB per point, separated by semicolons. Paste the GraphicEQ file for your headphones, or edit the text and save.": "使用 AutoEq 的 GraphicEQ 格式：以“GraphicEQ:”开头，随后每个节点包含频率和增益（dB），节点之间用分号分隔。粘贴耳机的 GraphicEQ 配置，或编辑文本后保存。",
++  "GraphicEQ files for thousands of headphones": "适用于数千款耳机的 GraphicEQ 配置",
++  "Use the text above": "应用上方文本",
++  "Nothing changed": "没有更改",
++  "Paste": "粘贴",
++  "Replace the text with what you copied, and use it": "用剪贴板内容替换文本并应用",
++  "Back to flat": "恢复平直曲线",
++  "Not a GraphicEQ line": "不是有效的 GraphicEQ 配置",
++  "Nothing to paste": "剪贴板中没有可粘贴的内容",
++  "It starts with \"GraphicEQ:\", then pairs of a frequency and a gain: GraphicEQ: 20 -1.2; 21 -1.1; …": "应以“GraphicEQ:”开头，随后依次填写频率和增益，例如：GraphicEQ: 20 -1.2; 21 -1.1; …",
++  "Flags": "功能开关",
++  "forced %@": "强制设为 %@",
++  "on": "开启",
++  "off": "关闭",
++  "on by default": "默认开启",
++  "off by default": "默认关闭",
++  "%ld by default, %ld to %ld": "默认 %ld，范围 %ld 至 %ld",
++  "text value": "文本值",
++  "type unknown": "未知类型",
++  "Search %lu flags": "搜索 %lu 个功能开关",
++  "Auto keeps Spotify's value. Changes apply after you restart Spotify.": "“自动”保留 Spotify 原有值。更改将在重启 Spotify 后生效。",
++  "Auto": "自动",
++  "true or false, a number, or a text value": "true、false、数字或文本值",
++  "Force": "强制应用",
++  "AI Chat (Martini)": "AI 聊天（Martini）",
++  "On Home": "首页入口",
++  "Chat entry point": "聊天入口",
++  "Martini behind it": "Martini 后台功能",
++  "Floating chat": "悬浮聊天",
++  "Microphone": "麦克风",
++  "Glowing pill": "发光标签",
++  "The chat": "聊天界面",
++  "Intent pills": "意图标签",
++  "Thinking states": "思考状态",
++  "Voice recording": "语音录制",
++  "In the player": "播放器内",
++  "Unreleased features; some do nothing on your version. Changes apply after you restart Spotify.": "尚未发布的功能，部分功能可能不适用于当前版本。更改将在重启 Spotify 后生效。",
++  "Local files from the Files app": "从“文件”应用导入本地文件",
++  "Home screen widget": "主屏幕小组件",
++  "Progress bar": "进度条",
++  "Sleep timer": "睡眠定时器",
++  "Fade out": "淡出",
++  "One minute option": "一分钟选项",
++  "Options sheet": "选项面板",
++  "Options sheet is always on in Redesigned UI.": "重新设计界面始终启用选项面板。",
++  "Snake on the cover art": "封面上的贪吃蛇游戏",
++  "Podcast comments": "播客评论",
++  "Comments card": "评论卡片",
++  "Pinned comments": "置顶评论",
++  "Several reactions": "多种表情回应",
++  "Chinese (Simplified)": "中文（简体）",
++  "Chinese (Traditional)": "中文（繁体）",
++  "Czech": "捷克语",
++  "Danish": "丹麦语",
++  "Dutch": "荷兰语",
++  "Finnish": "芬兰语",
++  "Greek": "希腊语",
++  "Hebrew": "希伯来语",
++  "Hungarian": "匈牙利语",
++  "Indonesian": "印度尼西亚语",
++  "Norwegian Bokmål": "挪威语（书面语）",
++  "Polish": "波兰语",
++  "Romanian": "罗马尼亚语",
++  "Slovak": "斯洛伐克语",
++  "Swedish": "瑞典语",
++  "Thai": "泰语",
++  "Turkish": "土耳其语",
++  "Ukrainian": "乌克兰语",
++  "Vietnamese": "越南语",
++  "The mod's own license, and the code from others it includes.": "此模组及其使用的第三方代码的许可信息。",
++  "The tab icons' names · MIT License": "标签栏图标名称 · MIT 许可证",
++  "Fluid artwork's renderer · MIT License": "流动封面渲染器 · MIT 许可证",
++  "Fluid artwork's simplex noise · MIT License": "流动封面的单纯形噪声 · MIT 许可证",
++  "Fluid artwork's dither · MIT License": "流动封面的抖动算法 · MIT 许可证",
++  "Crossfeed · MIT License": "交叉馈送 · MIT 许可证",
++  "Liveprog's EEL2 · zlib License": "Liveprog 的 EEL2 · zlib 许可证",
++  "\n\nand %lu more in %@.": "\n\n另有 %lu 项更新，详见 %@。",
++  "CPU includes Spotify and all injected modules and can exceed 100%. Heartbeats sample responsiveness, not FPS or every short stall. While recording, a 25 ms background probe captures up to 24 main-thread stack samples for delays above 50 ms; export includes these stacks for loading investigations. Thermal state and Low Power Mode are recorded; a change starts a fresh window.": "CPU 占用包含 Spotify 和所有注入模块，可能超过 100%。心跳采样衡量响应情况，不能代表帧率或捕获每一次短暂卡顿。记录期间，后台探针每 25 毫秒检查一次；延迟超过 50 毫秒时，最多保留 24 条主线程堆栈，导出后可用于排查加载问题。温度状态与低电量模式也会记录，条件改变时会开始新的采样窗口。",
++  "Stored locally; no automatic uploads. Keeps the most recent 600 samples across launches. A warning needs three consecutive one-minute windows above the baseline limits. Match scenario, iOS, Spotify, UI, device, power, thermal state and EEVEE profile. Other settings must be matched manually. Export before and after a change to investigate regressions.": "数据仅存储在本地，不会自动上传。跨启动保留最近 600 个样本。连续三个一分钟窗口超出基准限制时才会警告。比较时需保持场景、iOS、Spotify、界面、设备、电源、温度状态和 EEVEE 配置一致，其他设置也需手动保持一致。请在改动前后分别导出记录以排查性能退化。",
++  "Sing turns the vocals of the song playing down to sing over, from the microphone in its lyrics. It works on iOS 27 only. Its voice model, %@, is downloaded once and runs only on this iPhone. The switch and the download apply straight away.": "伴唱功能可通过歌词中的麦克风按钮降低原唱人声，方便跟唱。仅支持 iOS 27。人声模型大小约为 %@，只需下载一次，并且仅在此 iPhone 上运行。开关与模型下载完成后立即生效。",
++  "Sing separates a song's vocals on this iPhone with a voice model that needs iOS 27. This iPhone runs iOS %@.": "伴唱功能通过此 iPhone 上的人声模型分离歌曲人声，需要 iOS 27。此设备运行 iOS %@。",
++  "The iPhone taps along with the drums and rumbles under the bass of whatever Spotify is playing, worked out from the sound as it plays, much like Music Haptics in Apple Music.\n\nIt follows the sound this iPhone plays, through its speaker or headphones, while Spotify is open: iOS plays no haptics for an app in the background, and a song playing on another device through Connect has no sound here to follow.": "iPhone 会根据 Spotify 正在播放的声音，随鼓点轻触振动、随低音持续振动，类似于 Apple Music 的音乐触感。\n\n仅在 Spotify 位于前台时跟随此 iPhone 扬声器或耳机播放的声音。iOS 不允许后台应用播放触感；通过 Connect 在其他设备播放时，此设备也没有可跟随的声音。",
++  "EeveeSpotify is replacing lyrics, so these sources stay off. To use them, turn on Do Not Replace Lyrics in EeveeSpotify's lyrics settings and restart Spotify.": "EeveeSpotify 正在替换歌词，因此这里的来源保持关闭。如需使用，请在 EeveeSpotify 的歌词设置中开启“Do Not Replace Lyrics（不替换歌词）”，然后重启 Spotify。",
++  "Spicy Lyrics needs a free key of your own. Sign up on its developer platform, create an application, turn on client access with No origin header allowed, and paste the publishable key here. The lyrics show who synced them, as its terms require.": "Spicy Lyrics 需要你自己的免费密钥。请在开发者平台注册、创建应用，启用客户端访问并允许“No origin header”，然后在此粘贴可公开密钥。根据服务条款，歌词中会标明同步作者。",
++  "spoti.pw is made for Spotify %@ only. On any other version parts of it break or go missing, so it won't work the way you expect.\n\n%@ Use a %@ IPA instead.": "spoti.pw 仅适用于 Spotify %@。在其他版本上，部分功能可能损坏或缺失，无法按预期运行。\n\n%@ 请改用 %@ 版本的 IPA。",
++  "spoti.pw isn't made to run alongside EeveeSpotify. Both change the same parts of Spotify, so things break or behave in ways you don't expect.\n\n%@ Use an IPA without EeveeSpotify instead.": "spoti.pw 不支持与 EeveeSpotify 同时运行。两者会修改 Spotify 的相同部分，可能导致故障或异常行为。\n\n%@ 请改用未注入 EeveeSpotify 的 IPA。",
++  "Sign Spotify again with the bundle id set to\n\n%@\n\nIn Feather that is the Identifier field; leave PPQ protection off, it appends a random string and breaks this again.\n\nWhy: this build is installed as %@ but signed under the App ID %@. iOS opens the now playing card by the App ID, so it asks for an app that is not there. Nothing else in the mod is affected.": "请重新签名 Spotify，并将应用标识符（Bundle ID）设为：\n\n%@\n\n在 Feather 中，这对应 Identifier 字段。请关闭 PPQ protection，它会附加随机字符串，导致问题再次出现。\n\n原因：此版本安装时使用的标识符为 %@，但签名中的 App ID 为 %@。iOS 会使用 App ID 打开正在播放卡片，因此找不到对应应用。模组的其他功能不受影响。",
++  "%@ or %@": "%@ 或 %@",
++  "Nothing": "无动作",
++  "Seek back": "快退",
++  "Seek forward": "快进",
++  "Play or pause": "播放或暂停",
++  "Next track": "下一首",
++  "Previous track": "上一首",
++  "Two columns": "两列",
++  "Three columns": "三列",
++  "Three by three": "九宫格",
++  "Line meanings": "歌词释义",
++  "From the artist": "来自艺人",
++  "Artist and editors": "艺人与编辑",
++  "Everyone": "所有人",
++  "Explanations from Genius. Tap the bubble after a line, or hold the line.": "释义来自 Genius。点按歌词后的气泡，或长按歌词查看。",
++  "Collecting a one-minute window": "正在收集一分钟样本",
++  "No baseline saved": "尚未保存基准",
++  "Baseline context differs": "基准条件不一致",
++  "Sustained regression detected": "检测到持续性能退化",
++  "Within baseline limits": "处于基准范围内"
++}
+diff --git a/scripts/generate-localization.py b/scripts/generate-localization.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..04b625ca80ca5316d83989a2f5a013fb54fb132d
+--- /dev/null
++++ b/scripts/generate-localization.py
+@@ -0,0 +1,30 @@
++#!/usr/bin/env python3
++"""Generate the compiled Chinese catalogue; --check validates committed output."""
++import json
++from pathlib import Path
++import re
++import sys
++root = Path(__file__).resolve().parents[1]
++source = root / 'localization/zh-Hans.json'
++
++def unique(pairs):
++    result = {}
++    for key, value in pairs:
++        assert key not in result, f'Duplicate translation: {key}'
++        result[key] = value
++    return result
++
++catalog = json.loads(source.read_text(), object_pairs_hook=unique)
++formats = re.compile(r'%(?:\d+\$)?(?:\.\d+)?(?:ll|l|z)?[@diufsg%]')
++for key, value in catalog.items():
++    assert key and value.strip(), f'Empty translation: {key}'
++    assert formats.findall(key) == formats.findall(value), f'Format arguments changed: {key}'
++quote = lambda text: '@' + json.dumps(text, ensure_ascii=False)
++output = '// Generated by scripts/generate-localization.py; edit localization/zh-Hans.json.\n'
++output += ''.join(f'            {quote(key)}: {quote(value)},\n' for key, value in sorted(catalog.items()))
++target = root / 'tweak/Sources/Core/SGChinese.inc'
++if '--check' in sys.argv:
++    assert target.read_text() == output, 'Chinese catalogue needs regeneration'
++else:
++    target.write_text(output)
++print(f'Chinese catalogue: {len(catalog)} entries; format placeholders preserved')
+diff --git a/scripts/test-localization.py b/scripts/test-localization.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..c686586ad94611c8cfe6aa06100311e3cb01555b
+--- /dev/null
++++ b/scripts/test-localization.py
+@@ -0,0 +1,48 @@
++#!/usr/bin/env python3
++"""Validate the compiled catalogue and exercise the production Foundation lookup on macOS."""
++from pathlib import Path
++import json
++import subprocess
++import sys
++import tempfile
++root = Path(__file__).resolve().parents[1]
++subprocess.run([sys.executable, str(root / 'scripts/generate-localization.py'), '--check'], check=True)
++translations = json.loads((root / 'localization/zh-Hans.json').read_text())
++required = ['Mod Settings', 'Redesigned UI', 'Player', 'Lyrics', 'Audio effects', 'Privacy & clutter',
++            'Updates', 'Sources', 'Translation language', 'Background', 'Reset all settings?',
++            'Performance diagnostics', 'Cancel', 'About this switch', 'Line meanings']
++assert all(key in translations for key in required)
++if sys.platform != 'darwin':
++    print('Catalogue checks passed; Foundation runtime checks require the macOS Action')
++    sys.exit(0)
++source = r'''
++#import <Foundation/Foundation.h>
++#import "SGLocalization.h"
++#include <assert.h>
++int main(void) {
++    @autoreleasepool {
++        assert([SGTextForLanguage(@"Mod Settings", @"zh-Hans") isEqualToString:@"模组设置"]);
++        assert([SGTextForLanguage(@"Lyrics", @"zh-Hant-TW") isEqualToString:@"歌词"]);
++        assert([SGTextForLanguage(@"Cancel", @"en-US") isEqualToString:@"Cancel"]);
++        assert([SGTextForLanguage(@"Cancel", @"fr-FR") isEqualToString:@"Cancel"]);
++        assert(!SGTextForLanguage(nil, @"zh"));
++        for (NSString *raw in @[@"spoti.pw", @"spotifyglass.redesign.playerLyricsPreview",
++            @"https://open.spotify.com/track/123", @"sl_pk_example", @"Artist — 我的自定义名称", @"GraphicalEQ: 20 -1.2;"]) {
++            assert([SGTextForLanguage(raw, @"zh") isEqualToString:raw]);
++        }
++        NSString *format = SGTextForLanguage(@"Downloading %lld %% · %lld of %@", @"zh");
++        assert([[NSString stringWithFormat:format, 50ll, 235ll, @"470 MB"] isEqualToString:@"正在下载 50 % · 235 / 470 MB"]);
++        format = SGTextForLanguage(@"Spotify %@ isn't supported", @"zh");
++        assert([[NSString stringWithFormat:format, @"9.1.90"] isEqualToString:@"不支持 Spotify 9.1.90"]);
++        puts("PASS: Chinese locale selection, English fallback, raw identifiers and formatted UI text");
++    }
++}
++'''
++with tempfile.TemporaryDirectory(prefix='spoti-localization-') as directory:
++    main = Path(directory) / 'main.m'
++    main.write_text(source)
++    binary = Path(directory) / 'test'
++    core = root / 'tweak/Sources/Core'
++    subprocess.run(['xcrun', 'clang', '-fobjc-arc', '-fblocks', '-framework', 'Foundation',
++                    '-I', str(core), str(main), str(core / 'SGLocalization.m'), '-o', str(binary)], check=True)
++    subprocess.run([str(binary)], check=True)
+diff --git a/scripts/test-lyrics-identity.py b/scripts/test-lyrics-identity.py
+index ba97849338acc3a195cb9307f6e7901ce9dbac9c..d817a30ba552fab56afd2253b58512eef738d9d1 100644
+--- a/scripts/test-lyrics-identity.py
++++ b/scripts/test-lyrics-identity.py
+@@ -10,6 +10,7 @@ import sys
+ 
+ root = Path(__file__).resolve().parents[1]
+ subprocess.run([sys.executable, str(root / 'scripts/test-preview-anchor.py')], check=True)
++subprocess.run([sys.executable, str(root / 'scripts/test-localization.py')], check=True)
+ audit = json.loads((root / 'docs/lyrics-live-audit-round2-2026-10-18.json').read_text(encoding='utf-8'))
+ assert audit['all_passed'] and audit['reused_results'] == 0, 'Fresh multilingual audit did not pass'
+ qq_audit = json.loads((root / 'docs/lyrics-qq-retry-2026-10-18.json').read_text(encoding='utf-8'))
+diff --git a/tweak/Sources/App/About/AboutSettings.m b/tweak/Sources/App/About/AboutSettings.m
+index da8aedb571398f4491bd8b6d26801821cdb9bf82..f17d01c714900b7ab3d04e51625e670062e73267 100644
+--- a/tweak/Sources/App/About/AboutSettings.m
++++ b/tweak/Sources/App/About/AboutSettings.m
+@@ -19,11 +19,11 @@ static void resetAll(void) {
+ }
+ 
+ static void confirmReset(void) {
+-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Reset all settings?"
++    UIAlertController *alert = [SGSettingsAlert alertControllerWithTitle:@"Reset all settings?"
+                                                                   message:@"Every switch goes off, flag overrides and the tab bar layout are cleared, and Spotify restarts as it came, with the mod doing nothing until asked. Spotify's own settings are untouched."
+                                                            preferredStyle:UIAlertControllerStyleAlert];
+-    [alert addAction:[UIAlertAction actionWithTitle:@"Reset and restart" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) { resetAll(); }]];
+-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
++    [alert addAction:[SGSettingsAction actionWithTitle:@"Reset and restart" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) { resetAll(); }]];
++    [alert addAction:[SGSettingsAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+     [SGTopController() presentViewController:alert animated:YES completion:nil];
+ }
+ 
+diff --git a/tweak/Sources/App/About/AppIcon.m b/tweak/Sources/App/About/AppIcon.m
+index 605a10c6e915db6e8496752cd98202746179ec8b..d277f81d083cfb178fa6cfd271c1316c8580a550 100644
+--- a/tweak/Sources/App/About/AppIcon.m
++++ b/tweak/Sources/App/About/AppIcon.m
+@@ -123,10 +123,10 @@ static UIImage *preview(NSString *file) {
+             SGLog(@"app icon: %@ -> %@", file, error ?: @"set");
+             [weakTable reloadData];
+             if (!error) return;
+-            UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"The icon did not change"
++            UIAlertController *alert = [SGSettingsAlert alertControllerWithTitle:@"The icon did not change"
+                                                                           message:error.localizedDescription
+                                                                    preferredStyle:UIAlertControllerStyleAlert];
+-            [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
++            [alert addAction:[SGSettingsAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
+             [SGTopController() presentViewController:alert animated:YES completion:nil];
+         });
+     }];
+diff --git a/tweak/Sources/App/About/Backup.m b/tweak/Sources/App/About/Backup.m
+index 59f93dbc4bd99238579555a1efa29d5801a95b7e..6ff2c169f484c8928ba87ddac2951bf2318eebcb 100644
+--- a/tweak/Sources/App/About/Backup.m
++++ b/tweak/Sources/App/About/Backup.m
+@@ -20,9 +20,9 @@ static NSDictionary *storedDefaults(void) {
+ }
+ 
+ static void showAlert(NSString *title, NSString *message, UIAlertAction *confirm) {
+-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:title message:message preferredStyle:UIAlertControllerStyleAlert];
++    UIAlertController *alert = [SGSettingsAlert alertControllerWithTitle:title message:message preferredStyle:UIAlertControllerStyleAlert];
+     if (confirm) [alert addAction:confirm];
+-    [alert addAction:[UIAlertAction actionWithTitle:confirm ? @"Cancel" : @"OK" style:UIAlertActionStyleCancel handler:nil]];
++    [alert addAction:[SGSettingsAction actionWithTitle:confirm ? @"Cancel" : @"OK" style:UIAlertActionStyleCancel handler:nil]];
+     [SGTopController() presentViewController:alert animated:YES completion:nil];
+ }
+ 
+@@ -89,8 +89,8 @@ static void importSettings(NSDictionary *settings) {
+         return;
+     }
+     NSString *mod = [file[@"mod"] isKindOfClass:NSString.class] ? file[@"mod"] : @"unknown";
+-    NSString *message = [NSString stringWithFormat:@"Your settings are replaced by the file's, exported from version %@. Anything it does not have goes back to its default, and Spotify restarts.", mod];
+-    showAlert(@"Import settings?", message, [UIAlertAction actionWithTitle:@"Import and restart" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
++    NSString *message = [NSString stringWithFormat:SGText(@"Your settings are replaced by the file's, exported from version %@. Anything it does not have goes back to its default, and Spotify restarts."), mod];
++    showAlert(@"Import settings?", message, [SGSettingsAction actionWithTitle:@"Import and restart" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
+         importSettings(settings);
+     }]);
+ }
+diff --git a/tweak/Sources/App/About/Certificate.m b/tweak/Sources/App/About/Certificate.m
+index fd0d00c007913e3ff2aa77618ebd4cd71c12698b..12a7f944e8039683e7f1794285f6543a40e48a92 100644
+--- a/tweak/Sources/App/About/Certificate.m
++++ b/tweak/Sources/App/About/Certificate.m
+@@ -101,7 +101,7 @@ BOOL SGCertificateOfferShown(void) {
+ SGModRow *SGCertificateRow(void) {
+     if (!signedFree()) return nil;
+     NSDate *expires = SGCertificateExpiry();
+-    NSString *title = expires ? [NSString stringWithFormat:@"Signed until %@", dayOf(expires)] : @"Signed with a free Apple ID";
++    NSString *title = expires ? [NSString stringWithFormat:SGText(@"Signed until %@"), dayOf(expires)] : @"Signed with a free Apple ID";
+     return SGWithSymbol(SGLinkRow(title, @"A free Apple ID signs for 7 days, a certificate for a year", kCertificateURL), @"signature");
+ }
+ 
+diff --git a/tweak/Sources/App/About/Compatibility.m b/tweak/Sources/App/About/Compatibility.m
+index 3cef865879db98334c56a699f57597faca7ca7b9..e23ffe3ab43bc2cf3a19643b9604caef014f29dd 100644
+--- a/tweak/Sources/App/About/Compatibility.m
++++ b/tweak/Sources/App/About/Compatibility.m
+@@ -34,11 +34,11 @@ static NSArray<SGIncompatibility *> *incompatibilities(void) {
+         NSString *version = runningVersion();
+         if (version && ![version isEqualToString:SGSupportedSpotifyVersion]) {
+             SGIncompatibility *wrong = [SGIncompatibility new];
+-            wrong.title = [NSString stringWithFormat:@"Spotify %@ isn't supported", version];
+-            wrong.subtitle = [NSString stringWithFormat:@"The mod is made for %@ only", SGSupportedSpotifyVersion];
++            wrong.title = [NSString stringWithFormat:SGText(@"Spotify %@ isn't supported"), version];
++            wrong.subtitle = [NSString stringWithFormat:SGText(@"The mod is made for %@ only"), SGSupportedSpotifyVersion];
+             wrong.message = [NSString stringWithFormat:
+-                @"spoti.pw is made for Spotify %@ only. On any other version parts of it break or go missing, "
+-                @"so it won't work the way you expect.\n\n%@ Use a %@ IPA instead.",
++                SGText(@"spoti.pw is made for Spotify %@ only. On any other version parts of it break or go missing, "
++                @"so it won't work the way you expect.\n\n%@ Use a %@ IPA instead."),
+                 SGSupportedSpotifyVersion, kReportLine, SGSupportedSpotifyVersion];
+             wrong.key = @"spotifyglass.spotifyversion.warned";
+             wrong.stamp = version;
+@@ -49,8 +49,8 @@ static NSArray<SGIncompatibility *> *incompatibilities(void) {
+             eevee.title = @"EeveeSpotify isn't supported";
+             eevee.subtitle = @"It is injected alongside spoti.pw";
+             eevee.message = [NSString stringWithFormat:
+-                @"spoti.pw isn't made to run alongside EeveeSpotify. Both change the same parts of Spotify, "
+-                @"so things break or behave in ways you don't expect.\n\n%@ Use an IPA without EeveeSpotify instead.",
++                SGText(@"spoti.pw isn't made to run alongside EeveeSpotify. Both change the same parts of Spotify, "
++                @"so things break or behave in ways you don't expect.\n\n%@ Use an IPA without EeveeSpotify instead."),
+                 kReportLine];
+             eevee.key = @"spotifyglass.eevee.warned";
+             eevee.stamp = @"eevee";
+@@ -64,10 +64,10 @@ static NSArray<SGIncompatibility *> *incompatibilities(void) {
+ static void showWarning(SGIncompatibility *problem, void (^done)(void)) {
+     UIViewController *top = SGTopController();
+     if (!top) return;
+-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:problem.title
++    UIAlertController *alert = [SGSettingsAlert alertControllerWithTitle:problem.title
+                                                                    message:problem.message
+                                                             preferredStyle:UIAlertControllerStyleAlert];
+-    [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:^(UIAlertAction *action) {
++    [alert addAction:[SGSettingsAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:^(UIAlertAction *action) {
+         if (done) done();
+     }]];
+     [top presentViewController:alert animated:YES completion:nil];
+diff --git a/tweak/Sources/App/About/Signing.m b/tweak/Sources/App/About/Signing.m
+index 0e09257c29af18401df7eb486aa409a0675a53f7..eee735050b09d57bc8a0bb83106f55f5fd534353 100644
+--- a/tweak/Sources/App/About/Signing.m
++++ b/tweak/Sources/App/About/Signing.m
+@@ -58,22 +58,22 @@ static void showFix(void) {
+     UIViewController *top = SGTopController();
+     if (!appID || !top) return;
+     NSString *message = [NSString stringWithFormat:
+-        @"Sign Spotify again with the bundle id set to\n\n%@\n\n"
++        SGText(@"Sign Spotify again with the bundle id set to\n\n%@\n\n"
+         @"In Feather that is the Identifier field; leave PPQ protection off, it appends a random "
+         @"string and breaks this again.\n\n"
+         @"Why: this build is installed as %@ but signed under the App ID %@. iOS opens the now "
+         @"playing card by the App ID, so it asks for an app that is not there. Nothing else in the "
+-        @"mod is affected.", appID, bundleID, appID];
+-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"The lock screen cannot open Spotify"
++        @"mod is affected."), appID, bundleID, appID];
++    UIAlertController *sheet = [SGSettingsAlert alertControllerWithTitle:@"The lock screen cannot open Spotify"
+                                                                   message:message
+                                                            preferredStyle:UIAlertControllerStyleAlert];
+-    [sheet addAction:[UIAlertAction actionWithTitle:@"Copy the bundle id" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
++    [sheet addAction:[SGSettingsAction actionWithTitle:@"Copy the bundle id" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+         UIPasteboard.generalPasteboard.string = appID;
+     }]];
+-    [sheet addAction:[UIAlertAction actionWithTitle:@"Read more" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
++    [sheet addAction:[SGSettingsAction actionWithTitle:@"Read more" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+         SGOpenURL(SGSigningHelpURL);
+     }]];
+-    [sheet addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
++    [sheet addAction:[SGSettingsAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
+     [top presentViewController:sheet animated:YES completion:nil];
+ }
+ 
+diff --git a/tweak/Sources/App/About/Update.m b/tweak/Sources/App/About/Update.m
+index f90725b977734fa3db0e428c36853135b68a6f33..5a5367d841e680b823593ff39d55e597e732ebbb 100644
+--- a/tweak/Sources/App/About/Update.m
++++ b/tweak/Sources/App/About/Update.m
+@@ -158,7 +158,7 @@ NSString *SGUpdateStatus(void) {
+     if (sg_running) return @"checking…";
+     if (sg_failure) return sg_failure;
+     NSString *latest = SGUpdateVersion();
+-    if (latest) return [latest stringByAppendingString:@" is out"];
++    if (latest) return [latest stringByAppendingString:SGText(@" is out")];
+     if ([NSUserDefaults.standardUserDefaults doubleForKey:kChecked] > 0) return @"up to date";
+     return @"not checked";
+ }
+diff --git a/tweak/Sources/App/About/UpdateNotice.m b/tweak/Sources/App/About/UpdateNotice.m
+index e81091b37560bcbed9e9532353e606eb0dc5b956..fced3d244f049b6d14cdea1b2b6e0f450aaadbc7 100644
+--- a/tweak/Sources/App/About/UpdateNotice.m
++++ b/tweak/Sources/App/About/UpdateNotice.m
+@@ -33,10 +33,10 @@ static NSArray<SGUpdateChange *> *changesSinceThisBuild(void) {
+ // Three lines and a count: enough to know whether to care, with the whole changelog a tap away.
+ static NSString *noticeBody(NSString *version) {
+     NSArray<SGUpdateChange *> *changes = changesSinceThisBuild();
+-    NSMutableString *body = [NSMutableString stringWithFormat:@"This build is %s.", SG_VERSION];
++    NSMutableString *body = [NSMutableString stringWithFormat:SGText(@"This build is %s."), SG_VERSION];
+     NSUInteger shown = MIN(changes.count, (NSUInteger)3);
+     for (NSUInteger i = 0; i < shown; i++) [body appendFormat:@"\n\n• %@", changes[i].text];
+-    if (changes.count > shown) [body appendFormat:@"\n\nand %lu more in %@.", (unsigned long)(changes.count - shown), version];
++    if (changes.count > shown) [body appendFormat:SGText(@"\n\nand %lu more in %@."), (unsigned long)(changes.count - shown), version];
+     return body;
+ }
+ 
+@@ -64,20 +64,20 @@ static void offerWhenClear(NSInteger tries) {
+     // away under it, is still a sheet this release has had.
+     [NSUserDefaults.standardUserDefaults setObject:version forKey:kTold];
+     SGUpdateRelease *release = SGUpdateNewestRelease();
+-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:[NSString stringWithFormat:@"%@ is out", version]
++    UIAlertController *sheet = [SGSettingsAlert alertControllerWithTitle:[NSString stringWithFormat:SGText(@"%@ is out"), version]
+                                                                   message:noticeBody(version)
+                                                            preferredStyle:UIAlertControllerStyleAlert];
+-    [sheet addAction:[UIAlertAction actionWithTitle:@"What's new" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
++    [sheet addAction:[SGSettingsAction actionWithTitle:@"What's new" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+         // The sheet is still going as this runs, so the page waits for the screen it is pushed onto.
+         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+             SGShowPage(SGTopController(), SGUpdatePage());
+         });
+     }]];
+     if (release.url.length)
+-        [sheet addAction:[UIAlertAction actionWithTitle:@"Get it" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
++        [sheet addAction:[SGSettingsAction actionWithTitle:@"Get it" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+             SGOpenURL(release.url);
+         }]];
+-    [sheet addAction:[UIAlertAction actionWithTitle:@"Not now" style:UIAlertActionStyleCancel handler:nil]];
++    [sheet addAction:[SGSettingsAction actionWithTitle:@"Not now" style:UIAlertActionStyleCancel handler:nil]];
+     [top presentViewController:sheet animated:YES completion:nil];
+     SGLog(@"update notice: offered %@ over %@", version, NSStringFromClass(top.class));
+ }
+diff --git a/tweak/Sources/App/About/UpdatePage.m b/tweak/Sources/App/About/UpdatePage.m
+index 7db8f0f8cbb7b048f1fc147ad475cf9827d8bf4d..f9e8c8ec50f1bad0ea94c0765aab84c20c11dbf6 100644
+--- a/tweak/Sources/App/About/UpdatePage.m
++++ b/tweak/Sources/App/About/UpdatePage.m
+@@ -112,13 +112,13 @@ static NSArray<SGUpdateRelease *> *releasesToShow(void) {
+ 
+ - (NSString *)introText {
+     SGUpdateRelease *newest = SGUpdateNewestRelease();
+-    if (!newest) return [NSString stringWithFormat:@"This build is %s. Nothing has been asked of GitHub yet.", SG_VERSION];
++    if (!newest) return [NSString stringWithFormat:SGText(@"This build is %s. Nothing has been asked of GitHub yet."), SG_VERSION];
+     NSString *date = longDate(newest.date);
+-    NSString *when = date.length ? [@" came out on " stringByAppendingString:date] : @" is out";
++    NSString *when = date.length ? [SGText(@" came out on ") stringByAppendingString:date] : SGText(@" is out");
+     if (SGUpdateVersion())
+-        return [NSString stringWithFormat:@"%@%@, and this build is %s. Everything in between is below.",
++        return [NSString stringWithFormat:SGText(@"%@%@, and this build is %s. Everything in between is below."),
+                 newest.version, when, SG_VERSION];
+-    return [NSString stringWithFormat:@"This build, %s, is GitHub's newest release; it%@. What went into it is below.",
++    return [NSString stringWithFormat:SGText(@"This build, %s, is GitHub's newest release; it%@. What went into it is below."),
+             SG_VERSION, when];
+ }
+ 
+@@ -133,7 +133,7 @@ static NSArray<SGUpdateRelease *> *releasesToShow(void) {
+     NSMutableArray<SGUpdateRow *> *top = [NSMutableArray arrayWithObject:check];
+     SGUpdateRelease *newest = SGUpdateNewestRelease();
+     if (SGUpdateVersion() && newest.url.length)
+-        [top addObject:linkRow([@"Get " stringByAppendingString:newest.version],
++        [top addObject:linkRow([SGText(@"Get ") stringByAppendingString:newest.version],
+                                @"The release on GitHub, where its .deb is", @"arrow.down.circle", newest.url)];
+     [top addObject:linkRow(@"All releases", @"Every version, this one and the ones before it",
+                            @"clock.arrow.circlepath", [SGRepoURL stringByAppendingString:@"/releases"])];
+diff --git a/tweak/Sources/App/ModSettings.x b/tweak/Sources/App/ModSettings.x
+index 2c95f0ff492c5ae08b9b444efeeb0cbb5d95d581..dcc84331a30fae7aba3974bff972927017f6a270 100644
+--- a/tweak/Sources/App/ModSettings.x
++++ b/tweak/Sources/App/ModSettings.x
+@@ -115,7 +115,7 @@ static UIViewController *modSettingsPage(void) {
+     if (!(self = [super initWithFrame:frame])) return nil;
+     _icon = SGSymbolView(@"slider.horizontal.3", 20, UIImageSymbolWeightRegular, 24);
+     _title = [UILabel new];
+-    _title.text = @"Mod Settings";
++    _title.text = SGText(@"Mod Settings");
+     _title.textColor = UIColor.whiteColor;
+     _chevron = SGSymbolView(@"chevron.right", 11, UIImageSymbolWeightSemibold, 12);
+     for (UIView *v in @[_icon, _title, _chevron]) [self addSubview:v];
+diff --git a/tweak/Sources/App/Onboarding/Tour.m b/tweak/Sources/App/Onboarding/Tour.m
+index d8fd08c10c66dcaa4b3cbecf997563046ff39396..3b4287c9c3159ddcf71b870064904ab9eb190a84 100644
+--- a/tweak/Sources/App/Onboarding/Tour.m
++++ b/tweak/Sources/App/Onboarding/Tour.m
+@@ -62,11 +62,11 @@ static UIButton *glassButton(NSString *title) {
+     icon.layer.cornerCurve = kCACornerCurveContinuous;
+ 
+     UILabel *name = [UILabel new];
+-    name.text = title;
++    name.text = SGText(title);
+     name.font = [UIFont systemFontOfSize:17 weight:UIFontWeightSemibold];
+     name.textColor = UIColor.whiteColor;
+     UILabel *line = [UILabel new];
+-    line.text = subtitle;
++    line.text = SGText(subtitle);
+     line.font = [UIFont systemFontOfSize:13];
+     line.textColor = SGGrey();
+     line.numberOfLines = 0;
+@@ -150,7 +150,7 @@ static UIButton *glassButton(NSString *title) {
+     UIImageView *icon = SGSymbolView(@"exclamationmark.triangle.fill", 15, UIImageSymbolWeightSemibold, 22);
+     icon.tintColor = UIColor.systemYellowColor;
+     UILabel *text = [UILabel new];
+-    text.text = SGRedesignTested() ? @"The redesign is a beta. Expect lags, freezes and bugs, and if you find one, please report it." : SGRedesignUntestedWarning();
++    text.text = SGText(SGRedesignTested() ? @"The redesign is a beta. Expect lags, freezes and bugs, and if you find one, please report it." : SGRedesignUntestedWarning());
+     text.font = [UIFont systemFontOfSize:13];
+     text.textColor = SGGrey();
+     text.numberOfLines = 0;
+@@ -197,7 +197,7 @@ static UIButton *glassButton(NSString *title) {
+     [strip addSubview:halo];
+ 
+     UILabel *heading = [UILabel new];
+-    heading.text = @"Pick your look.";
++    heading.text = SGText(@"Pick your look.");
+     heading.font = [UIFont systemFontOfSize:30 weight:UIFontWeightBold];
+     heading.textColor = UIColor.whiteColor;
+     heading.numberOfLines = 0;
+@@ -229,7 +229,7 @@ static UIButton *glassButton(NSString *title) {
+     _primary = glassButton(@"Start listening");
+     [_primary addTarget:self action:@selector(finish) forControlEvents:UIControlEventTouchUpInside];
+     UILabel *footer = [UILabel new];
+-    footer.text = @"Hold Home to open settings.";
++    footer.text = SGText(@"Hold Home to open settings.");
+     footer.font = [UIFont systemFontOfSize:13];
+     footer.textColor = SGGrey();
+     footer.textAlignment = NSTextAlignmentCenter;
+diff --git a/tweak/Sources/App/Pages.m b/tweak/Sources/App/Pages.m
+index c97bcd7b2550e78481cdb9b15ffe02d30b0acede..2175c0a5df135e3ab027588ae8468c878c8aee92 100644
+--- a/tweak/Sources/App/Pages.m
++++ b/tweak/Sources/App/Pages.m
+@@ -27,7 +27,7 @@ void SGSetRedesignedUI(BOOL on) {
+ }
+ 
+ NSString *SGRedesignUntestedWarning(void) {
+-    return [NSString stringWithFormat:@"The redesign is made for iOS 26 and has not been tested on iOS %@ at all. Expect bugs and freezes. If Spotify stops opening, delete and reinstall it.", UIDevice.currentDevice.systemVersion];
++    return [NSString stringWithFormat:SGText(@"The redesign is made for iOS 26 and has not been tested on iOS %@ at all. Expect bugs and freezes. If Spotify stops opening, delete and reinstall it."), UIDevice.currentDevice.systemVersion];
+ }
+ 
+ // The whole look changes hands at launch, so the switch asks for the restart straight away rather than
+@@ -35,11 +35,11 @@ NSString *SGRedesignUntestedWarning(void) {
+ static void offerRestart(BOOL on) {
+     NSString *restart = on ? @"The redesign takes over when Spotify starts again. Spotify closes now; open it again to see it." : @"Spotify's own look comes back when Spotify starts again. Spotify closes now; open it again to see it.";
+     BOOL untested = on && !SGRedesignTested();
+-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:untested ? @"Not tested on this iOS" : @"Restart Spotify"
++    UIAlertController *alert = [SGSettingsAlert alertControllerWithTitle:untested ? @"Not tested on this iOS" : @"Restart Spotify"
+         message:untested ? [NSString stringWithFormat:@"%@\n\n%@", SGRedesignUntestedWarning(), restart] : restart
+         preferredStyle:UIAlertControllerStyleAlert];
+-    [alert addAction:[UIAlertAction actionWithTitle:@"Later" style:UIAlertActionStyleCancel handler:nil]];
+-    [alert addAction:[UIAlertAction actionWithTitle:@"Restart now" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { SGRestartSpotify(); }]];
++    [alert addAction:[SGSettingsAction actionWithTitle:@"Later" style:UIAlertActionStyleCancel handler:nil]];
++    [alert addAction:[SGSettingsAction actionWithTitle:@"Restart now" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { SGRestartSpotify(); }]];
+     [SGTopController() presentViewController:alert animated:YES completion:nil];
+ }
+ 
+diff --git a/tweak/Sources/App/Performance/PerformancePage.m b/tweak/Sources/App/Performance/PerformancePage.m
+index 40fa0dd5d1e3e99bdba7e44a22ffd671c9a1a2bc..c32f290a83092ef572f813e9900e12973bc7d9e5 100644
+--- a/tweak/Sources/App/Performance/PerformancePage.m
++++ b/tweak/Sources/App/Performance/PerformancePage.m
+@@ -5,8 +5,8 @@
+ #import "Diagnostics/SGPerformance.h"
+ 
+ static void message(NSString *title, NSString *text) {
+-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:title message:text preferredStyle:UIAlertControllerStyleAlert];
+-    [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
++    UIAlertController *alert = [SGSettingsAlert alertControllerWithTitle:title message:text preferredStyle:UIAlertControllerStyleAlert];
++    [alert addAction:[SGSettingsAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
+     [SGTopController() presentViewController:alert animated:YES completion:nil];
+ }
+ static SGModRow *metric(NSString *title, NSString *key, NSString *unit) {
+diff --git a/tweak/Sources/App/Sheet/SGCardSheet.m b/tweak/Sources/App/Sheet/SGCardSheet.m
+index 8885022d1b73415a4bdf2ba7e757d78c7f4d4462..dc130f0adf538dd66b3785a4c0702199d844a7b0 100644
+--- a/tweak/Sources/App/Sheet/SGCardSheet.m
++++ b/tweak/Sources/App/Sheet/SGCardSheet.m
+@@ -56,6 +56,7 @@ static CAShapeLayer *newStroke(CGFloat width) {
+ 
+ - (instancetype)initWithTitle:(NSString *)title symbol:(NSString *)symbol color:(UIColor *)color prominent:(BOOL)prominent {
+     if (!(self = [super initWithFrame:CGRectZero])) return nil;
++    title = SGText(title);
+     _prominent = prominent;
+     self.isAccessibilityElement = YES;
+     self.accessibilityTraits = UIAccessibilityTraitButton;
+@@ -272,7 +273,7 @@ static __weak SGCardSheet *sg_showing;
+ 
+ - (UILabel *)label:(NSString *)text font:(UIFont *)font color:(UIColor *)color {
+     UILabel *label = [UILabel new];
+-    label.text = text;
++    label.text = SGText(text);
+     label.font = font;
+     label.textColor = color;
+     label.numberOfLines = 0;
+@@ -321,7 +322,7 @@ static __weak SGCardSheet *sg_showing;
+ 
+     UIButtonConfiguration *config = [UIButtonConfiguration plainButtonConfiguration];
+     config.baseForegroundColor = [UIColor colorWithWhite:1 alpha:0.6];
+-    config.attributedTitle = [[NSAttributedString alloc] initWithString:self.dismissTitle ?: @"Not now"
++    config.attributedTitle = [[NSAttributedString alloc] initWithString:SGText(self.dismissTitle ?: @"Not now")
+                                                              attributes:@{NSFontAttributeName: [UIFont systemFontOfSize:15 weight:UIFontWeightMedium]}];
+     UIButton *later = [UIButton buttonWithConfiguration:config primaryAction:nil];
+     [later addTarget:self action:@selector(dismissCard) forControlEvents:UIControlEventTouchUpInside];
+diff --git a/tweak/Sources/Core/SGChinese.inc b/tweak/Sources/Core/SGChinese.inc
+new file mode 100644
+index 0000000000000000000000000000000000000000..418c4f521a9f21268480e1ddeb8ba56a05ed513c
+--- /dev/null
++++ b/tweak/Sources/Core/SGChinese.inc
+@@ -0,0 +1,677 @@
++// Generated by scripts/generate-localization.py; edit localization/zh-Hans.json.
++            @"\n\nand %lu more in %@.": @"\n\n另有 %lu 项更新，详见 %@。",
++            @" Download goes on from where it stopped.": @" 下载将从上次中断的位置继续。",
++            @" came out on ": @" 发布于 ",
++            @" is out": @" 已发布",
++            @" is unstable": @"尚不稳定",
++            @"% of one core": @"相对于单个核心的百分比",
++            @"%@ (featured)": @"%@（合作艺人）",
++            @"%@ is out": @"%@ 已发布",
++            @"%@ or %@": @"%@ 或 %@",
++            @"%@ seconds": @"%@ 秒",
++            @"%@%@, and this build is %s. Everything in between is below.": @"%@%@，当前版本为 %s。下方列出了期间的所有更新。",
++            @"%ld by default, %ld to %ld": @"默认 %ld，范围 %ld 至 %ld",
++            @"%lu effects": @"%lu 项音效",
++            @"%lu points": @"%lu 个节点",
++            @"1 effect": @"1 项音效",
++            @"15 bands, with presets": @"15 频段，支持预设",
++            @"A %@ file from Files": @"从“文件”中选择 %@ 文件",
++            @"A STUDENT PROJECT": @"学生开发的项目",
++            @"A free Apple ID signs for 7 days, a certificate for a year": @"免费 Apple ID 签名有效期为 7 天，证书签名通常为 1 年",
++            @"A moving cover behind the lock screen's controls": @"在锁屏控制按钮后显示动态封面",
++            @"A paused song holds the background still.": @"暂停歌曲时，背景也会停止运动。",
++            @"A room around the music": @"为音乐添加空间感",
++            @"A tap on each kick and snare, and a rumble under the bass": @"随底鼓和军鼓轻触振动，随低音持续振动",
++            @"A tap on each kick and snare, no rumble": @"仅随底鼓和军鼓轻触振动",
++            @"A tap on each kick, and a rumble under the bass": @"随底鼓轻触振动，随低音持续振动",
++            @"A track without a clip shows Fluid artwork, and so does every track in Low Power Mode or with Reduce Motion on.": @"没有视频的歌曲会显示流动封面；低电量模式或开启“减弱动态效果”时也会使用流动封面。",
++            @"A wider or narrower stereo image": @"扩展或收窄立体声声场",
++            @"AI Chat (Martini)": @"AI 聊天（Martini）",
++            @"AMOLED background": @"纯黑背景",
++            @"About": @"关于",
++            @"About the artist": @"关于艺人",
++            @"About this switch": @"关于此开关",
++            @"Accent colour": @"主题色",
++            @"Acoustic": @"原声",
++            @"Add": @"添加",
++            @"Add a Tab": @"添加标签页",
++            @"Add a tab…": @"添加标签页…",
++            @"Add to library": @"添加到音乐库",
++            @"Add to playlist": @"添加到歌单",
++            @"After a minute of representative use, save the current window.": @"在典型使用场景下运行一分钟后，保存当前采样窗口。",
++            @"Album": @"专辑",
++            @"Albums": @"专辑",
++            @"All flags": @"全部功能开关",
++            @"All releases": @"所有版本",
++            @"Ambience": @"环境",
++            @"Analog modelling": @"模拟电路建模",
++            @"Animated artwork": @"动态封面",
++            @"Animated artwork is the lock screen's own, and iOS takes one only from 26 on. This phone runs iOS %@, where the cover stays still.": @"动态封面由系统锁屏提供，仅支持 iOS 26 及以上版本。此设备运行 iOS %@，因此显示静态封面。",
++            @"Animated cover": @"动态封面",
++            @"Animated lock screen": @"锁屏动态封面",
++            @"Another switch is forcing this flag, so the row shows what it forces instead of taking a value of its own.": @"另一个设置正在强制控制此功能，因此这里显示其实际状态，无法单独更改。",
++            @"Any": @"任意",
++            @"Any credit on the track": @"歌曲署名中的任意艺人",
++            @"Any curve, like AutoEq's corrections": @"自定义响应曲线，例如 AutoEq 校正曲线",
++            @"App icon": @"应用图标",
++            @"Appearance": @"外观",
++            @"Appears on": @"收录于",
++            @"Apple Music gets only the artist and album name. Nothing is downloaded in Low Data or Low Power Mode.": @"仅向 Apple Music 发送艺人和专辑名称。低数据模式或低电量模式下不会下载内容。",
++            @"Apple Music style player": @"Apple Music 风格播放器",
++            @"Apple Music's, where the album has one": @"显示 Apple Music 提供的专辑动态封面（如有）",
++            @"Applies immediately. Logs stay on this device.": @"立即生效，日志仅保存在此设备。",
++            @"Applies now. Samples every 2 seconds while Spotify is active.": @"立即生效。Spotify 位于前台时每 2 秒采样一次。",
++            @"Arabic": @"阿拉伯语",
++            @"Artist": @"艺人",
++            @"Artist and editors": @"艺人与编辑",
++            @"Artist facts": @"艺人资讯",
++            @"Artist pick": @"艺人精选",
++            @"Artist playlists": @"艺人歌单",
++            @"Artists": @"艺人",
++            @"Artwork": @"封面",
++            @"Artwork background": @"封面背景",
++            @"Artwork sources": @"封面来源",
++            @"Ask on Discord": @"在 Discord 寻求帮助",
++            @"Asked in this order": @"按此顺序获取",
++            @"Asked top to bottom until one has a clip. Apple Music gets only the artist and album name.": @"从上到下依次获取，直到找到视频。仅向 Apple Music 发送艺人和专辑名称。",
++            @"Asked top to bottom until one has synced lyrics. Sources get only the track, never your account.": @"从上到下依次获取，直到找到同步歌词。来源仅接收歌曲信息，不会收到你的账户信息。",
++            @"Audio effects": @"音效",
++            @"Audiobooks": @"有声书",
++            @"Auto": @"自动",
++            @"Auto check updates": @"自动检查更新",
++            @"Auto keeps Spotify's value. Changes apply after you restart Spotify.": @"“自动”保留 Spotify 原有值。更改将在重启 Spotify 后生效。",
++            @"AutoEq's GraphicEQ format: \"GraphicEQ:\", then a frequency and a gain in dB per point, separated by semicolons. Paste the GraphicEQ file for your headphones, or edit the text and save.": @"使用 AutoEq 的 GraphicEQ 格式：以“GraphicEQ:”开头，随后每个节点包含频率和增益（dB），节点之间用分号分隔。粘贴耳机的 GraphicEQ 配置，或编辑文本后保存。",
++            @"Back to flat": @"恢复平直曲线",
++            @"Background": @"背景",
++            @"Bar passes / requests": @"迷你播放器执行 / 请求次数",
++            @"Bar to cover art animation": @"迷你播放器展开至封面的动画",
++            @"Baseline build": @"基准版本",
++            @"Baseline context differs": @"基准条件不一致",
++            @"Baseline saved": @"基准已保存",
++            @"Bass": @"低音",
++            @"Bass boost": @"低音增强",
++            @"Beat": @"节拍",
++            @"Block": @"屏蔽",
++            @"Block from what's playing…": @"屏蔽当前歌曲的艺人…",
++            @"Block telemetry": @"拦截遥测",
++            @"Blocked": @"已屏蔽",
++            @"Blocked Artists": @"已屏蔽艺人",
++            @"Blocked artists": @"已屏蔽艺人",
++            @"Blue": @"蓝色",
++            @"Blur": @"模糊",
++            @"Bottom sheets": @"底部弹出面板",
++            @"Bright": @"明亮",
++            @"Brightness": @"亮度",
++            @"Browse": @"浏览",
++            @"Burst skip": @"连续跳过",
++            @"Buy me a coffee": @"请我喝杯咖啡",
++            @"Buy the student behind it a coffee": @"请开发它的学生喝杯咖啡",
++            @"CPU includes Spotify and all injected modules and can exceed 100%. Heartbeats sample responsiveness, not FPS or every short stall. While recording, a 25 ms background probe captures up to 24 main-thread stack samples for delays above 50 ms; export includes these stacks for loading investigations. Thermal state and Low Power Mode are recorded; a change starts a fresh window.": @"CPU 占用包含 Spotify 和所有注入模块，可能超过 100%。心跳采样衡量响应情况，不能代表帧率或捕获每一次短暂卡顿。记录期间，后台探针每 25 毫秒检查一次；延迟超过 50 毫秒时，最多保留 24 条主线程堆栈，导出后可用于排查加载问题。温度状态与低电量模式也会记录，条件改变时会开始新的采样窗口。",
++            @"Can't use that link": @"无法使用此链接",
++            @"Cancel": @"取消",
++            @"Cancel download": @"取消下载",
++            @"Cathedral": @"大教堂",
++            @"Chamber": @"室内空间",
++            @"Changes": @"更新内容",
++            @"Changes apply after you restart Spotify.": @"更改将在重启 Spotify 后生效。",
++            @"Changes apply straight away.": @"更改立即生效。",
++            @"Chapter skip controls": @"章节跳转按钮",
++            @"Chat entry point": @"聊天入口",
++            @"Check now": @"立即检查",
++            @"Checking…": @"正在检查…",
++            @"Chinese": @"中文",
++            @"Chinese (Simplified)": @"中文（简体）",
++            @"Chinese (Traditional)": @"中文（繁体）",
++            @"Choose a Link": @"选择链接",
++            @"Choose a Spotify page or enter a custom link": @"选择 Spotify 页面或输入自定义链接",
++            @"Choose an Icon": @"选择图标",
++            @"Choosing a file uses it straight away. Swipe left on one to delete it.": @"选择文件后立即应用，向左轻扫文件可将其删除。",
++            @"Classical": @"古典",
++            @"Clear history and baseline": @"清除记录与基准",
++            @"Clear lyrics debug logs": @"清除歌词调试日志",
++            @"Clutter": @"界面精简",
++            @"Collect lyrics debug logs": @"收集歌词调试日志",
++            @"Collecting a one-minute window": @"正在收集一分钟样本",
++            @"Colour": @"颜色",
++            @"Comments card": @"评论卡片",
++            @"Companion content": @"相关内容",
++            @"Compare the same scenario and device conditions after your next change.": @"下次修改后，请在相同场景和设备条件下进行比较。",
++            @"Concerts": @"演唱会",
++            @"Connect as a bottom sheet": @"以底部面板显示设备连接",
++            @"Connect sheet from the video switcher": @"从视频切换器打开设备面板",
++            @"Connect to Wi-Fi to download Sing's voice model.": @"请连接 Wi-Fi 以下载人声模型。",
++            @"Connect to a device": @"连接设备",
++            @"Control menu": @"控制菜单",
++            @"Controls": @"控制按钮",
++            @"Convolver": @"卷积器",
++            @"Copy the bundle id": @"复制应用标识符",
++            @"Could not delete the file": @"无法删除文件",
++            @"Could not import the file": @"无法导入文件",
++            @"Could not write the performance report. Try again.": @"无法写入性能报告，请重试。",
++            @"Counts for this process while recording is active. Multiple layout requests in one pass share one application. Counts reset when history is cleared.": @"统计此进程在开启记录期间的次数。同一轮中的多个布局请求仅执行一次。清除记录后计数会重置。",
++            @"Cover artwork": @"封面图片",
++            @"Create": @"创建",
++            @"Creator and collaborators": @"创建者与协作者",
++            @"Credits": @"制作人员",
++            @"Crossfeed": @"交叉馈送",
++            @"Crossfeed · MIT License": @"交叉馈送 · MIT 许可证",
++            @"Curation pills": @"歌单筛选标签",
++            @"Current line in place of the artist": @"在艺人位置显示当前歌词",
++            @"Current one-minute window": @"当前一分钟窗口",
++            @"Custom link": @"自定义链接",
++            @"Custom navbar": @"自定义导航栏",
++            @"Customize": @"自定义",
++            @"Czech": @"捷克语",
++            @"DDC file": @"DDC 文件",
++            @"DDC files": @"DDC 文件",
++            @"DJ beta badge": @"DJ 测试版标识",
++            @"DJ button": @"DJ 按钮",
++            @"DJ card": @"DJ 卡片",
++            @"Danish": @"丹麦语",
++            @"Default (700 Hz, 4.5 dB)": @"默认（700 Hz，4.5 dB）",
++            @"Delete": @"删除",
++            @"Denser rows": @"紧凑列表",
++            @"Description": @"简介",
++            @"Disable Canvas": @"禁用 Canvas",
++            @"Discovered on": @"发现于",
++            @"Display": @"显示",
++            @"Double tap here": @"双击此区域",
++            @"Double tap the player": @"双击播放器",
++            @"Download": @"下载",
++            @"Download failed": @"下载失败",
++            @"Download over cellular?": @"使用蜂窝网络下载？",
++            @"Download voice model": @"下载人声模型",
++            @"Downloaded · ": @"已下载 · ",
++            @"Downloading %lld %% · %lld of %@": @"正在下载 %lld %% · %lld / %@",
++            @"Downloads": @"已下载",
++            @"Drag to reorder, tap to show or hide.": @"拖动调整顺序，点按显示或隐藏。",
++            @"Drive": @"驱动强度",
++            @"Dutch": @"荷兰语",
++            @"EeveeSpotify is replacing lyrics, so these sources stay off. To use them, turn on Do Not Replace Lyrics in EeveeSpotify's lyrics settings and restart Spotify.": @"EeveeSpotify 正在替换歌词，因此这里的来源保持关闭。如需使用，请在 EeveeSpotify 的歌词设置中开启“Do Not Replace Lyrics（不替换歌词）”，然后重启 Spotify。",
++            @"EeveeSpotify isn't supported": @"不支持同时运行 EeveeSpotify",
++            @"Effects": @"音效",
++            @"Effects written as EEL scripts": @"使用 EEL 脚本编写的音效",
++            @"Electronic": @"电子",
++            @"Enable collection, play a different song and then return to the problem song.": @"先开启日志收集，播放另一首歌曲，再返回有问题的歌曲。",
++            @"Enable recording and keep Spotify active in one scenario for at least 62 seconds.": @"请开启记录，并让 Spotify 在同一场景下保持前台运行至少 62 秒。",
++            @"English": @"英语",
++            @"Enjoying spoti.pw?": @"喜欢 spoti.pw 吗？",
++            @"Enter a Spotify share link or spotify: URI.": @"请输入 Spotify 分享链接或 spotify: URI。",
++            @"Enter a custom link…": @"输入自定义链接…",
++            @"Equalizer": @"均衡器",
++            @"Even where Spotify has none": @"也为 Spotify 未提供歌词的歌曲获取歌词",
++            @"Evens out or livens up the dynamics": @"平衡或增强声音动态",
++            @"Every effect goes off, and every value, curve and file choice back to its default. The Effects switch and your imported files stay.": @"关闭所有单项音效，并将参数、曲线和文件选择恢复默认。音效总开关和已导入的文件会保留。",
++            @"Every switch goes off, flag overrides and the tab bar layout are cleared, and Spotify restarts as it came, with the mod doing nothing until asked. Spotify's own settings are untouched.": @"所有模组开关将关闭，功能覆盖与导航栏布局将清除，并重启 Spotify。重置后模组功能默认关闭。Spotify 自身设置不会改变。",
++            @"Every tab of Spotify's comes back where Spotify put it, and the tabs you added go.": @"恢复 Spotify 原有标签页及其顺序，并移除你添加的标签页。",
++            @"Every version, this one and the ones before it": @"查看当前版本及所有历史版本",
++            @"Everyone": @"所有人",
++            @"Everything": @"全部",
++            @"Expand the sticky header on tap": @"点按展开吸顶页眉",
++            @"Explanations from Genius. Tap the bubble after a line, or hold the line.": @"释义来自 Genius。点按歌词后的气泡，或长按歌词查看。",
++            @"Explore (video deck)": @"探索（视频卡片）",
++            @"Explore the artist": @"探索艺人",
++            @"Export failed": @"导出失败",
++            @"Export lyrics debug logs": @"导出歌词调试日志",
++            @"Export performance history": @"导出性能记录",
++            @"Export settings": @"导出设置",
++            @"Fade into a blur": @"渐变为模糊背景",
++            @"Fade out": @"淡出",
++            @"Fans also like": @"粉丝也喜欢",
++            @"Featuring": @"参与作品",
++            @"Filter pills": @"筛选标签",
++            @"Find and sort bar": @"查找与排序栏",
++            @"Finnish": @"芬兰语",
++            @"Flags": @"功能开关",
++            @"Flat": @"平直",
++            @"Floating chat": @"悬浮聊天",
++            @"Fluid artwork": @"流动封面",
++            @"Fluid artwork's dither · MIT License": @"流动封面的抖动算法 · MIT 许可证",
++            @"Fluid artwork's renderer · MIT License": @"流动封面渲染器 · MIT 许可证",
++            @"Fluid artwork's simplex noise · MIT License": @"流动封面的单纯形噪声 · MIT 许可证",
++            @"Follow": @"关注",
++            @"Follows": @"跟随声音",
++            @"Force": @"强制应用",
++            @"French": @"法语",
++            @"From the artist": @"来自艺人",
++            @"Gain and limiter, always on": @"增益与限幅器（始终开启）",
++            @"General use": @"日常使用",
++            @"German": @"德语",
++            @"Gestures": @"手势",
++            @"Get ": @"下载 ",
++            @"Get it": @"下载更新",
++            @"Glass": @"玻璃",
++            @"Glass header buttons": @"玻璃效果顶部按钮",
++            @"Glass lyrics": @"玻璃效果歌词",
++            @"Glowing pill": @"发光标签",
++            @"Gradient": @"渐变背景",
++            @"Graphic EQ": @"图形均衡器",
++            @"GraphicEQ files for thousands of headphones": @"适用于数千款耳机的 GraphicEQ 配置",
++            @"Greek": @"希腊语",
++            @"Green": @"绿色",
++            @"Header": @"页眉",
++            @"Headphone correction files": @"耳机校正文件",
++            @"Hebrew": @"希伯来语",
++            @"Height": @"高度",
++            @"Hidden": @"已隐藏",
++            @"Hide above the tracks": @"在歌曲列表上方隐藏",
++            @"Hide cards below the player": @"隐藏播放器下方卡片",
++            @"Hide in the header": @"在页眉隐藏",
++            @"Hide in the playlist header": @"在歌单页眉隐藏",
++            @"Hide labels": @"隐藏文字标签",
++            @"Hide on Home": @"在首页隐藏",
++            @"Hide on the page": @"在页面隐藏",
++            @"Hide on the player": @"在播放器中隐藏",
++            @"Hide playlist buttons": @"隐藏歌单按钮",
++            @"Hide social proof in Search": @"隐藏搜索页的社交推荐信息",
++            @"Hide the AI playlist creation tip": @"隐藏 AI 歌单创建提示",
++            @"Hide the Puffin nudge": @"隐藏 Puffin 提醒",
++            @"Hide the account switching tip": @"隐藏切换账户提示",
++            @"Hide the concert notifications tip": @"隐藏演唱会通知提示",
++            @"Hide the data saver tip": @"隐藏流量节省提示",
++            @"Hide the device button": @"隐藏设备按钮",
++            @"Hide the live event tip": @"隐藏现场活动提示",
++            @"Hide the live event venue tip": @"隐藏现场活动场地提示",
++            @"Hide the smart shuffle helper": @"隐藏智能随机播放提示",
++            @"Hide the tab bar": @"隐藏标签栏",
++            @"Hide the video carousel in Search": @"隐藏搜索页的视频轮播",
++            @"Hide the watch feed explorer tip": @"隐藏视频动态探索提示",
++            @"Hindi": @"印地语",
++            @"Hold Home to open settings.": @"长按首页按钮打开模组设置。",
++            @"Hold and drag to resize": @"长按并拖动调整大小",
++            @"Home": @"首页",
++            @"Home & Library": @"首页与音乐库",
++            @"Home screen widget": @"主屏幕小组件",
++            @"Home scrolling": @"首页滚动",
++            @"Hungarian": @"匈牙利语",
++            @"I'm a student and I build it for free, in my spare time. If it made your music better, a coffee helps me keep going.": @"我是一名学生，利用课余时间免费开发这个项目。如果它改善了你的听歌体验，请我喝杯咖啡能帮助我继续开发。",
++            @"Icon": @"图标",
++            @"Icons only": @"仅显示图标",
++            @"Idle": @"空闲",
++            @"Idle playback": @"静置播放",
++            @"Import and restart": @"导入并重启",
++            @"Import file…": @"导入文件…",
++            @"Import settings": @"导入设置",
++            @"Import settings?": @"导入设置？",
++            @"Impulse response": @"脉冲响应",
++            @"Impulse responses": @"脉冲响应",
++            @"In the player": @"播放器内",
++            @"Indonesian": @"印度尼西亚语",
++            @"Intent pills": @"意图标签",
++            @"It is injected alongside spoti.pw": @"检测到它与 spoti.pw 同时注入",
++            @"It starts with \"GraphicEQ:\", then pairs of a frequency and a gain: GraphicEQ: 20 -1.2; 21 -1.1; …": @"应以“GraphicEQ:”开头，随后依次填写频率和增益，例如：GraphicEQ: 20 -1.2; 21 -1.1; …",
++            @"It takes %@ on this iPhone. Remove it to free the space; Sing is unavailable without it.": @"模型在此 iPhone 上占用 %@。移除可释放空间，但移除后无法使用伴唱功能。",
++            @"Italian": @"意大利语",
++            @"JSON with build, device conditions, samples and baseline.": @"导出包含版本、设备条件、样本和基准的 JSON 文件。",
++            @"Japanese": @"日语",
++            @"Join the Discord": @"加入 Discord 社区",
++            @"Karaoke": @"卡拉 OK",
++            @"Korean": @"韩语",
++            @"Labs": @"实验功能",
++            @"Large hall": @"大型大厅",
++            @"Large room": @"大房间",
++            @"Largest": @"最大",
++            @"Largest first": @"按字号从大到小排列",
++            @"Later": @"稍后",
++            @"Legacy": @"经典界面",
++            @"Length and saves": @"时长与收藏数",
++            @"Library": @"音乐库",
++            @"Library Pro": @"增强音乐库",
++            @"Library settings": @"音乐库设置",
++            @"Licenses": @"开源许可",
++            @"Lifts the low end": @"增强低频",
++            @"Like and dislike buttons": @"喜欢与不喜欢按钮",
++            @"Liked Songs": @"已点赞的歌曲",
++            @"Lime": @"青柠色",
++            @"Limiter release": @"限幅释放时间",
++            @"Limiter threshold": @"限幅阈值",
++            @"Line meanings": @"歌词释义",
++            @"Link": @"链接",
++            @"Liquid Glass": @"液态玻璃",
++            @"Live Activity": @"实时活动",
++            @"Live events": @"现场活动",
++            @"Liveprog's EEL2 · zlib License": @"Liveprog 的 EEL2 · zlib 许可证",
++            @"Loading": @"正在加载",
++            @"Local files from the Files app": @"从“文件”应用导入本地文件",
++            @"Lock screen lyrics": @"锁屏歌词",
++            @"Lock screen widget": @"锁屏小组件",
++            @"Looks like Apple Music. Better lyrics, Live Activity.": @"Apple Music 风格界面，提供增强歌词和实时活动。",
++            @"Loudness": @"响度增强",
++            @"Lyrics": @"歌词",
++            @"Lyrics diagnostics": @"歌词诊断",
++            @"Lyrics for every track": @"为所有歌曲获取歌词",
++            @"Lyrics passes / requests": @"歌词布局执行 / 请求次数",
++            @"Lyrics preview": @"歌词预览",
++            @"Lyrics sources": @"歌词来源",
++            @"Made For You": @"为你推荐",
++            @"Main or featured": @"主要艺人或合作艺人",
++            @"Main queue delay p95": @"主线程延迟 P95",
++            @"Martini behind it": @"Martini 后台功能",
++            @"Maximum gain": @"最大增益",
++            @"Maybe later": @"以后再说",
++            @"Medium room": @"中等房间",
++            @"Memory footprint": @"内存占用",
++            @"Merch": @"周边商品",
++            @"Microphone": @"麦克风",
++            @"Mini player transition animations": @"迷你播放器过渡动画",
++            @"Minimum phase": @"最小相位",
++            @"Mod": @"关于模组",
++            @"Mod Settings": @"模组设置",
++            @"Monthly listeners": @"每月听众数",
++            @"More": @"更多",
++            @"More by the artist": @"艺人的更多作品",
++            @"More options": @"更多选项",
++            @"More options in the navigation bar": @"导航栏中的更多选项",
++            @"More options, still looks like Spotify.": @"更多自定义选项，保留 Spotify 原有外观。",
++            @"More samples needed": @"需要更多样本",
++            @"Moves in beside the tabs on scroll. Restart to apply": @"滚动时移入标签页旁边，重启后生效",
++            @"Multiband compander": @"多频段动态压扩器",
++            @"Music Haptics": @"音乐触感",
++            @"Music videos": @"音乐视频",
++            @"Name": @"名称",
++            @"Navbar": @"导航栏",
++            @"Needs iOS 26": @"需要 iOS 26",
++            @"Needs iOS 27": @"需要 iOS 27",
++            @"New Releases": @"最新发行",
++            @"New progress slider": @"新版进度条",
++            @"Next track": @"下一首",
++            @"No baseline saved": @"尚未保存基准",
++            @"No files yet": @"暂无文件",
++            @"No internet connection": @"无网络连接",
++            @"No lyrics debug logs": @"暂无歌词调试日志",
++            @"No model": @"尚无模型",
++            @"No one yet": @"暂无已屏蔽艺人",
++            @"None": @"无",
++            @"None on": @"尚未启用来源",
++            @"Norwegian Bokmål": @"挪威语（书面语）",
++            @"Not a GraphicEQ line": @"不是有效的 GraphicEQ 配置",
++            @"Not a file this effect takes": @"此音效不支持该文件",
++            @"Not a settings file": @"不是有效的设置文件",
++            @"Not applied": @"未应用",
++            @"Not downloaded": @"尚未下载",
++            @"Not enough space": @"存储空间不足",
++            @"Not now": @"暂不",
++            @"Not set": @"未设置",
++            @"Not tested on this iOS": @"尚未在此 iOS 版本上测试",
++            @"Nothing": @"无动作",
++            @"Nothing changed": @"没有更改",
++            @"Nothing playing": @"暂无正在播放的歌曲",
++            @"Nothing to paste": @"剪贴板中没有可粘贴的内容",
++            @"Nothing written down": @"暂无更新说明",
++            @"Now playing bar": @"迷你播放器",
++            @"OK": @"好",
++            @"Off": @"关闭",
++            @"On": @"开启",
++            @"On Home": @"首页入口",
++            @"One minute option": @"一分钟选项",
++            @"Open GitHub": @"打开 GitHub",
++            @"Optimization": @"优化方式",
++            @"Options sheet": @"选项面板",
++            @"Options sheet is always on in Redesigned UI.": @"重新设计界面始终启用选项面板。",
++            @"Orange": @"橙色",
++            @"Original": @"原始",
++            @"Output control": @"输出控制",
++            @"Overridden by another setting": @"已由其他设置接管",
++            @"Paste": @"粘贴",
++            @"Paste a Spotify share link or enter a spotify: URI.": @"粘贴 Spotify 分享链接，或输入 spotify: URI。",
++            @"Paste a Spotify share link or spotify: URI": @"粘贴 Spotify 分享链接或 spotify: URI",
++            @"Paste the publishable key (sl_pk_…) of your application on Spicy Lyrics' developer platform.": @"粘贴你在 Spicy Lyrics 开发者平台创建的应用的可公开密钥（sl_pk_…）。",
++            @"Paused": @"已暂停",
++            @"Paused · %lld of %@": @"已暂停 · %lld / %@",
++            @"Performance diagnostics": @"性能诊断",
++            @"Photo": @"照片",
++            @"Pick a %@ file.": @"请选择 %@ 文件。",
++            @"Pick a colour": @"选择颜色",
++            @"Pick a file made by Export settings.": @"请选择通过“导出设置”生成的文件。",
++            @"Pick your look.": @"选择你喜欢的界面。",
++            @"Pink": @"粉色",
++            @"Pinned comments": @"置顶评论",
++            @"Plate": @"板式混响",
++            @"Play a track by the artist first, then come back here.": @"请先播放该艺人的歌曲，然后返回此处。",
++            @"Play next in the context menu": @"在菜单中显示“下一首播放”",
++            @"Play or pause": @"播放或暂停",
++            @"Playback state": @"播放状态",
++            @"Player": @"播放器",
++            @"Player screen": @"播放器界面",
++            @"Playing": @"正在播放",
++            @"Playlists": @"歌单",
++            @"Please don't open issues or report bugs on Discord from this setup.": @"此配置不受支持，请勿基于此配置提交问题或向 Discord 报告错误。",
++            @"Podcast": @"播客",
++            @"Podcast comments": @"播客评论",
++            @"Podcasts": @"播客",
++            @"Polish": @"波兰语",
++            @"Popular": @"热门歌曲",
++            @"Popular releases": @"热门发行",
++            @"Portuguese": @"葡萄牙语",
++            @"Post gain": @"输出增益",
++            @"Preset": @"预设",
++            @"Preview cards": @"预览卡片",
++            @"Previous track": @"上一首",
++            @"Privacy": @"隐私",
++            @"Privacy & clutter": @"隐私与界面精简",
++            @"Process CPU": @"进程 CPU 占用",
++            @"Progress bar": @"进度条",
++            @"Promo cards": @"推广卡片",
++            @"Pronunciation": @"注音",
++            @"Pronunciation and translation are turned on from the button in the lyrics' corner.": @"可通过歌词角落的按钮开启注音和翻译。",
++            @"Pull to refresh": @"下拉刷新",
++            @"Purple": @"紫色",
++            @"Queue": @"播放队列",
++            @"Queue & devices": @"播放队列与设备",
++            @"Queue as a bottom sheet": @"以底部面板显示队列",
++            @"Queue badge": @"队列角标",
++            @"Queue flip transition": @"队列翻转过渡动画",
++            @"Read more": @"了解更多",
++            @"Recents": @"最近播放",
++            @"Recents sort order": @"最近播放排序方式",
++            @"Recommendations": @"推荐内容",
++            @"Record performance": @"记录性能",
++            @"Recorded rooms and speakers": @"模拟录制的空间与扬声器效果",
++            @"Records song metadata, search candidates, timing checks, network status and the chosen source. Keeps up to 1 MiB. Contains no lyric text or account credentials. If a song was already cached, restart Spotify before reproducing it.": @"记录歌曲信息、搜索候选、时间校验、网络状态和选用来源，最多保留 1 MiB。不包含歌词正文或账户凭据。如果歌曲已缓存，请重启 Spotify 后再复现问题。",
++            @"Redesigned": @"重新设计",
++            @"Redesigned UI": @"重新设计界面",
++            @"Redesigned header": @"新版页眉",
++            @"Reduce interventions": @"减少提示打扰",
++            @"Rejected": @"已拒绝",
++            @"Related music videos": @"相关音乐视频",
++            @"Related videos": @"相关视频",
++            @"Release": @"释放时间",
++            @"Release pings, help and previews": @"版本通知、帮助与功能预览",
++            @"Remove": @"移除",
++            @"Remove local measurements and start a fresh window.": @"删除本地测量记录并开始新的采样窗口。",
++            @"Remove the collected logs from this device.": @"从此设备删除已收集的日志。",
++            @"Remove the voice model?": @"移除人声模型？",
++            @"Remove voice model": @"移除人声模型",
++            @"Repeat": @"循环播放",
++            @"Repeated operations": @"重复操作",
++            @"Replace the text with what you copied, and use it": @"用剪贴板内容替换文本并应用",
++            @"Report a bug": @"报告问题",
++            @"Reset": @"重置",
++            @"Reset all effects": @"重置所有音效",
++            @"Reset all effects?": @"重置所有音效？",
++            @"Reset all settings": @"重置所有设置",
++            @"Reset all settings?": @"重置所有设置？",
++            @"Reset and restart": @"重置并重启",
++            @"Reset the telemetry counters": @"重置遥测拦截计数",
++            @"Response": @"响应曲线",
++            @"Restart Spotify": @"重启 Spotify",
++            @"Restart now": @"立即重启",
++            @"Retained samples": @"保留样本数",
++            @"Reverb": @"混响",
++            @"Rock": @"摇滚",
++            @"Romanian": @"罗马尼亚语",
++            @"Room": @"空间",
++            @"Russian": @"俄语",
++            @"Saturation": @"饱和度",
++            @"Save": @"保存",
++            @"Save button": @"保存按钮",
++            @"Save current baseline": @"保存当前基准",
++            @"Script": @"脚本",
++            @"Scripts": @"脚本",
++            @"Search": @"搜索",
++            @"Search %lu flags": @"搜索 %lu 个功能开关",
++            @"Search all icons": @"搜索所有图标",
++            @"Seek back": @"快退",
++            @"Seek forward": @"快进",
++            @"Seek step": @"快进与快退步长",
++            @"Several reactions": @"多种表情回应",
++            @"Share": @"分享",
++            @"Share button in the header": @"页眉分享按钮",
++            @"Share the log after reproducing the problem.": @"复现问题后分享日志。",
++            @"Sheet style player": @"卡片式播放器",
++            @"Shortcuts grid": @"快捷入口网格",
++            @"Show": @"显示",
++            @"Show source": @"显示歌词来源",
++            @"Show the current line below the cover": @"在封面下方显示当前歌词",
++            @"Shows": @"显示内容",
++            @"Shuffle": @"随机播放",
++            @"Sign Spotify again with the bundle id set to\n\n%@\n\nIn Feather that is the Identifier field; leave PPQ protection off, it appends a random string and breaks this again.\n\nWhy: this build is installed as %@ but signed under the App ID %@. iOS opens the now playing card by the App ID, so it asks for an app that is not there. Nothing else in the mod is affected.": @"请重新签名 Spotify，并将应用标识符（Bundle ID）设为：\n\n%@\n\n在 Feather 中，这对应 Identifier 字段。请关闭 PPQ protection，它会附加随机字符串，导致问题再次出现。\n\n原因：此版本安装时使用的标识符为 %@，但签名中的 App ID 为 %@。iOS 会使用 App ID 打开正在播放卡片，因此找不到对应应用。模组的其他功能不受影响。",
++            @"Signed until %@": @"签名有效期至 %@",
++            @"Signed with a free Apple ID": @"使用免费 Apple ID 签名",
++            @"Simulate word timing": @"模拟逐字歌词时间",
++            @"Sing": @"伴唱",
++            @"Sing is unavailable until it is downloaded again (%@).": @"移除后需重新下载模型（%@）才能使用伴唱功能。",
++            @"Sing needs its voice model, %@, before its microphone shows in the lyrics.": @"伴唱功能需要先下载人声模型（%@），下载后歌词中才会显示麦克风按钮。",
++            @"Sing separates a song's vocals on this iPhone with a voice model that needs iOS 27. This iPhone runs iOS %@.": @"伴唱功能通过此 iPhone 上的人声模型分离歌曲人声，需要 iOS 27。此设备运行 iOS %@。",
++            @"Sing turns the vocals of the song playing down to sing over, from the microphone in its lyrics. It works on iOS 27 only. Its voice model, %@, is downloaded once and runs only on this iPhone. The switch and the download apply straight away.": @"伴唱功能可通过歌词中的麦克风按钮降低原唱人声，方便跟唱。仅支持 iOS 27。人声模型大小约为 %@，只需下载一次，并且仅在此 iPhone 上运行。开关与模型下载完成后立即生效。",
++            @"Skip blocked artists": @"跳过已屏蔽艺人的歌曲",
++            @"Skip button on podcasts": @"播客跳过按钮",
++            @"Skip when the artist is": @"跳过歌曲的条件",
++            @"Sleep timer": @"睡眠定时器",
++            @"Slovak": @"斯洛伐克语",
++            @"Small hall": @"小型大厅",
++            @"Small room": @"小房间",
++            @"Smaller": @"较小",
++            @"Smallest": @"最小",
++            @"Snake on the cover art": @"封面上的贪吃蛇游戏",
++            @"Softer stereo on headphones": @"让耳机中的立体声更自然柔和",
++            @"Songs you liked": @"你点赞的歌曲",
++            @"Sort artists by recently updated": @"按最近更新排序艺人",
++            @"Sort playlists by recently updated": @"按最近更新排序歌单",
++            @"Sources": @"来源",
++            @"Spanish": @"西班牙语",
++            @"Speed": @"速度",
++            @"Spicy Lyrics key": @"Spicy Lyrics 密钥",
++            @"Spicy Lyrics needs a free key of your own. Sign up on its developer platform, create an application, turn on client access with No origin header allowed, and paste the publishable key here. The lyrics show who synced them, as its terms require.": @"Spicy Lyrics 需要你自己的免费密钥。请在开发者平台注册、创建应用，启用客户端访问并允许“No origin header”，然后在此粘贴可公开密钥。根据服务条款，歌词中会标明同步作者。",
++            @"Split": @"分割",
++            @"Spotify %@ isn't supported": @"不支持 Spotify %@",
++            @"Spotify has nowhere to open %@.": @"Spotify 无法打开 %@。",
++            @"Spotify's flags": @"Spotify 功能开关",
++            @"Spotify's green": @"Spotify 绿色",
++            @"Spotify's own": @"Spotify 默认",
++            @"Spotify's own buttons keep their taps.": @"Spotify 原有按钮仍响应正常点按。",
++            @"Spotify's own events still go out, since Recents is built from them": @"仍会发送 Spotify 自身事件，以维持最近播放记录",
++            @"Spotify's own look comes back when Spotify starts again. Spotify closes now; open it again to see it.": @"重启 Spotify 后将恢复原有界面。应用将关闭，请重新打开以查看更改。",
++            @"Spotify's own tab": @"Spotify 原有标签页",
++            @"Spotify's pages": @"Spotify 页面",
++            @"Stale lyric checks skipped": @"已跳过的过期歌词检查",
++            @"Start listening": @"开始听歌",
++            @"Start over": @"恢复初始布局",
++            @"Status": @"状态",
++            @"Stereo widening": @"立体声扩展",
++            @"Stored locally; no automatic uploads. Keeps the most recent 600 samples across launches. A warning needs three consecutive one-minute windows above the baseline limits. Match scenario, iOS, Spotify, UI, device, power, thermal state and EEVEE profile. Other settings must be matched manually. Export before and after a change to investigate regressions.": @"数据仅存储在本地，不会自动上传。跨启动保留最近 600 个样本。连续三个一分钟窗口超出基准限制时才会警告。比较时需保持场景、iOS、Spotify、界面、设备、电源、温度状态和 EEVEE 配置一致，其他设置也需手动保持一致。请在改动前后分别导出记录以排查性能退化。",
++            @"Strength": @"强度",
++            @"Support spoti.pw": @"支持 spoti.pw",
++            @"Sustained regression detected": @"检测到持续性能退化",
++            @"Swedish": @"瑞典语",
++            @"Tabs": @"标签页",
++            @"Tap a cell to set it": @"点按区域以设置动作",
++            @"Tap for the fix": @"点按查看修复方法",
++            @"Tap to read the release on GitHub": @"点按前往 GitHub 查看版本说明",
++            @"Telemetry blocked so far": @"已拦截的遥测请求",
++            @"Test scenario": @"测试场景",
++            @"Text sizes": @"文字大小",
++            @"Thai": @"泰语",
++            @"The %@ downloaded so far are deleted, and the next download starts over.": @"目前已下载的 %@ 将被删除，下次下载会从头开始。",
++            @"The album's animated cover": @"专辑动态封面",
++            @"The chat": @"聊天界面",
++            @"The cover itself, blurred and slowly warped": @"将专辑封面模糊并缓慢扭曲",
++            @"The download goes on while Spotify is in the background. Sing's microphone shows in the lyrics once it is in.": @"Spotify 在后台时仍会继续下载。下载完成后，歌词中将显示伴唱麦克风按钮。",
++            @"The first name on the track": @"歌曲署名中的第一位艺人",
++            @"The iPhone taps along with the drums and rumbles under the bass of whatever Spotify is playing, worked out from the sound as it plays, much like Music Haptics in Apple Music.\n\nIt follows the sound this iPhone plays, through its speaker or headphones, while Spotify is open: iOS plays no haptics for an app in the background, and a song playing on another device through Connect has no sound here to follow.": @"iPhone 会根据 Spotify 正在播放的声音，随鼓点轻触振动、随低音持续振动，类似于 Apple Music 的音乐触感。\n\n仅在 Spotify 位于前台时跟随此 iPhone 扬声器或耳机播放的声音。iOS 不允许后台应用播放触感；通过 Connect 在其他设备播放时，此设备也没有可跟随的声音。",
++            @"The icon did not change": @"图标未能更改",
++            @"The lock screen cannot open Spotify": @"锁屏无法打开 Spotify",
++            @"The main artist": @"仅主要艺人",
++            @"The microphone in the lyrics": @"歌词中的麦克风",
++            @"The mod is made for %@ only": @"此模组仅适用于 %@",
++            @"The mod's own license, and the code from others it includes.": @"此模组及其使用的第三方代码的许可信息。",
++            @"The newest version of spoti.pw, leaning towards Apple Music's style. It is not compatible with the legacy look's settings.\n\nThe legacy look gives you more freedom, yet still looks like Spotify.": @"spoti.pw 的新版界面，采用接近 Apple Music 的风格。它与经典界面的设置相互独立。\n\n经典界面提供更多自定义选项，同时保留 Spotify 的外观。",
++            @"The player follows these as they move. Brightness past 100% can make white text harder to read on a light cover.": @"调整会实时应用到播放器。亮度超过 100% 时，浅色封面上的白色文字可能不易阅读。",
++            @"The redesign is a beta. Expect lags, freezes and bugs, and if you find one, please report it.": @"重新设计界面仍处于测试阶段，可能出现卡顿、无响应或其他问题，欢迎反馈。",
++            @"The redesign is made for iOS 26 and has not been tested on iOS %@ at all. Expect bugs and freezes. If Spotify stops opening, delete and reinstall it.": @"重新设计界面针对 iOS 26 开发，尚未在 iOS %@ 上测试，可能出现错误或无响应。如果 Spotify 无法启动，请删除后重新安装。",
++            @"The redesign takes over when Spotify starts again. Spotify closes now; open it again to see it.": @"重启 Spotify 后将使用重新设计界面。应用将关闭，请重新打开以查看更改。",
++            @"The release on GitHub, where its .deb is": @"在 GitHub 查看此版本及其 .deb 安装包",
++            @"The tab icons' names · MIT License": @"标签栏图标名称 · MIT 许可证",
++            @"The track's Canvas or the album's animated cover, looping": @"循环播放歌曲 Canvas 或专辑动态封面",
++            @"The track's own clip": @"歌曲自带的短视频",
++            @"Thinking states": @"思考状态",
++            @"This build is %s.": @"当前版本为 %s。",
++            @"This build is %s. Nothing has been asked of GitHub yet.": @"当前版本为 %s，尚未向 GitHub 检查更新。",
++            @"This build, %s, is GitHub's newest release; it%@. What went into it is below.": @"当前版本 %s 已是 GitHub 上的最新版本，%@。下方为本次更新内容。",
++            @"This iPhone isn't on Wi-Fi, and Sing's voice model is %@.": @"此 iPhone 未连接 Wi-Fi，人声模型大小为 %@。",
++            @"Three by three": @"九宫格",
++            @"Three columns": @"三列",
++            @"Tips": @"提示",
++            @"Tooltips": @"操作提示",
++            @"Top collaborators": @"主要合作艺人",
++            @"Total": @"总计",
++            @"Translation": @"翻译",
++            @"Translation language": @"翻译语言",
++            @"Treble": @"高音",
++            @"Trimmed": @"裁剪",
++            @"Tube amplifier warmth": @"模拟电子管放大器的温暖音色",
++            @"Turkish": @"土耳其语",
++            @"Turning it on or off applies after you restart Spotify.": @"开启或关闭后，需重启 Spotify 才会生效。",
++            @"Two columns": @"两列",
++            @"Two lines of track info": @"双行歌曲信息",
++            @"Ukrainian": @"乌克兰语",
++            @"Unblock": @"取消屏蔽",
++            @"Unreleased features; some do nothing on your version. Changes apply after you restart Spotify.": @"尚未发布的功能，部分功能可能不适用于当前版本。更改将在重启 Spotify 后生效。",
++            @"Updates": @"更新",
++            @"Use Link": @"使用此链接",
++            @"Use Spotify's order": @"恢复 Spotify 默认顺序",
++            @"Use search to find any SF Symbol": @"通过搜索查找 SF Symbol 图标",
++            @"Use the same activity when comparing builds.": @"比较不同版本时，请使用相同场景。",
++            @"Use the text above": @"应用上方文本",
++            @"Used when the lyrics come with translations. Any shows the first.": @"用于选择歌词附带的翻译语言。“任意”会显示第一种可用翻译。",
++            @"Verified badge": @"认证标识",
++            @"Version": @"版本",
++            @"Vibrations": @"振动",
++            @"Video": @"视频",
++            @"Video in the mini player": @"迷你播放器中的视频",
++            @"Vietnamese": @"越南语",
++            @"Vocal": @"人声",
++            @"Voice model": @"人声模型",
++            @"Voice recording": @"语音录制",
++            @"Waiting for player": @"等待播放器",
++            @"Waiting for samples": @"等待采样",
++            @"Warm": @"温暖",
++            @"Warp": @"扭曲",
++            @"Website": @"网站",
++            @"Welcome tour": @"欢迎引导",
++            @"What's new": @"更新内容",
++            @"White": @"白色",
++            @"Width": @"宽度",
++            @"Within baseline limits": @"处于基准范围内",
++            @"Works only with Spotify in English.": @"仅适用于英文界面的 Spotify。",
++            @"You might also like": @"你可能也喜欢",
++            @"Your Episodes": @"你的单集",
++            @"Your Library": @"音乐库",
++            @"Your settings are replaced by the file's, exported from version %@. Anything it does not have goes back to its default, and Spotify restarts.": @"当前设置将替换为此文件中的设置（导出自版本 %@）。文件中未包含的设置将恢复默认，然后重启 Spotify。",
++            @"about %lld MB": @"约 %lld MB",
++            @"asked too often": @"请求过于频繁",
++            @"check failed": @"检查失败",
++            @"forced %@": @"强制设为 %@",
++            @"iOS confirms each change in an alert of its own. The name under the icon is set when the app is signed: rename it in Feather, Sideloadly or whatever signs it.": @"每次更改图标时，iOS 都会弹出确认提示。图标下方的应用名称由签名工具设定，可在 Feather、Sideloadly 等工具中修改。",
++            @"no release in the reply": @"响应中没有版本信息",
++            @"not checked": @"尚未检查",
++            @"off": @"关闭",
++            @"off by default": @"默认关闭",
++            @"on": @"开启",
++            @"on by default": @"默认开启",
++            @"spoti.pw is made for Spotify %@ only. On any other version parts of it break or go missing, so it won't work the way you expect.\n\n%@ Use a %@ IPA instead.": @"spoti.pw 仅适用于 Spotify %@。在其他版本上，部分功能可能损坏或缺失，无法按预期运行。\n\n%@ 请改用 %@ 版本的 IPA。",
++            @"spoti.pw isn't made to run alongside EeveeSpotify. Both change the same parts of Spotify, so things break or behave in ways you don't expect.\n\n%@ Use an IPA without EeveeSpotify instead.": @"spoti.pw 不支持与 EeveeSpotify 同时运行。两者会修改 Spotify 的相同部分，可能导致故障或异常行为。\n\n%@ 请改用未注入 EeveeSpotify 的 IPA。",
++            @"text value": @"文本值",
++            @"true or false, a number, or a text value": @"true、false、数字或文本值",
++            @"type unknown": @"未知类型",
++            @"up to date": @"已是最新版本",
+diff --git a/tweak/Sources/Core/SGCore.h b/tweak/Sources/Core/SGCore.h
+index 47cda85f3804b1fb29811f6ce3b7a3ebe8d9b06e..df2dfa53a0a38f6fcd169de2b062706b0fa81655 100644
+--- a/tweak/Sources/Core/SGCore.h
++++ b/tweak/Sources/Core/SGCore.h
+@@ -8,3 +8,6 @@
+ #import "SGBackdrop.h"
+ #import "SGUIMode.h"
+ #import "SGFlagForce.h"
++
++#import "SGLocalization.h"
++#import "SGLocalizationUI.h"
+diff --git a/tweak/Sources/Core/SGLocalization.h b/tweak/Sources/Core/SGLocalization.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..35a3bf561ea8c1e90b8858c83c91115c764c07eb
+--- /dev/null
++++ b/tweak/Sources/Core/SGLocalization.h
+@@ -0,0 +1,4 @@
++// Translate mod-owned presentation text only. Preferences, identifiers and network data stay raw.
++#import <Foundation/Foundation.h>
++FOUNDATION_EXPORT NSString *SGText(NSString *text);
++FOUNDATION_EXPORT NSString *SGTextForLanguage(NSString *text, NSString *language);
+diff --git a/tweak/Sources/Core/SGLocalization.m b/tweak/Sources/Core/SGLocalization.m
+new file mode 100644
+index 0000000000000000000000000000000000000000..f8b5ae61bed90dde2a9f4197f0fc3ae143b8c5d3
+--- /dev/null
++++ b/tweak/Sources/Core/SGLocalization.m
+@@ -0,0 +1,18 @@
++#import "SGLocalization.h"
++#import <dispatch/dispatch.h>
++
++NSString *SGTextForLanguage(NSString *text, NSString *language) {
++    if (!text || ![language.lowercaseString hasPrefix:@"zh"]) return text;
++    static NSDictionary<NSString *, NSString *> *chinese;
++    static dispatch_once_t once;
++    dispatch_once(&once, ^{
++        chinese = @{
++#include "SGChinese.inc"
++        };
++    });
++    return chinese[text] ?: text;
++}
++
++NSString *SGText(NSString *text) {
++    return SGTextForLanguage(text, NSLocale.preferredLanguages.firstObject);
++}
+diff --git a/tweak/Sources/Core/SGLocalizationUI.h b/tweak/Sources/Core/SGLocalizationUI.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..78efcbe87a2a341a3f56830bd55890ae62c4aa9d
+--- /dev/null
++++ b/tweak/Sources/Core/SGLocalizationUI.h
+@@ -0,0 +1,10 @@
++#import <UIKit/UIKit.h>
++// Explicit factories used by mod settings; never swizzle Spotify's UIKit objects.
++@interface SGSettingsAlert : NSObject
+++ (UIAlertController *)alertControllerWithTitle:(NSString *)title message:(NSString *)message
++                                preferredStyle:(UIAlertControllerStyle)style;
++@end
++@interface SGSettingsAction : NSObject
+++ (UIAlertAction *)actionWithTitle:(NSString *)title style:(UIAlertActionStyle)style
++                          handler:(void (^)(UIAlertAction *action))handler;
++@end
+diff --git a/tweak/Sources/Core/SGLocalizationUI.m b/tweak/Sources/Core/SGLocalizationUI.m
+new file mode 100644
+index 0000000000000000000000000000000000000000..f4cabd98714724db849783dabaa2a53aca976ceb
+--- /dev/null
++++ b/tweak/Sources/Core/SGLocalizationUI.m
+@@ -0,0 +1,14 @@
++#import "SGLocalization.h"
++#import "SGLocalizationUI.h"
++@implementation SGSettingsAlert
+++ (UIAlertController *)alertControllerWithTitle:(NSString *)title message:(NSString *)message
++                                preferredStyle:(UIAlertControllerStyle)style {
++    return [UIAlertController alertControllerWithTitle:SGText(title) message:SGText(message) preferredStyle:style];
++}
++@end
++@implementation SGSettingsAction
+++ (UIAlertAction *)actionWithTitle:(NSString *)title style:(UIAlertActionStyle)style
++                          handler:(void (^)(UIAlertAction *action))handler {
++    return [UIAlertAction actionWithTitle:SGText(title) style:style handler:handler];
++}
++@end
+diff --git a/tweak/Sources/Native/Appearance/AppearanceSettings.m b/tweak/Sources/Native/Appearance/AppearanceSettings.m
+index 2df5344c79e4be5cc911f0c0858ac1bd3c007a4d..4fa1d6a9e0bfae17a17618d7506af4ea1f45e903 100644
+--- a/tweak/Sources/Native/Appearance/AppearanceSettings.m
++++ b/tweak/Sources/Native/Appearance/AppearanceSettings.m
+@@ -11,10 +11,10 @@ static void chooseAccent(void) {
+         return;
+     }
+     UIViewController *top = SGTopController();
+-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"Accent colour" message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+-    [sheet addAction:[UIAlertAction actionWithTitle:@"Pick a colour" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { SGPickAccent(); }]];
+-    [sheet addAction:[UIAlertAction actionWithTitle:@"Spotify's green" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) { SGSetInt(SGKeyAccent, -1); }]];
+-    [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
++    UIAlertController *sheet = [SGSettingsAlert alertControllerWithTitle:@"Accent colour" message:nil preferredStyle:UIAlertControllerStyleActionSheet];
++    [sheet addAction:[SGSettingsAction actionWithTitle:@"Pick a colour" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { SGPickAccent(); }]];
++    [sheet addAction:[SGSettingsAction actionWithTitle:@"Spotify's green" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) { SGSetInt(SGKeyAccent, -1); }]];
++    [sheet addAction:[SGSettingsAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+     sheet.popoverPresentationController.sourceView = top.view;
+     sheet.popoverPresentationController.sourceRect = CGRectMake(CGRectGetMidX(top.view.bounds), CGRectGetMidY(top.view.bounds), 0, 0);
+     sheet.popoverPresentationController.permittedArrowDirections = 0;
+diff --git a/tweak/Sources/Native/Navbar/NavbarSettings.m b/tweak/Sources/Native/Navbar/NavbarSettings.m
+index 31b9623e7da430980925e7ca3e5de0c2ae00b24d..1c6b28dd61cd058ac1349014d1d40cd49017a087 100644
+--- a/tweak/Sources/Native/Navbar/NavbarSettings.m
++++ b/tweak/Sources/Native/Navbar/NavbarSettings.m
+@@ -152,7 +152,7 @@ static UIView *iconAccessory(NSString *name) {
+ - (void)viewDidLoad {
+     [super viewDidLoad];
+     self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemCancel target:self action:@selector(cancel)];
+-    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Add" style:UIBarButtonItemStyleDone target:self action:@selector(add)];
++    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:SGText(@"Add") style:UIBarButtonItemStyleDone target:self action:@selector(add)];
+ }
+ 
+ // The link and icon pages write into the draft, so it is read again on the way back.
+@@ -180,7 +180,7 @@ static UIView *iconAccessory(NSString *name) {
+         field.translatesAutoresizingMaskIntoConstraints = NO;
+         field.textColor = UIColor.whiteColor;
+         field.tintColor = SGGreen();
+-        field.placeholder = @"Name";
++        field.placeholder = SGText(@"Name");
+         field.clearButtonMode = UITextFieldViewModeWhileEditing;
+         field.autocorrectionType = UITextAutocorrectionTypeNo;
+         field.returnKeyType = UIReturnKeyDone;
+@@ -289,7 +289,7 @@ static UIView *iconAccessory(NSString *name) {
+         [self.navigationController popViewControllerAnimated:YES];
+         return;
+     }
+-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Custom link" message:@"Paste a Spotify share link or enter a spotify: URI." preferredStyle:UIAlertControllerStyleAlert];
++    UIAlertController *alert = [SGSettingsAlert alertControllerWithTitle:@"Custom link" message:@"Paste a Spotify share link or enter a spotify: URI." preferredStyle:UIAlertControllerStyleAlert];
+     [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+         field.placeholder = @"spotify:playlist:… or open.spotify.com/…";
+         field.text = self->_draft[SGNavbarURI];
+@@ -297,8 +297,8 @@ static UIView *iconAccessory(NSString *name) {
+         field.autocorrectionType = UITextAutocorrectionTypeNo;
+         field.keyboardType = UIKeyboardTypeURL;
+     }];
+-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+-    [alert addAction:[UIAlertAction actionWithTitle:@"Use Link" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
++    [alert addAction:[SGSettingsAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
++    [alert addAction:[SGSettingsAction actionWithTitle:@"Use Link" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+         NSURL *url = SGSpotifyURIFromText(alert.textFields.firstObject.text);
+         if (!url) {
+             [self showLinkError:@"Enter a Spotify share link or spotify: URI."];
+@@ -310,7 +310,7 @@ static UIView *iconAccessory(NSString *name) {
+               route == SGLinkRouteOpens ? via : route == SGLinkRouteNone ? @"no handler" : @"unknown");
+         // Said here rather than by Spotify's alert on the bar later, every time the tab is tapped.
+         if (route == SGLinkRouteNone) {
+-            [self showLinkError:[NSString stringWithFormat:@"Spotify has nowhere to open %@.", url.absoluteString]];
++            [self showLinkError:[NSString stringWithFormat:SGText(@"Spotify has nowhere to open %@."), url.absoluteString]];
+             return;
+         }
+         self->_draft[SGNavbarURI] = url.absoluteString;
+@@ -321,8 +321,8 @@ static UIView *iconAccessory(NSString *name) {
+ }
+ 
+ - (void)showLinkError:(NSString *)message {
+-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Can't use that link" message:message preferredStyle:UIAlertControllerStyleAlert];
+-    [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
++    UIAlertController *alert = [SGSettingsAlert alertControllerWithTitle:@"Can't use that link" message:message preferredStyle:UIAlertControllerStyleAlert];
++    [alert addAction:[SGSettingsAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
+     [self presentViewController:alert animated:YES completion:nil];
+ }
+ 
+@@ -425,7 +425,7 @@ static NSArray<NSString *> *symbolNames(void) {
+     self.tableView.tableHeaderView = header;
+ 
+     _symbolHint = [UILabel new];
+-    _symbolHint.text = @"Use search to find any SF Symbol";
++    _symbolHint.text = SGText(@"Use search to find any SF Symbol");
+     _symbolHint.textColor = SGGrey();
+     _symbolHint.font = [UIFont systemFontOfSize:13];
+     _symbolHint.textAlignment = NSTextAlignmentCenter;
+@@ -435,7 +435,7 @@ static NSArray<NSString *> *symbolNames(void) {
+     _searchController.searchResultsUpdater = self;
+     _searchController.obscuresBackgroundDuringPresentation = NO;
+     _searchController.hidesNavigationBarDuringPresentation = NO;
+-    _searchController.searchBar.placeholder = @"Search all icons";
++    _searchController.searchBar.placeholder = SGText(@"Search all icons");
+     _searchController.searchBar.tintColor = UIColor.whiteColor;
+     _searchController.searchBar.delegate = self;
+     self.navigationItem.searchController = _searchController;
+@@ -675,7 +675,7 @@ typedef NS_ENUM(NSInteger, SGNavbarSection) {
+             NSDictionary *entry = _entries[(NSUInteger)path.row];
+             BOOL hidden = [entry[SGNavbarHidden] boolValue];
+             NSString *uri = entry[SGNavbarURI];
+-            SGFillCell(cell, entry[SGNavbarTitle], hidden ? @"Hidden" : (uri ?: @"Spotify's own tab"),
++            SGFillRawCell(cell, uri ? entry[SGNavbarTitle] : SGText(entry[SGNavbarTitle]), SGText(hidden ? @"Hidden" : (uri ?: @"Spotify's own tab")),
+                      hidden ? SGGrey() : nil, hidden ? @"eye.slash" : @"eye");
+             break;
+         }
+@@ -744,11 +744,11 @@ typedef NS_ENUM(NSInteger, SGNavbarSection) {
+ }
+ 
+ - (void)reset {
+-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Use Spotify's order"
++    UIAlertController *alert = [SGSettingsAlert alertControllerWithTitle:@"Use Spotify's order"
+                                                                   message:@"Every tab of Spotify's comes back where Spotify put it, and the tabs you added go."
+                                                            preferredStyle:UIAlertControllerStyleAlert];
+-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+-    [alert addAction:[UIAlertAction actionWithTitle:@"Reset" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
++    [alert addAction:[SGSettingsAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
++    [alert addAction:[SGSettingsAction actionWithTitle:@"Reset" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
+         SGSetNavbarLayout(@[]);
+         SGRefreshTabBar();
+         [self reload];
+diff --git a/tweak/Sources/Redesigned/Kit/SGRAppearanceSettings.m b/tweak/Sources/Redesigned/Kit/SGRAppearanceSettings.m
+index c7614d28e9b413acf22da86da13b21121af85558..d5731f724e98d4caf74a06b58bcf56601ab7db23 100644
+--- a/tweak/Sources/Redesigned/Kit/SGRAppearanceSettings.m
++++ b/tweak/Sources/Redesigned/Kit/SGRAppearanceSettings.m
+@@ -11,10 +11,10 @@ static void chooseAccent(void) {
+         return;
+     }
+     UIViewController *top = SGTopController();
+-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"Accent colour" message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+-    [sheet addAction:[UIAlertAction actionWithTitle:@"Pick a colour" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { SGRPickAccent(); }]];
+-    [sheet addAction:[UIAlertAction actionWithTitle:@"Spotify's green" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) { SGSetInt(SGRKeyAccent, -1); }]];
+-    [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
++    UIAlertController *sheet = [SGSettingsAlert alertControllerWithTitle:@"Accent colour" message:nil preferredStyle:UIAlertControllerStyleActionSheet];
++    [sheet addAction:[SGSettingsAction actionWithTitle:@"Pick a colour" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { SGRPickAccent(); }]];
++    [sheet addAction:[SGSettingsAction actionWithTitle:@"Spotify's green" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) { SGSetInt(SGRKeyAccent, -1); }]];
++    [sheet addAction:[SGSettingsAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+     sheet.popoverPresentationController.sourceView = top.view;
+     sheet.popoverPresentationController.sourceRect = CGRectMake(CGRectGetMidX(top.view.bounds), CGRectGetMidY(top.view.bounds), 0, 0);
+     sheet.popoverPresentationController.permittedArrowDirections = 0;
+diff --git a/tweak/Sources/Redesigned/Lyrics/SingSettings.m b/tweak/Sources/Redesigned/Lyrics/SingSettings.m
+index a2a727620d48b4b4285f3f0bf2b1740eb7ef1b8d..befaad7b626ddb4ff7b5bd16d409f56c9703772e 100644
+--- a/tweak/Sources/Redesigned/Lyrics/SingSettings.m
++++ b/tweak/Sources/Redesigned/Lyrics/SingSettings.m
+@@ -13,32 +13,32 @@
+ 
+ // The model's size as the footer and the prompts say it, to the nearest ten megabytes.
+ static NSString *aboutSize(void) {
+-    return [NSString stringWithFormat:@"about %lld MB", ((SGSingModelSize() >> 20) + 5) / 10 * 10];
++    return [NSString stringWithFormat:SGText(@"about %lld MB"), ((SGSingModelSize() >> 20) + 5) / 10 * 10];
+ }
+ 
+ static NSString *footer(void) {
+-    return [NSString stringWithFormat:@"Sing turns the vocals of the song playing down to sing over, from the microphone in its lyrics. "
++    return [NSString stringWithFormat:SGText(@"Sing turns the vocals of the song playing down to sing over, from the microphone in its lyrics. "
+             "It works on iOS 27 only. Its voice model, %@, is downloaded once and runs only on this iPhone. "
+-            "The switch and the download apply straight away.", aboutSize()];
++            "The switch and the download apply straight away."), aboutSize()];
+ }
+ 
+ static void tell(NSString *title, NSString *message) {
+-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:title message:message preferredStyle:UIAlertControllerStyleAlert];
+-    [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
++    UIAlertController *alert = [SGSettingsAlert alertControllerWithTitle:title message:message preferredStyle:UIAlertControllerStyleAlert];
++    [alert addAction:[SGSettingsAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
+     [SGTopController() presentViewController:alert animated:YES completion:nil];
+ }
+ 
+ static NSString *modelStatus(void) {
+     int64_t received = SGSingModelReceived(), size = SGSingModelSize();
+     switch (SGSingModelCurrentState()) {
+-        case SGSingModelInstalled: return [@"Downloaded · " stringByAppendingString:SGSingModelBytesText(size)];
++        case SGSingModelInstalled: return [SGText(@"Downloaded · ") stringByAppendingString:SGSingModelBytesText(size)];
+         case SGSingModelChecking: return @"Checking…";
+         case SGSingModelDownloading:
+-            return [NSString stringWithFormat:@"Downloading %lld %% · %lld of %@", received * 100 / size,
++            return [NSString stringWithFormat:SGText(@"Downloading %lld %% · %lld of %@"), received * 100 / size,
+                     (received + (1ll << 19)) >> 20, SGSingModelBytesText(size)];
+         case SGSingModelMissing:
+             if (SGSingModelFailure()) return @"Download failed";
+-            if (received > 0) return [NSString stringWithFormat:@"Paused · %lld of %@", (received + (1ll << 19)) >> 20, SGSingModelBytesText(size)];
++            if (received > 0) return [NSString stringWithFormat:SGText(@"Paused · %lld of %@"), (received + (1ll << 19)) >> 20, SGSingModelBytesText(size)];
+             return @"Not downloaded";
+     }
+     return nil;
+@@ -49,13 +49,13 @@ static void explainModel(void) {
+     NSString *failure = SGSingModelFailure();
+     switch (SGSingModelCurrentState()) {
+         case SGSingModelInstalled:
+-            tell(@"Voice model", [NSString stringWithFormat:@"It takes %@ on this iPhone. Remove it to free the space; Sing is unavailable without it.",
++            tell(@"Voice model", [NSString stringWithFormat:SGText(@"It takes %@ on this iPhone. Remove it to free the space; Sing is unavailable without it."),
+                                   SGSingModelBytesText(SGSingModelSize())]);
+             break;
+         case SGSingModelMissing:
+             tell(failure ? @"Download failed" : @"Voice model",
+-                 failure ? [failure stringByAppendingString:@" Download goes on from where it stopped."]
+-                         : [NSString stringWithFormat:@"Sing needs its voice model, %@, before its microphone shows in the lyrics.", aboutSize()]);
++                 failure ? [failure stringByAppendingString:SGText(@" Download goes on from where it stopped.")]
++                         : [NSString stringWithFormat:SGText(@"Sing needs its voice model, %@, before its microphone shows in the lyrics."), aboutSize()]);
+             break;
+         default:
+             tell(@"Voice model", @"The download goes on while Spotify is in the background. Sing's microphone shows in the lyrics once it is in.");
+@@ -70,11 +70,11 @@ static void startDownload(void) {
+         if (network == SGSingModelOffline) {
+             tell(@"No internet connection", @"Connect to Wi-Fi to download Sing's voice model.");
+         } else if (network == SGSingModelMetered) {
+-            UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Download over cellular?"
+-                message:[NSString stringWithFormat:@"This iPhone isn't on Wi-Fi, and Sing's voice model is %@.", aboutSize()]
++            UIAlertController *alert = [SGSettingsAlert alertControllerWithTitle:@"Download over cellular?"
++                message:[NSString stringWithFormat:SGText(@"This iPhone isn't on Wi-Fi, and Sing's voice model is %@."), aboutSize()]
+                 preferredStyle:UIAlertControllerStyleAlert];
+-            [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+-            [alert addAction:[UIAlertAction actionWithTitle:@"Download" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
++            [alert addAction:[SGSettingsAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
++            [alert addAction:[SGSettingsAction actionWithTitle:@"Download" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+                 SGSingModelDownload(YES);
+             }]];
+             [SGTopController() presentViewController:alert animated:YES completion:nil];
+@@ -86,13 +86,13 @@ static void startDownload(void) {
+ 
+ static void confirmRemove(void) {
+     BOOL installed = SGSingModelCurrentState() == SGSingModelInstalled;
+-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Remove the voice model?"
+-        message:installed ? [NSString stringWithFormat:@"Sing is unavailable until it is downloaded again (%@).", aboutSize()]
+-                          : [NSString stringWithFormat:@"The %@ downloaded so far are deleted, and the next download starts over.",
++    UIAlertController *alert = [SGSettingsAlert alertControllerWithTitle:@"Remove the voice model?"
++        message:installed ? [NSString stringWithFormat:SGText(@"Sing is unavailable until it is downloaded again (%@)."), aboutSize()]
++                          : [NSString stringWithFormat:SGText(@"The %@ downloaded so far are deleted, and the next download starts over."),
+                              SGSingModelBytesText(SGSingModelReceived())]
+         preferredStyle:UIAlertControllerStyleAlert];
+-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+-    [alert addAction:[UIAlertAction actionWithTitle:@"Remove" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
++    [alert addAction:[SGSettingsAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
++    [alert addAction:[SGSettingsAction actionWithTitle:@"Remove" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
+         SGSingModelRemove();
+     }]];
+     [SGTopController() presentViewController:alert animated:YES completion:nil];
+@@ -101,8 +101,8 @@ static void confirmRemove(void) {
+ // Below iOS 27 the switch is a row saying what is missing.
+ static SGModRow *unavailableRow(void) {
+     return SGStatActionRow(@"Sing", nil, ^NSString *{ return @"Needs iOS 27"; }, ^{
+-        tell(@"Sing", [NSString stringWithFormat:@"Sing separates a song's vocals on this iPhone with a voice model that needs iOS 27. "
+-                       "This iPhone runs iOS %@.", UIDevice.currentDevice.systemVersion]);
++        tell(@"Sing", [NSString stringWithFormat:SGText(@"Sing separates a song's vocals on this iPhone with a voice model that needs iOS 27. "
++                       "This iPhone runs iOS %@."), UIDevice.currentDevice.systemVersion]);
+     });
+ }
+ 
+diff --git a/tweak/Sources/Redesigned/Navbar/NavbarSettings.m b/tweak/Sources/Redesigned/Navbar/NavbarSettings.m
+index 9409f5fb103c93b5e69799149c7d420e049cc79d..5280bf592cc57efee34c345f053bf701711d0e85 100644
+--- a/tweak/Sources/Redesigned/Navbar/NavbarSettings.m
++++ b/tweak/Sources/Redesigned/Navbar/NavbarSettings.m
+@@ -156,7 +156,7 @@ static UIView *iconAccessory(NSString *name) {
+ - (void)viewDidLoad {
+     [super viewDidLoad];
+     self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemCancel target:self action:@selector(cancel)];
+-    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Add" style:UIBarButtonItemStyleDone target:self action:@selector(add)];
++    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:SGText(@"Add") style:UIBarButtonItemStyleDone target:self action:@selector(add)];
+ }
+ 
+ // The link and icon pages write into the draft, so it is read again on the way back.
+@@ -184,7 +184,7 @@ static UIView *iconAccessory(NSString *name) {
+         field.translatesAutoresizingMaskIntoConstraints = NO;
+         field.textColor = UIColor.whiteColor;
+         field.tintColor = SGGreen();
+-        field.placeholder = @"Name";
++        field.placeholder = SGText(@"Name");
+         field.clearButtonMode = UITextFieldViewModeWhileEditing;
+         field.autocorrectionType = UITextAutocorrectionTypeNo;
+         field.returnKeyType = UIReturnKeyDone;
+@@ -293,7 +293,7 @@ static UIView *iconAccessory(NSString *name) {
+         [self.navigationController popViewControllerAnimated:YES];
+         return;
+     }
+-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Custom link" message:@"Paste a Spotify share link or enter a spotify: URI." preferredStyle:UIAlertControllerStyleAlert];
++    UIAlertController *alert = [SGSettingsAlert alertControllerWithTitle:@"Custom link" message:@"Paste a Spotify share link or enter a spotify: URI." preferredStyle:UIAlertControllerStyleAlert];
+     [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+         field.placeholder = @"spotify:playlist:… or open.spotify.com/…";
+         field.text = self->_draft[SGRNavbarURI];
+@@ -301,8 +301,8 @@ static UIView *iconAccessory(NSString *name) {
+         field.autocorrectionType = UITextAutocorrectionTypeNo;
+         field.keyboardType = UIKeyboardTypeURL;
+     }];
+-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+-    [alert addAction:[UIAlertAction actionWithTitle:@"Use Link" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
++    [alert addAction:[SGSettingsAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
++    [alert addAction:[SGSettingsAction actionWithTitle:@"Use Link" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+         NSURL *url = SGSpotifyURIFromText(alert.textFields.firstObject.text);
+         if (!url) {
+             [self showLinkError:@"Enter a Spotify share link or spotify: URI."];
+@@ -314,7 +314,7 @@ static UIView *iconAccessory(NSString *name) {
+               route == SGLinkRouteOpens ? via : route == SGLinkRouteNone ? @"no handler" : @"unknown");
+         // Said here rather than by Spotify's alert on the bar later, every time the tab is tapped.
+         if (route == SGLinkRouteNone) {
+-            [self showLinkError:[NSString stringWithFormat:@"Spotify has nowhere to open %@.", url.absoluteString]];
++            [self showLinkError:[NSString stringWithFormat:SGText(@"Spotify has nowhere to open %@."), url.absoluteString]];
+             return;
+         }
+         self->_draft[SGRNavbarURI] = url.absoluteString;
+@@ -325,8 +325,8 @@ static UIView *iconAccessory(NSString *name) {
+ }
+ 
+ - (void)showLinkError:(NSString *)message {
+-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Can't use that link" message:message preferredStyle:UIAlertControllerStyleAlert];
+-    [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
++    UIAlertController *alert = [SGSettingsAlert alertControllerWithTitle:@"Can't use that link" message:message preferredStyle:UIAlertControllerStyleAlert];
++    [alert addAction:[SGSettingsAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
+     [self presentViewController:alert animated:YES completion:nil];
+ }
+ 
+@@ -429,7 +429,7 @@ static NSArray<NSString *> *symbolNames(void) {
+     self.tableView.tableHeaderView = header;
+ 
+     _symbolHint = [UILabel new];
+-    _symbolHint.text = @"Use search to find any SF Symbol";
++    _symbolHint.text = SGText(@"Use search to find any SF Symbol");
+     _symbolHint.textColor = SGGrey();
+     _symbolHint.font = [UIFont systemFontOfSize:13];
+     _symbolHint.textAlignment = NSTextAlignmentCenter;
+@@ -439,7 +439,7 @@ static NSArray<NSString *> *symbolNames(void) {
+     _searchController.searchResultsUpdater = self;
+     _searchController.obscuresBackgroundDuringPresentation = NO;
+     _searchController.hidesNavigationBarDuringPresentation = NO;
+-    _searchController.searchBar.placeholder = @"Search all icons";
++    _searchController.searchBar.placeholder = SGText(@"Search all icons");
+     _searchController.searchBar.tintColor = UIColor.whiteColor;
+     _searchController.searchBar.delegate = self;
+     self.navigationItem.searchController = _searchController;
+@@ -683,7 +683,7 @@ typedef NS_ENUM(NSInteger, SGRNavbarSection) {
+             NSDictionary *entry = _entries[(NSUInteger)path.row];
+             BOOL hidden = [entry[SGRNavbarHidden] boolValue];
+             NSString *uri = entry[SGRNavbarURI];
+-            SGFillCell(cell, entry[SGRNavbarTitle], hidden ? @"Hidden" : (uri ?: @"Spotify's own tab"),
++            SGFillRawCell(cell, uri ? entry[SGRNavbarTitle] : SGText(entry[SGRNavbarTitle]), SGText(hidden ? @"Hidden" : (uri ?: @"Spotify's own tab")),
+                      hidden ? SGGrey() : nil, hidden ? @"eye.slash" : @"eye");
+             break;
+         }
+@@ -757,11 +757,11 @@ typedef NS_ENUM(NSInteger, SGRNavbarSection) {
+ }
+ 
+ - (void)reset {
+-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Use Spotify's order"
++    UIAlertController *alert = [SGSettingsAlert alertControllerWithTitle:@"Use Spotify's order"
+                                                                   message:@"Every tab of Spotify's comes back where Spotify put it, and the tabs you added go."
+                                                            preferredStyle:UIAlertControllerStyleAlert];
+-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+-    [alert addAction:[UIAlertAction actionWithTitle:@"Reset" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
++    [alert addAction:[SGSettingsAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
++    [alert addAction:[SGSettingsAction actionWithTitle:@"Reset" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
+         SGRSetNavbarLayout(@[]);
+         SGRRefreshTabBar();
+         [self reload];
+diff --git a/tweak/Sources/Settings/SGGlowSwitch.m b/tweak/Sources/Settings/SGGlowSwitch.m
+index 143a47b61ca84f6f69146f96087839131103ae10..e7937bcb2302260ed4ac81fc021458c72355a1c2 100644
+--- a/tweak/Sources/Settings/SGGlowSwitch.m
++++ b/tweak/Sources/Settings/SGGlowSwitch.m
+@@ -1,4 +1,5 @@
+ #import "SGGlowSwitch.h"
++#import "Core/SGLocalization.h"
+ 
+ static const CGFloat kWidth = 56, kHeight = 32, kKnobInset = 3, kKnobStretch = 5;
+ static const CGFloat kRimWidth = 2, kGlowWidth = 5, kGlowRadius = 6, kGlowBleed = 14;
+@@ -168,7 +169,7 @@ static CAShapeLayer *newStroke(CGFloat width) {
+     _glow.opacity = glow ? (on ? 0.9 : 0.45) : 0;
+     _knob.alpha = self.enabled ? 1 : 0.5;
+     self.alpha = self.enabled ? 1 : 0.4;
+-    self.accessibilityValue = on ? @"On" : @"Off";
++    self.accessibilityValue = SGText(on ? @"On" : @"Off");
+     [self updateMotion];
+ }
+ 
+diff --git a/tweak/Sources/Settings/SGModPage.m b/tweak/Sources/Settings/SGModPage.m
+index bad6b931857caac457601cffbb52e87781165a59..9f4333994ecc43f8c3be2570daf1bb35bee95b2a 100644
+--- a/tweak/Sources/Settings/SGModPage.m
++++ b/tweak/Sources/Settings/SGModPage.m
+@@ -239,17 +239,17 @@ SGModRow *SGLinkRow(NSString *title, NSString *subtitle, NSString *url) {
+ }
+ 
+ static void sayProblem(NSString *title, NSString *problem) {
+-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:title message:problem preferredStyle:UIAlertControllerStyleAlert];
+-    [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
++    UIAlertController *alert = [SGSettingsAlert alertControllerWithTitle:title message:problem preferredStyle:UIAlertControllerStyleAlert];
++    [alert addAction:[SGSettingsAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
+     [SGTopController() presentViewController:alert animated:YES completion:nil];
+ }
+ 
+ SGModRow *SGTextRow(NSString *title, NSString *prompt, NSString *placeholder, NSString *(^value)(void),
+                     NSString *(^set)(NSString *text)) {
+     return SGStatActionRow(title, nil, value, ^{
+-        UIAlertController *alert = [UIAlertController alertControllerWithTitle:title message:prompt preferredStyle:UIAlertControllerStyleAlert];
++        UIAlertController *alert = [SGSettingsAlert alertControllerWithTitle:title message:prompt preferredStyle:UIAlertControllerStyleAlert];
+         [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+-            field.placeholder = placeholder;
++            field.placeholder = SGText(placeholder);
+             field.autocapitalizationType = UITextAutocapitalizationTypeNone;
+             field.autocorrectionType = UITextAutocorrectionTypeNo;
+             field.spellCheckingType = UITextSpellCheckingTypeNo;
+@@ -257,13 +257,13 @@ SGModRow *SGTextRow(NSString *title, NSString *prompt, NSString *placeholder, NS
+             field.smartQuotesType = UITextSmartQuotesTypeNo;
+             field.clearButtonMode = UITextFieldViewModeWhileEditing;
+         }];
+-        [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
++        [alert addAction:[SGSettingsAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+         if (value()) {
+-            [alert addAction:[UIAlertAction actionWithTitle:@"Remove" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
++            [alert addAction:[SGSettingsAction actionWithTitle:@"Remove" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
+                 set(@"");
+             }]];
+         }
+-        UIAlertAction *save = [UIAlertAction actionWithTitle:@"Save" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
++        UIAlertAction *save = [SGSettingsAction actionWithTitle:@"Save" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+             NSString *text = [alert.textFields.firstObject.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+             if (!text.length) return;
+             NSString *problem = set(text);
+@@ -310,7 +310,7 @@ static UIView *valueAndChevron(NSString *text) {
+     UILabel *label = [UILabel new];
+     label.font = SGTitleFont();
+     label.textColor = SGGrey();
+-    label.text = text;
++    label.text = SGText(text);
+     [label sizeToFit];
+     UIImageView *chevron = SGSymbolView(@"chevron.right", 13, UIImageSymbolWeightSemibold, 16);
+     CGFloat height = MAX(label.bounds.size.height, chevron.bounds.size.height);
+@@ -338,7 +338,7 @@ void SGFillRowCell(UITableViewCell *cell, SGModRow *row) {
+         UILabel *label = [UILabel new];
+         label.font = SGTitleFont();
+         label.textColor = SGGrey();
+-        label.text = row.value();
++        label.text = SGText(row.value());
+         [label sizeToFit];
+         cell.accessoryView = label;
+         cell.selectionStyle = row.action ? UITableViewCellSelectionStyleDefault : UITableViewCellSelectionStyleNone;
+@@ -698,7 +698,7 @@ static void showProgress(UITableViewCell *cell, SGModRow *row, BOOL animated) {
+         if (row.number && [cell isKindOfClass:SGModSliderCell.class]) [(SGModSliderCell *)cell readAgain];
+         UILabel *label = (UILabel *)cell.accessoryView;
+         if (!row.value || row.page || ![label isKindOfClass:UILabel.class]) continue;
+-        label.text = row.value();
++        label.text = SGText(row.value());
+         [label sizeToFit];
+         [cell setNeedsLayout];
+     }
+@@ -817,7 +817,7 @@ static void showProgress(UITableViewCell *cell, SGModRow *row, BOOL animated) {
+     UIImageSymbolConfiguration *symbol = [UIImageSymbolConfiguration configurationWithPointSize:17 weight:UIImageSymbolWeightRegular];
+     [info setImage:[UIImage systemImageNamed:@"info.circle" withConfiguration:symbol] forState:UIControlStateNormal];
+     info.tintColor = SGGrey();
+-    info.accessibilityLabel = @"About this switch";
++    info.accessibilityLabel = SGText(@"About this switch");
+     [info addTarget:self action:@selector(infoTapped:) forControlEvents:UIControlEventTouchUpInside];
+     [toggle sizeToFit];
+     CGFloat side = 30, gap = 8, height = MAX(side, toggle.bounds.size.height);
+@@ -833,8 +833,8 @@ static void showProgress(UITableViewCell *cell, SGModRow *row, BOOL animated) {
+     NSIndexPath *path = [self pathOf:button];
+     if (!path) return;
+     SGModRow *row = [self rowAt:path];
+-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:row.title message:row.info preferredStyle:UIAlertControllerStyleAlert];
+-    [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
++    UIAlertController *alert = [SGSettingsAlert alertControllerWithTitle:row.title message:row.info preferredStyle:UIAlertControllerStyleAlert];
++    [alert addAction:[SGSettingsAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
+     [self presentViewController:alert animated:YES completion:nil];
+ }
+ 
+@@ -860,22 +860,22 @@ static void showProgress(UITableViewCell *cell, SGModRow *row, BOOL animated) {
+ 
+ // A locked row will not move, and nothing on it says why.
+ - (void)explainLock {
+-    UIAlertController *alert = [UIAlertController
++    UIAlertController *alert = [SGSettingsAlert
+         alertControllerWithTitle:@"Overridden by another setting"
+                          message:@"Another switch is forcing this flag, so the row shows what it forces instead of taking a value of its own."
+                   preferredStyle:UIAlertControllerStyleAlert];
+-    [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
++    [alert addAction:[SGSettingsAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
+     [self presentViewController:alert animated:YES completion:nil];
+ }
+ 
+ - (void)warn:(SGModRow *)row {
+-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:[row.title stringByAppendingString:@" is unstable"]
++    UIAlertController *alert = [SGSettingsAlert alertControllerWithTitle:[row.title stringByAppendingString:SGText(@" is unstable")]
+                                                                   message:row.warning
+                                                            preferredStyle:UIAlertControllerStyleAlert];
+-    [alert addAction:[UIAlertAction actionWithTitle:@"Open GitHub" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
++    [alert addAction:[SGSettingsAction actionWithTitle:@"Open GitHub" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+         SGOpenURL(SGRepoURL);
+     }]];
+-    [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
++    [alert addAction:[SGSettingsAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
+     [self presentViewController:alert animated:YES completion:nil];
+ }
+ 
+diff --git a/tweak/Sources/Settings/SGOrderPage.m b/tweak/Sources/Settings/SGOrderPage.m
+index 2a9e916e437d07a30702343833fe760d682c3b33..86b1dda169aa01d024f76b712c425c4bd4d602b8 100644
+--- a/tweak/Sources/Settings/SGOrderPage.m
++++ b/tweak/Sources/Settings/SGOrderPage.m
+@@ -144,7 +144,7 @@ typedef NS_ENUM(NSInteger, SGOrderSection) {
+     SGOrderItem *item = [self itemFor:[self keysIn:path.section][(NSUInteger)path.row]];
+     BOOL on = path.section == SGOrderSectionOn;
+     // The asked ones are numbered, so the order reads as an order rather than a list.
+-    NSString *title = on ? [NSString stringWithFormat:@"%ld. %@", (long)path.row + 1, item.name] : item.name;
++    NSString *title = on ? [NSString stringWithFormat:@"%ld. %@", (long)path.row + 1, SGText(item.name)] : item.name;
+     NSString *problem = item.problem ? item.problem() : nil;
+     SGFillCell(cell, title, problem ?: item.detail, on ? nil : SGGrey(), on ? @"checkmark.circle.fill" : @"circle");
+     if (problem && on) {
+diff --git a/tweak/Sources/Settings/SGPage.m b/tweak/Sources/Settings/SGPage.m
+index 5b7e47988ecc821e5b8ad2947fd36a353d86f82b..6e1a8c66005fecfbab6c8cd075541af068ddf849 100644
+--- a/tweak/Sources/Settings/SGPage.m
++++ b/tweak/Sources/Settings/SGPage.m
+@@ -14,6 +14,8 @@ static BOOL sg_pagesConform;
+ 
+ @implementation SGPage
+ 
++- (void)setTitle:(NSString *)title { [super setTitle:SGText(title)]; }
++
+ // Inset grouped cards on Spotify's dark grey, a hairline between the rows of a card.
+ - (void)viewDidLoad {
+     [super viewDidLoad];
+diff --git a/tweak/Sources/Settings/SGPageStyle.h b/tweak/Sources/Settings/SGPageStyle.h
+index 5b4a52b028155394202c2c589f53fdcda2645092..de69a28da79f4992ba52df9ba5b680385f7c3725 100644
+--- a/tweak/Sources/Settings/SGPageStyle.h
++++ b/tweak/Sources/Settings/SGPageStyle.h
+@@ -25,6 +25,8 @@ void SGInsetForBars(UITableView *table);
+ extern const CGFloat SGSectionHeaderHeight;
+ extern const CGFloat SGSectionGap;   // above a section with no header, so its card does not touch the one before
+ void SGFillCell(UITableViewCell *cell, NSString *title, NSString *subtitle, UIColor *color, NSString *symbolName);
++// Preserve user content verbatim while using the same cell styling.
++void SGFillRawCell(UITableViewCell *cell, NSString *title, NSString *subtitle, UIColor *color, NSString *symbolName);
+ UIView *SGSectionHeader(UITableView *table, NSString *title);
+ UIView *SGSectionFooter(UITableView *table, NSString *text);
+ CGFloat SGSectionFooterHeight(UITableView *table, NSString *text);
+diff --git a/tweak/Sources/Settings/SGPageStyle.m b/tweak/Sources/Settings/SGPageStyle.m
+index 864082ce9e6d6015ce0776b0b83cf2aca771da69..b72928f758e5eeab337adf08901c46ab19865891 100644
+--- a/tweak/Sources/Settings/SGPageStyle.m
++++ b/tweak/Sources/Settings/SGPageStyle.m
+@@ -19,7 +19,7 @@ UIImageView *SGSymbolView(NSString *name, CGFloat size, UIImageSymbolWeight weig
+ // A grey note in a wrapper view, for the table header and footer.
+ UIView *SGNote(NSString *text) {
+     UILabel *label = [UILabel new];
+-    label.text = text;
++    label.text = SGText(text);
+     label.font = SGSubtitleFont();
+     label.textColor = SGGrey();
+     label.numberOfLines = 0;
+@@ -110,6 +110,11 @@ const CGFloat SGSectionGap = 20;
+ // Every page below draws Spotify's own list row: a 13pt white title over an 11pt grey subtitle,
+ // with an optional symbol in the leading slot.
+ void SGFillCell(UITableViewCell *cell, NSString *title, NSString *subtitle, UIColor *color, NSString *symbolName) {
++    SGFillRawCell(cell, SGText(title), SGText(subtitle), color, symbolName);
++}
++
++// User-authored names, file names and artist names are never catalogue lookups.
++void SGFillRawCell(UITableViewCell *cell, NSString *title, NSString *subtitle, UIColor *color, NSString *symbolName) {
+     UIListContentConfiguration *content = [UIListContentConfiguration subtitleCellConfiguration];
+     content.text = title;
+     content.secondaryText = subtitle;
+@@ -132,7 +137,7 @@ void SGFillCell(UITableViewCell *cell, NSString *title, NSString *subtitle, UICo
+ 
+ UIView *SGSectionHeader(UITableView *table, NSString *title) {
+     UILabel *label = [UILabel new];
+-    label.text = title.uppercaseString;
++    label.text = SGText(title).uppercaseString;
+     label.font = SGSubtitleFont();
+     label.textColor = SGGrey();
+     label.frame = CGRectMake(16, 20, table.bounds.size.width - 32, 14);
+@@ -148,7 +153,7 @@ static CGFloat footerTextHeight(UITableView *table, NSString *text) {
+     // An inset grouped table narrows its footers by its side margins, and the label wraps at that width.
+     CGFloat inset = table.style == UITableViewStyleInsetGrouped ? table.layoutMargins.left + table.layoutMargins.right : 0;
+     CGFloat width = MAX(table.bounds.size.width - inset - 32, 100);
+-    return ceil([text boundingRectWithSize:CGSizeMake(width, CGFLOAT_MAX)
++    return ceil([SGText(text) boundingRectWithSize:CGSizeMake(width, CGFLOAT_MAX)
+                                    options:NSStringDrawingUsesLineFragmentOrigin
+                                 attributes:@{NSFontAttributeName: SGSubtitleFont()}
+                                    context:nil].size.height);
+@@ -156,7 +161,7 @@ static CGFloat footerTextHeight(UITableView *table, NSString *text) {
+ 
+ UIView *SGSectionFooter(UITableView *table, NSString *text) {
+     UILabel *label = [UILabel new];
+-    label.text = text;
++    label.text = SGText(text);
+     label.font = SGSubtitleFont();
+     label.textColor = SGGrey();
+     label.numberOfLines = 0;
+@@ -177,6 +182,7 @@ static NSString *linkShown(NSString *url) {
+ }
+ 
+ NSString *SGLinkedFooterText(NSString *text, NSString *url) {
++    text = SGText(text);
+     return [NSString stringWithFormat:@"%@ %@", text, linkShown(url)];
+ }
+ 
+diff --git a/tweak/Sources/Shared/ArtistBlock/ArtistBlockSettings.m b/tweak/Sources/Shared/ArtistBlock/ArtistBlockSettings.m
+index e19f580ca867038321b441043ee5dd1afc01e01f..0ca1005146fe4a4a2ae1667161ad74b13baa84fd 100644
+--- a/tweak/Sources/Shared/ArtistBlock/ArtistBlockSettings.m
++++ b/tweak/Sources/Shared/ArtistBlock/ArtistBlockSettings.m
+@@ -96,7 +96,7 @@ typedef NS_ENUM(NSInteger, SGArtistSection) {
+                 break;
+             }
+             NSDictionary *artist = _blocked[(NSUInteger)path.row];
+-            SGFillCell(cell, artist[SGArtistName], artist[SGArtistURI], nil, nil);
++            SGFillRawCell(cell, artist[SGArtistName], artist[SGArtistURI], nil, nil);
+             break;
+     }
+     return cell;
+@@ -129,27 +129,27 @@ typedef NS_ENUM(NSInteger, SGArtistSection) {
+ - (void)pickFromPlaying:(UIView *)source {
+     NSArray<NSDictionary *> *artists = SGPlayingArtists();
+     if (!artists.count) {
+-        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Nothing playing"
++        UIAlertController *alert = [SGSettingsAlert alertControllerWithTitle:@"Nothing playing"
+                                                                       message:@"Play a track by the artist first, then come back here."
+                                                                preferredStyle:UIAlertControllerStyleAlert];
+-        [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
++        [alert addAction:[SGSettingsAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
+         [self presentViewController:alert animated:YES completion:nil];
+         return;
+     }
+-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"Block"
++    UIAlertController *sheet = [SGSettingsAlert alertControllerWithTitle:@"Block"
+                                                                   message:nil
+                                                            preferredStyle:UIAlertControllerStyleActionSheet];
+     [artists enumerateObjectsUsingBlock:^(NSDictionary *artist, NSUInteger index, BOOL *stop) {
+         BOOL blocked = SGArtistBlocked(artist[SGArtistURI]);
+-        NSString *title = index == 0 ? artist[SGArtistName] : [NSString stringWithFormat:@"%@ (featured)", artist[SGArtistName]];
+-        UIAlertAction *action = [UIAlertAction actionWithTitle:title style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
++        NSString *title = index == 0 ? artist[SGArtistName] : [NSString stringWithFormat:SGText(@"%@ (featured)"), artist[SGArtistName]];
++        UIAlertAction *action = [SGSettingsAction actionWithTitle:title style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
+             SGBlockArtist(artist);
+             [self reload];
+         }];
+         action.enabled = !blocked;
+         [sheet addAction:action];
+     }];
+-    [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
++    [sheet addAction:[SGSettingsAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+     sheet.popoverPresentationController.sourceView = source;
+     sheet.popoverPresentationController.sourceRect = source.bounds;
+     [self presentViewController:sheet animated:YES completion:nil];
+diff --git a/tweak/Sources/Shared/AudioEffects/AudioEffectsLibraryPage.m b/tweak/Sources/Shared/AudioEffects/AudioEffectsLibraryPage.m
+index 519bf22fb31d82814c0ea65ec73d0797544cb7d8..bdf752d914e26cff5e99731b3a712bf0d131fe61 100644
+--- a/tweak/Sources/Shared/AudioEffects/AudioEffectsLibraryPage.m
++++ b/tweak/Sources/Shared/AudioEffects/AudioEffectsLibraryPage.m
+@@ -31,12 +31,12 @@ static NSString *extensionList(SGDSPFileKind kind) {
+     if (dotted.count < 2) return dotted.firstObject ?: @"";
+     NSString *last = dotted.lastObject;
+     [dotted removeLastObject];
+-    return [NSString stringWithFormat:@"%@ or %@", [dotted componentsJoinedByString:@", "], last];
++    return [NSString stringWithFormat:SGText(@"%@ or %@"), [dotted componentsJoinedByString:@", "], last];
+ }
+ 
+ static void showAlert(UIViewController *owner, NSString *title, NSString *message) {
+-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:title message:message preferredStyle:UIAlertControllerStyleAlert];
+-    [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
++    UIAlertController *alert = [SGSettingsAlert alertControllerWithTitle:title message:message preferredStyle:UIAlertControllerStyleAlert];
++    [alert addAction:[SGSettingsAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
+     [owner presentViewController:alert animated:YES completion:nil];
+ }
+ 
+@@ -183,7 +183,7 @@ static UITableViewCell *tiledCell(UITableView *table, NSString *title, NSString
+ - (UITableViewCell *)tableView:(UITableView *)table cellForRowAtIndexPath:(NSIndexPath *)path {
+     if (path.section == 0) return [self errorCellIn:table];
+     if (path.section == 2) {
+-        NSString *subtitle = [NSString stringWithFormat:@"A %@ file from Files", extensionList(_kind)];
++        NSString *subtitle = [NSString stringWithFormat:SGText(@"A %@ file from Files"), extensionList(_kind)];
+         return tiledCell(table, @"Import file…", subtitle, @"square.and.arrow.down", nil);
+     }
+     UITableViewCell *cell = SGDequeueCell(table, @"file");
+@@ -194,7 +194,7 @@ static UITableViewCell *tiledCell(UITableView *table, NSString *title, NSString
+     }
+     NSString *name = _files[(NSUInteger)path.row];
+     BOOL chosen = [name isEqualToString:SGDSPString(fileKeyOf(_kind))];
+-    SGFillCell(cell, name, nil, nil, nil);
++    SGFillRawCell(cell, name, nil, nil, nil);
+     cell.selectionStyle = UITableViewCellSelectionStyleDefault;
+     if (chosen) {
+         UIImageView *tick = SGSymbolView(@"checkmark", 13, UIImageSymbolWeightSemibold, 16);
+@@ -256,7 +256,7 @@ static UITableViewCell *tiledCell(UITableView *table, NSString *title, NSString
+     NSURL *url = urls.firstObject;
+     if (!url) return;
+     if (![SGDSPFileExtensions(_kind) containsObject:url.pathExtension.lowercaseString]) {
+-        showAlert(self, @"Not a file this effect takes", [NSString stringWithFormat:@"Pick a %@ file.", extensionList(_kind)]);
++        showAlert(self, @"Not a file this effect takes", [NSString stringWithFormat:SGText(@"Pick a %@ file."), extensionList(_kind)]);
+         return;
+     }
+     NSError *error = nil;
+diff --git a/tweak/Sources/Shared/AudioEffects/AudioEffectsPage.m b/tweak/Sources/Shared/AudioEffects/AudioEffectsPage.m
+index 77333685d06776f5972f3ceaacc575b349f0dae2..e3d2f9a24013cd4fa12c98b58e6efe599d7c7668 100644
+--- a/tweak/Sources/Shared/AudioEffects/AudioEffectsPage.m
++++ b/tweak/Sources/Shared/AudioEffects/AudioEffectsPage.m
+@@ -101,7 +101,7 @@ static NSString *graphicEqSummary(void) {
+         points++;
+         flat &= parts[1].doubleValue == 0;
+     }
+-    return flat ? @"Flat" : [NSString stringWithFormat:@"%lu points", (unsigned long)points];
++    return flat ? @"Flat" : [NSString stringWithFormat:SGText(@"%lu points"), (unsigned long)points];
+ }
+ 
+ // The effects' cards. The engine runs them in an order of its own (SGDSPEngine.m).
+@@ -163,7 +163,7 @@ NSString *SGDSPSummary(void) {
+     NSUInteger on = 0;
+     for (SGDSPEffect *e in effects()) on += e.key && SGDSPSwitch(e.key);
+     if (!on) return @"On";
+-    return on == 1 ? @"1 effect" : [NSString stringWithFormat:@"%lu effects", (unsigned long)on];
++    return on == 1 ? @"1 effect" : [NSString stringWithFormat:SGText(@"%lu effects"), (unsigned long)on];
+ }
+ 
+ #pragma mark - numbers
+@@ -260,19 +260,19 @@ static UIFont *tabular(UIFont *font) {
+     _detents = count > 0 && count <= 24;
+     _title.font = SGTitleFont();
+     _value.font = tabular(SGTitleFont());
+-    _title.text = row.title;
++    _title.text = SGText(row.title);
+     _slider.minimumTrackTintColor = SGGreen();
+     _slider.minimumValue = (float)range.min;
+     _slider.maximumValue = (float)range.max;
+     _slider.spokenStep = (float)(count > 0 && count <= 40 ? range.step : snapped(row.key, range.min + (range.max - range.min) / 20) - range.min);
+     _shown = SGDSPNumber(row.key);
+     _slider.value = (float)_shown;
+-    _slider.accessibilityLabel = row.title;
++    _slider.accessibilityLabel = SGText(row.title);
+     [self showValue];
+ }
+ 
+ - (void)showValue {
+-    _value.text = numberText(_row, _shown);
++    _value.text = SGText(numberText(_row, _shown));
+     _slider.accessibilityValue = _value.text;
+     [self setNeedsLayout];
+ }
+@@ -388,7 +388,7 @@ static UIView *valueAndChevron(NSString *text) {
+     UILabel *label = [UILabel new];
+     label.font = SGTitleFont();
+     label.textColor = SGGrey();
+-    label.text = text;
++    label.text = SGText(text);
+     [label sizeToFit];
+     UIImageView *chevron = SGSymbolView(@"chevron.right", 13, UIImageSymbolWeightSemibold, 16);
+     CGFloat height = MAX(label.bounds.size.height, chevron.bounds.size.height);
+@@ -739,17 +739,17 @@ static UIView *valueAndChevron(NSString *text) {
+ }
+ 
+ - (void)confirmReset {
+-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Reset all effects?"
++    UIAlertController *alert = [SGSettingsAlert alertControllerWithTitle:@"Reset all effects?"
+         message:@"Every effect goes off, and every value, curve and file choice back to its default. The Effects switch and your imported files stay."
+         preferredStyle:UIAlertControllerStyleAlert];
+-    [alert addAction:[UIAlertAction actionWithTitle:@"Reset" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
++    [alert addAction:[SGSettingsAction actionWithTitle:@"Reset" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
+         SGDSPResetAll();
+         [self readState];
+         [UIView transitionWithView:self.tableView duration:0.25 options:UIViewAnimationOptionTransitionCrossDissolve animations:^{
+             [self.tableView reloadData];
+         } completion:nil];
+     }]];
+-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
++    [alert addAction:[SGSettingsAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+     [self presentViewController:alert animated:YES completion:nil];
+ }
+ 
+diff --git a/tweak/Sources/Shared/Flags/FlagsPage.m b/tweak/Sources/Shared/Flags/FlagsPage.m
+index 9cdd2e206c3b7441933db8b60268d3b154dc66cd..8bbe535a7eba4e3140c9465a9aeeee664a4dfd64 100644
+--- a/tweak/Sources/Shared/Flags/FlagsPage.m
++++ b/tweak/Sources/Shared/Flags/FlagsPage.m
+@@ -4,12 +4,12 @@
+ #import "Flags.h"
+ 
+ static NSString *flagState(const SGFlagDef *flag, id value) {
+-    if (value) return [NSString stringWithFormat:@"forced %@", flag->type == SGFlagBool ? ([value boolValue] ? @"on" : @"off") : value];
++    if (value) return [NSString stringWithFormat:SGText(@"forced %@"), flag->type == SGFlagBool ? SGText([value boolValue] ? @"on" : @"off") : value];
+     switch (flag->type) {
+-        case SGFlagBool: return flag->value ? @"on by default" : @"off by default";
+-        case SGFlagInt: return [NSString stringWithFormat:@"%ld by default, %ld to %ld", flag->value, flag->lower, flag->upper];
+-        case SGFlagEnum: return @"text value";
+-        default: return @"type unknown";
++        case SGFlagBool: return SGText(flag->value ? @"on by default" : @"off by default");
++        case SGFlagInt: return [NSString stringWithFormat:SGText(@"%ld by default, %ld to %ld"), flag->value, flag->lower, flag->upper];
++        case SGFlagEnum: return SGText(@"text value");
++        default: return SGText(@"type unknown");
+     }
+ }
+ 
+@@ -37,7 +37,7 @@ static NSString *flagState(const SGFlagDef *flag, id value) {
+     self.tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
+     self.tableView.keyboardDismissMode = UIScrollViewKeyboardDismissModeOnDrag;
+     _search = [UISearchBar new];
+-    _search.placeholder = [NSString stringWithFormat:@"Search %lu flags", (unsigned long)SGFlagCount];
++    _search.placeholder = [NSString stringWithFormat:SGText(@"Search %lu flags"), (unsigned long)SGFlagCount];
+     _search.searchBarStyle = UISearchBarStyleMinimal;
+     _search.delegate = self;
+     _header = SGNote(@"Auto keeps Spotify's value. Changes apply after you restart Spotify.");
+@@ -106,7 +106,7 @@ static NSString *flagState(const SGFlagDef *flag, id value) {
+     cell.selectionStyle = UITableViewCellSelectionStyleDefault;
+ 
+     if (flag->type == SGFlagBool) {
+-        UISegmentedControl *control = [[UISegmentedControl alloc] initWithItems:@[@"Auto", @"Off", @"On"]];
++        UISegmentedControl *control = [[UISegmentedControl alloc] initWithItems:@[SGText(@"Auto"), SGText(@"Off"), SGText(@"On")]];
+         control.selectedSegmentIndex = value ? ([value boolValue] ? 2 : 1) : 0;
+         control.selectedSegmentTintColor = SGGreen();
+         [control setTitleTextAttributes:@{NSForegroundColorAttributeName: UIColor.whiteColor, NSFontAttributeName: SGSubtitleFont()} forState:UIControlStateNormal];
+@@ -140,16 +140,16 @@ static NSString *flagState(const SGFlagDef *flag, id value) {
+     NSString *key = @(flag->key);
+     id value = _overrides[key];
+     NSString *hint = flag->type == SGFlagUnknown ? @"true or false, a number, or a text value" : flagState(flag, value);
+-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:[key substringFromIndex:[key rangeOfString:@"."].location + 1] message:hint preferredStyle:UIAlertControllerStyleAlert];
++    UIAlertController *alert = [SGSettingsAlert alertControllerWithTitle:[key substringFromIndex:[key rangeOfString:@"."].location + 1] message:hint preferredStyle:UIAlertControllerStyleAlert];
+     [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+         field.text = value ? [value description] : @"";
+         field.keyboardType = flag->type == SGFlagInt ? UIKeyboardTypeNumbersAndPunctuation : UIKeyboardTypeDefault;
+     }];
+-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+-    [alert addAction:[UIAlertAction actionWithTitle:@"Auto" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
++    [alert addAction:[SGSettingsAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
++    [alert addAction:[SGSettingsAction actionWithTitle:@"Auto" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
+         [self store:nil forKey:key row:path.row];
+     }]];
+-    [alert addAction:[UIAlertAction actionWithTitle:@"Force" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
++    [alert addAction:[SGSettingsAction actionWithTitle:@"Force" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+         NSString *text = alert.textFields.firstObject.text;
+         if (!text.length) return;
+         [self store:flag->type == SGFlagInt ? @(text.integerValue) : text forKey:key row:path.row];
+diff --git a/tweak/Sources/Shared/Gestures/GesturesSettings.m b/tweak/Sources/Shared/Gestures/GesturesSettings.m
+index 44429d90c8e464e96c75a34fdf98f28b29445d03..9335061c1aa6f0e2ec9b1bc03636b79a9794cd1e 100644
+--- a/tweak/Sources/Shared/Gestures/GesturesSettings.m
++++ b/tweak/Sources/Shared/Gestures/GesturesSettings.m
+@@ -66,7 +66,7 @@ static NSString *cellLabel(SGGestureAction action) {
+     [zones enumerateObjectsUsingBlock:^(NSNumber *action, NSUInteger index, BOOL *stop) {
+         UILabel *label = self->_labels[index];
+         SGGestureAction value = (SGGestureAction)action.integerValue;
+-        label.text = cellLabel(value);
++        label.text = SGText(cellLabel(value));
+         label.textColor = value == SGGestureNothing ? SGGrey() : UIColor.whiteColor;
+     }];
+     [self setNeedsLayout];
+@@ -144,16 +144,16 @@ static NSString *cellLabel(SGGestureAction action) {
+ 
+ - (void)pickActionFor:(NSInteger)cell {
+     NSArray<NSString *> *names = SGGestureActionNames();
+-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"Double tap here"
++    UIAlertController *sheet = [SGSettingsAlert alertControllerWithTitle:@"Double tap here"
+                                                                   message:nil
+                                                            preferredStyle:UIAlertControllerStyleActionSheet];
+     [names enumerateObjectsUsingBlock:^(NSString *name, NSUInteger index, BOOL *stop) {
+-        [sheet addAction:[UIAlertAction actionWithTitle:name style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
++        [sheet addAction:[SGSettingsAction actionWithTitle:name style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+             SGSetGestureZone(cell, (SGGestureAction)index);
+             [self refresh];
+         }]];
+     }];
+-    [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
++    [sheet addAction:[SGSettingsAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+     sheet.popoverPresentationController.sourceView = _grid;
+     sheet.popoverPresentationController.sourceRect = _grid.bounds;
+     [self presentViewController:sheet animated:YES completion:nil];
+@@ -201,7 +201,7 @@ static NSString *cellLabel(SGGestureAction action) {
+         case 2: {
+             BOOL split = path.section == 1;
+             NSString *title = split ? SGGestureSplitNames()[(NSUInteger)path.row]
+-                                    : [NSString stringWithFormat:@"%@ seconds", SGGestureStepChoices()[(NSUInteger)path.row]];
++                                    : [NSString stringWithFormat:SGText(@"%@ seconds"), SGGestureStepChoices()[(NSUInteger)path.row]];
+             SGFillCell(cell, title, nil, nil, nil);
+             cell.selectionStyle = UITableViewCellSelectionStyleDefault;
+             if (path.row == (split ? SGGestureSplit() : SGGestureStepChoice())) {
+diff --git a/tweak/Sources/Shared/LockScreenArtwork/LockScreenArtworkSettings.m b/tweak/Sources/Shared/LockScreenArtwork/LockScreenArtworkSettings.m
+index 016bad38eb7eff48cc3db12f8beef4e0c328166e..37af00de8bb3859c6c971cb384f1c636feb55f39 100644
+--- a/tweak/Sources/Shared/LockScreenArtwork/LockScreenArtworkSettings.m
++++ b/tweak/Sources/Shared/LockScreenArtwork/LockScreenArtworkSettings.m
+@@ -7,10 +7,10 @@
+ #import "LockScreenArtwork.h"
+ 
+ static void sayWhatIsMissing(void) {
+-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Animated lock screen"
+-        message:[NSString stringWithFormat:@"Animated artwork is the lock screen's own, and iOS takes one only from 26 on. This phone runs iOS %@, where the cover stays still.", UIDevice.currentDevice.systemVersion]
++    UIAlertController *alert = [SGSettingsAlert alertControllerWithTitle:@"Animated lock screen"
++        message:[NSString stringWithFormat:SGText(@"Animated artwork is the lock screen's own, and iOS takes one only from 26 on. This phone runs iOS %@, where the cover stays still."), UIDevice.currentDevice.systemVersion]
+         preferredStyle:UIAlertControllerStyleAlert];
+-    [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
++    [alert addAction:[SGSettingsAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
+     [SGTopController() presentViewController:alert animated:YES completion:nil];
+ }
+ 
+diff --git a/tweak/Sources/Shared/LyricsSources/LyricsDiagnostics.m b/tweak/Sources/Shared/LyricsSources/LyricsDiagnostics.m
+index bb0057581e559bea97f7c529d6e43170dd6cc108..c2c443799021b6f2ce7d19341ff440ba8511abe6 100644
+--- a/tweak/Sources/Shared/LyricsSources/LyricsDiagnostics.m
++++ b/tweak/Sources/Shared/LyricsSources/LyricsDiagnostics.m
+@@ -118,10 +118,10 @@ UIViewController *SGLyricsDiagnosticsPage(void) {
+         SGLyricsDiagnosticsExport(^(NSURL *file) {
+             UIViewController *top = SGTopController();
+             if (!file) {
+-                UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"No lyrics debug logs"
++                UIAlertController *alert = [SGSettingsAlert alertControllerWithTitle:@"No lyrics debug logs"
+                     message:@"Enable collection, play a different song and then return to the problem song."
+                     preferredStyle:UIAlertControllerStyleAlert];
+-                [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
++                [alert addAction:[SGSettingsAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
+                 [top presentViewController:alert animated:YES completion:nil];
+                 return;
+             }
+-- 
+2.34.1
+

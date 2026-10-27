@@ -1,0 +1,6 @@
+tree 8a8a94416a7e371c2aa54bd5c6352309eee8d290
+parent 4c9ab21948b8e809d6aa6debe4f31af7b049380f
+author ddyec <89333385+ddyec@users.noreply.github.com> 1792555368 +0000
+committer ddyec <89333385+ddyec@users.noreply.github.com> 1792555368 +0000
+
+fix: isolate playback CPU intervals and bound stall capture cost

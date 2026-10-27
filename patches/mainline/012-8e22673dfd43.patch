@@ -1,0 +1,36 @@
+From 8e22673dfd43366dcda8d94e35e063a4c7244176 Mon Sep 17 00:00:00 2001
+From: Codex <codex@users.noreply.github.com>
+Date: Wed, 30 Sep 2026 16:34:56 +0800
+Subject: [PATCH] fix: preserve unmodified catalogue title spelling
+
+---
+ tweak/Sources/Shared/LyricsSources/LyricsMatching.m | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/tweak/Sources/Shared/LyricsSources/LyricsMatching.m b/tweak/Sources/Shared/LyricsSources/LyricsMatching.m
+index 4da7a37837fe3e03a389af95f05e829faeb9caf9..171f5ed950d0a2544dd7d64e5e142f72c66bd6b0 100644
+--- a/tweak/Sources/Shared/LyricsSources/LyricsMatching.m
++++ b/tweak/Sources/Shared/LyricsSources/LyricsMatching.m
+@@ -122,7 +122,9 @@ NSString *SGLyricsSearchTitle(NSString *title) {
+     });
+     // Featured performers are credits, often absent from another catalogue's title.
+     // Strip only a trailing feature-credit bracket; live/remix markers stay intact.
+-    value = [featured stringByReplacingMatchesInString:value options:0 range:NSMakeRange(0, value.length) withTemplate:@""];
++    NSString *withoutFeature = [featured stringByReplacingMatchesInString:value options:0 range:NSMakeRange(0, value.length) withTemplate:@""];
++    BOOL removedFeature = ![withoutFeature isEqualToString:value];
++    value = withoutFeature;
+     // Check the whole suffix, including a nested version such as
+     // Song - Soundtrack Theme (Instrumental), before removing anything.
+     NSTextCheckingResult *match = [suffix firstMatchInString:value options:0 range:NSMakeRange(0, value.length)];
+@@ -134,7 +136,7 @@ NSString *SGLyricsSearchTitle(NSString *title) {
+                 stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+         }
+     }
+-    return [value stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
++    return removedFeature ? [value stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet] : title;
+ }
+ 
+ BOOL SGLyricsTitleMatches(NSString *candidate, NSString *wanted) {
+-- 
+2.34.1
+

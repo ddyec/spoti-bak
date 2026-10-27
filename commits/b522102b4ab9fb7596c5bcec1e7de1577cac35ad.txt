@@ -1,0 +1,6 @@
+tree b0ca7ec948eeaeaf121047ba329b3ff663d35dad
+parent 93abc92f57ae54b1297b418346d776d45bef3863
+author ddyec <89333385+ddyec@users.noreply.github.com> 1792506005 +0800
+committer ddyec <89333385+ddyec@users.noreply.github.com> 1792506005 +0800
+
+fix: allow supplied Eevee components to be re-signed during packaging

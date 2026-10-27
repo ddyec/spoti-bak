@@ -1,0 +1,304 @@
+From 0567146ba901f04069b9884ad5e469450f289cc9 Mon Sep 17 00:00:00 2001
+From: Codex <codex@users.noreply.github.com>
+Date: Wed, 30 Sep 2026 16:57:54 +0800
+Subject: [PATCH] fix: render native lyrics preview independently of Spotify
+ container
+
+---
+ docs/lyrics-matching.md                       |   8 +-
+ scripts/test-lyrics-identity.py               |  14 +-
+ tweak/Sources/Native/Player/LyricsPreview.x   | 138 +++++++++++++-----
+ tweak/Sources/Native/Player/NowPlaying.h      |   2 -
+ tweak/Sources/Native/Player/PlayerDeclutter.x |   2 +-
+ 5 files changed, 121 insertions(+), 43 deletions(-)
+
+diff --git a/docs/lyrics-matching.md b/docs/lyrics-matching.md
+index 5ca3e85be182f847b084219e63470deade57fb1e..727b3c55519330e45df49911c5e6152c7e2401d5 100644
+--- a/docs/lyrics-matching.md
++++ b/docs/lyrics-matching.md
+@@ -53,11 +53,15 @@ The existing redesigned lyrics corner menu exposes Pronunciation when data is pr
+ No synthesized Japanese kanji reading or machine translation is introduced.
+ # Native player preview
+ 
+-The native player now renders the shared cache's current timed line inside its existing
+-`LyricsContainerView`, rather than depending on Spotify's separate preview model. This is
++The native player now renders the shared cache's current timed line in its own overlay on
++the player, measured between the visible cover and the information row. It does not depend
++on Spotify creating or sizing `LyricsContainerView` or populating its preview model. This is
+ enabled with any custom lyrics source unless **Hide on the player → Lyrics preview** is on.
+ It uses the same playback clock and lead-line selection as the other lyric surfaces, clears
+ on track changes and instrumental breaks, and polls only while attached to a window. No
+ network or parsing work runs in its update. Unsynced/no-source tracks retain Spotify's preview.
+ The redesigned player continues to use its existing full lyrics overlay. Device acceptance
+ is required for the preview's bounds and visibility on the installed Spotify version.
++With lyrics diagnostics enabled, `preview` events record the track, display state, cache
++count, position and measured rectangles, without recording lyric text. These distinguish a
++disabled hide setting, missing timed lyrics, invalid geometry and a displayed line.
+diff --git a/scripts/test-lyrics-identity.py b/scripts/test-lyrics-identity.py
+index 16e300fb65cc265d146b6fbfe0ac9c8b68f039b3..9120975fe2e043f0c0634252b76c28f9a741c13a 100644
+--- a/scripts/test-lyrics-identity.py
++++ b/scripts/test-lyrics-identity.py
+@@ -25,16 +25,24 @@ krc = section(base / "LyricsSources/KuGou.m", "static NSArray *krcPronunciationR
+ qqMetadata = section(base / "LyricsSources/QQMusic.m", "static NSString *singers(", "static void lyricReply(")
+ qqEligibility = section(base / "LyricsSources/QQMusic.m", "static BOOL matches(", "static NSString *decoded(")
+ eligibility = section(base / "LyricsSources/LyricsSources.m", "static BOOL needsChineseTranslations(", "// Calculate off main;")
+-source = ("#import <Foundation/Foundation.h>\n#import <dispatch/dispatch.h>\n#include <stdio.h>\n#include <stdlib.h>\n"
++preview = section(root / "tweak/Sources/Native/Player/LyricsPreview.x", "static CGRect previewFrame(", "static BOOL showing(")
++source = ("#import <Foundation/Foundation.h>\n#import <CoreGraphics/CoreGraphics.h>\n#import <dispatch/dispatch.h>\n#include <stdio.h>\n#include <stdlib.h>\n"
+           + model + query + "BOOL SGLyricsTimedCredit(NSString *);\n"
+           + "BOOL SGLyricsDiagnosticsEnabled(void) { return NO; }\nvoid SGLyricsLog(NSString *format, ...) {}\n"
+-          + timing + lrc + matching + aliases + qrc + eligibility + qqMetadata + qqEligibility + krc)
++          + timing + lrc + matching + aliases + qrc + eligibility + qqMetadata + qqEligibility + krc + preview)
+ tests = r'''
+ static void check(BOOL ok, NSString *label) {
+     if (!ok) { NSLog(@"FAIL: %@", label); exit(1); }
+ }
+ int main(void) {
+     @autoreleasepool {
++        CGRect player = CGRectMake(0, 0, 402, 874);
++        CGRect cover = CGRectMake(24, 118, 354, 354), info = CGRectMake(0, 576, 402, 64);
++        CGRect previewRect = previewFrame(cover, info, player);
++        check(!CGRectIsNull(previewRect) && CGRectGetMinY(previewRect) > CGRectGetMaxY(cover) &&
++            CGRectGetMaxY(previewRect) < CGRectGetMinY(info), @"preview fits cover/title gap independently of native container");
++        check(CGRectIsNull(previewFrame(cover, CGRectMake(0, 490, 402, 64), player)), @"preview never overlaps title in cramped layout");
++        check(CGRectIsNull(previewFrame(CGRectZero, info, player)), @"missing cover cannot place preview over controls");
+         NSString *longTitle = @"Moon Halo - Honkai Impact 3Rd \"Everlasting Flames\" Animated Short Theme";
+         for (NSString *title in @[
+             longTitle,
+@@ -149,6 +157,6 @@ int main(void) {
+ with tempfile.TemporaryDirectory(prefix="lyrics-identity-") as directory:
+     path = Path(directory)
+     (path / "identity.m").write_text(source + tests, encoding="utf-8")
+-    subprocess.run(["xcrun", "clang", "-fobjc-arc", "-fblocks", "-framework", "Foundation",
++    subprocess.run(["xcrun", "clang", "-fobjc-arc", "-fblocks", "-framework", "Foundation", "-framework", "CoreGraphics",
+                     str(path / "identity.m"), "-o", str(path / "identity")], check=True)
+     subprocess.run([str(path / "identity")], check=True)
+diff --git a/tweak/Sources/Native/Player/LyricsPreview.x b/tweak/Sources/Native/Player/LyricsPreview.x
+index b0ff3157cc4ad71abdaeefa77a6efa07b2417c56..58514ad4f27c23f5d6233b31932f1d9b9d40f6a6 100644
+--- a/tweak/Sources/Native/Player/LyricsPreview.x
++++ b/tweak/Sources/Native/Player/LyricsPreview.x
+@@ -1,22 +1,49 @@
+-// Native player/Player.x already proves LyricsContainerView and layoutSubviews against the
+-// recorded player tree. Its parent is a plain artwork view, not an Encore arranged stack.
+-// Spotify's preview model need not receive the lyrics that our color-lyrics hook supplies.
+-// Render those cached lines in the existing preview bounds, using the shared player clock.
++// Native preview owns its surface: Spotify may never create LyricsContainerView, or may
++// give it zero bounds when its separate preview model has no data. Player controller,
++// information unit and cover classes/selectors are proven by the existing player hooks
++// and recorded player tree. No flag or private preview model is needed here.
+ #import "Core/SGCore.h"
+ #import "Shared/Lyrics/Lyrics.h"
+ #import "Shared/LyricsSources/LyricsSources.h"
++#import "Shared/LyricsSources/LyricsDiagnostics.h"
+ #import "NowPlaying.h"
+ 
+-BOOL SGNativeLyricsPreviewAvailable(void) {
++static char kPreviewKey;
++static __weak UIView *sg_previewHost, *sg_previewInfo;
++
++static BOOL SGNativeLyricsPreviewAvailable(void) {
+     if (SGHidden(SGHideLyricsInline) || !SGLyricsEnabled()) return NO;
+     NSArray *lines = SGKaraokeLinesForTrack(SGKaraokePlayingTrack());
+     return lines.count && SGKaraokeLinesTiming(lines) != SGKaraokeTimingNone;
+ }
+ 
++// Foundation/CoreGraphics regression harness exercises this production geometry directly.
++static CGRect previewFrame(CGRect cover, CGRect info, CGRect host) {
++    if (cover.size.width < 200 || info.size.height <= 0) return CGRectNull;
++    CGFloat top = CGRectGetMaxY(cover) + 8, bottom = CGRectGetMinY(info) - 8;
++    CGFloat height = MIN(64, bottom - top);
++    CGFloat side = MAX(24, CGRectGetMinX(cover));
++    if (height < 28 || top < CGRectGetMinY(host) || bottom > CGRectGetMaxY(host) ||
++        host.size.width - side * 2 < 100) return CGRectNull;
++    return CGRectMake(CGRectGetMinX(host) + side, top + (bottom - top - height) / 2,
++                      host.size.width - side * 2, height);
++}
++
++static BOOL showing(UIView *view, UIView *host) {
++    if (!view || ![view isDescendantOfView:host]) return NO;
++    for (UIView *v = view; v && v != host; v = v.superview) {
++        if (v.hidden || v.alpha < 0.01) return NO;
++    }
++    return YES;
++}
++
+ @interface SGNativeLyricsPreview : UILabel
+ @property (nonatomic, strong) NSTimer *timer;
+-@property (nonatomic, strong) NSMapTable<UIView *, NSNumber *> *savedAlpha;
++@property (nonatomic, weak) UIView *cover;
++@property (nonatomic, weak) UIView *platformPreview;
++@property (nonatomic, copy) NSString *lastDiagnostic;
+ - (void)refresh;
++- (void)findCover;
+ @end
+ 
+ @implementation SGNativeLyricsPreview
+@@ -27,8 +54,7 @@ BOOL SGNativeLyricsPreviewAvailable(void) {
+     self.textAlignment = NSTextAlignmentCenter;
+     self.numberOfLines = 2;
+     self.userInteractionEnabled = NO;
+-    self.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+-    self.savedAlpha = [NSMapTable weakToStrongObjectsMapTable];
++    self.alpha = 0;
+     return self;
+ }
+ - (void)didMoveToWindow {
+@@ -43,60 +69,102 @@ BOOL SGNativeLyricsPreviewAvailable(void) {
+     [NSRunLoop.mainRunLoop addTimer:self.timer forMode:NSRunLoopCommonModes];
+     [self refresh];
+ }
++- (void)findCover {
++    UIView *host = self.superview;
++    __block UIView *found = nil;
++    SGForEachView(host, ^(UIView *view) {
++        if ([NSStringFromClass(view.class) isEqualToString:@"_TtC22Lyrics_NPVContainerKit19LyricsContainerView"])
++            self.platformPreview = view;
++        if (view.bounds.size.width >= 200 && showing(view, host) &&
++            [NSStringFromClass(view.class) isEqualToString:@"_TtC35CreativeWorkCommons_CoverArtTiltKit16CoverArtTiltView"]) {
++            CGRect rect = [host convertRect:view.bounds fromView:view];
++            // Visible centre cell only: neighbouring queue covers can share a window.
++            if (CGRectGetMidX(rect) >= 0 && CGRectGetMidX(rect) <= host.bounds.size.width) found = view;
++        }
++    });
++    self.cover = found;
++}
+ - (void)refresh {
+     if (UIApplication.sharedApplication.applicationState != UIApplicationStateActive) return;
+-    UIView *host = self.superview;
++    UIView *host = self.superview, *info = sg_previewInfo;
+     if (!host) return;
+-    BOOL available = SGNativeLyricsPreviewAvailable();
++    BOOL geometry = showing(self.cover, host) && showing(info, host);
++    CGRect coverRect = geometry ? [host convertRect:self.cover.bounds fromView:self.cover] : CGRectZero;
++    CGRect infoRect = geometry ? [host convertRect:info.bounds fromView:info] : CGRectZero;
++    CGRect frame = geometry ? previewFrame(coverRect, infoRect, host.bounds) : CGRectNull;
++    geometry = !CGRectIsNull(frame);
++    if (geometry) {
++        if (!CGRectEqualToRect(frame, self.frame)) self.frame = frame;
++    }
++    NSString *track = SGKaraokePlayingTrack();
++    NSArray<SGKaraokeLine *> *lines = SGKaraokeLinesForTrack(track);
++    NSInteger ms = SGKaraokePositionMs(), index = -1;
+     NSString *text = nil;
+-    if (available) {
+-        NSArray<SGKaraokeLine *> *lines = SGKaraokeLinesForTrack(SGKaraokePlayingTrack());
+-        NSInteger ms = SGKaraokePositionMs();
+-        NSInteger index = ms >= 0 ? SGKaraokeLeadLine(lines, ms) : -1;
++    BOOL available = SGNativeLyricsPreviewAvailable();
++    if (available && ms >= 0) {
++        index = SGKaraokeLeadLine(lines, ms);
+         if (index >= 0) {
+             SGKaraokeLine *line = lines[index];
+-            // A long instrumental break should not keep the previous sentence on screen.
+             if (ms <= SGKaraokeSungEnd(line) + 4000) text = SGKaraokeLineText(line);
+         }
+     }
+     if (![self.text isEqualToString:text]) self.text = text;
+-    for (UIView *child in host.subviews) {
+-        if (child == self) continue;
+-        if (available) {
+-            if (![self.savedAlpha objectForKey:child]) [self.savedAlpha setObject:@(child.alpha) forKey:child];
+-            child.alpha = 0;
+-        } else {
+-            NSNumber *alpha = [self.savedAlpha objectForKey:child];
+-            if (alpha) child.alpha = alpha.doubleValue;
++    self.alpha = geometry && available && text.length ? 0.85 : 0;
++    // No arranged views are removed or collapsed. Restore the native styling whenever
++    // our line is unavailable, including an instrumental gap or the hide switch.
++    self.platformPreview.alpha = self.alpha > 0 ? 0 : (SGFlag(SGKeyPlayerBackdrop, NO) ? 0.72 : 1);
++    if (SGLyricsDiagnosticsEnabled()) {
++        NSString *reason = SGHidden(SGHideLyricsInline) ? @"hiddenBySetting" :
++            (!SGLyricsEnabled() ? @"sourcesOff" : (!geometry ? @"noGeometry" :
++            (!available ? @"noTimedLyrics" : (!text.length ? @"breakOrUnknownClock" : @"showing"))));
++        NSString *key = [NSString stringWithFormat:@"%@:%@", track, reason];
++        if (![self.lastDiagnostic isEqualToString:key]) {
++            self.lastDiagnostic = key;
++            SGLyricsLog(@"preview track=%@ state=%@ lines=%lu ms=%ld index=%ld cover=%@ info=%@ frame=%@",
++                track, reason, (unsigned long)lines.count, (long)ms, (long)index,
++                NSStringFromCGRect(coverRect), NSStringFromCGRect(infoRect), NSStringFromCGRect(self.frame));
+         }
+-    }
+-    if (!available) [self.savedAlpha removeAllObjects];
+-    self.alpha = available ? 1 : 0;
+-    if (available && host.hidden) host.hidden = NO;
++    } else self.lastDiagnostic = nil;
+ }
+ - (void)dealloc { [_timer invalidate]; }
+ @end
+ 
+-static char kPreviewKey;
+-%hook _TtC22Lyrics_NPVContainerKit19LyricsContainerView
+-- (void)layoutSubviews {
+-    %orig;
+-    UIView *host = (UIView *)self;
++static void updatePreview(UIView *host) {
+     SGNativeLyricsPreview *preview = objc_getAssociatedObject(host, &kPreviewKey);
+     if (!preview && SGLyricsEnabled()) {
+-        preview = [[SGNativeLyricsPreview alloc] initWithFrame:host.bounds];
++        preview = [[SGNativeLyricsPreview alloc] initWithFrame:CGRectZero];
+         objc_setAssociatedObject(host, &kPreviewKey, preview, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+         [host addSubview:preview];
+     }
+     if (!preview) return;
+-    preview.frame = CGRectInset(host.bounds, 8, 0);
+     [host bringSubviewToFront:preview];
++    [preview findCover];
+     [preview refresh];
+ }
++
++%hook _TtC19NowPlaying_ViewImpl24NowPlayingViewController
++- (void)viewDidLayoutSubviews {
++    %orig;
++    UIView *host = ((UIViewController *)self).viewIfLoaded;
++    if (!host || host.bounds.size.height < 200) return;
++    sg_previewHost = host;
++    updatePreview(host);
++}
++%end
++
++%hook _TtC20NowPlaying_ModesImpl23InformationElementsUnit
++- (void)viewDidLayoutSubviews {
++    %orig;
++    sg_previewInfo = ((UIViewController *)self).viewIfLoaded;
++    if (sg_previewHost) updatePreview(sg_previewHost);
++}
+ %end
+ 
+ %ctor {
+     if (!SGNativeUI()) return;
+     %init;
+-    SGRequireClasses(@[@"_TtC22Lyrics_NPVContainerKit19LyricsContainerView"]);
++    SGRequireClasses(@[@"_TtC19NowPlaying_ViewImpl24NowPlayingViewController",
++        @"_TtC20NowPlaying_ModesImpl23InformationElementsUnit",
++        @"_TtC35CreativeWorkCommons_CoverArtTiltKit16CoverArtTiltView",
++        @"_TtC22Lyrics_NPVContainerKit19LyricsContainerView"]);
+ }
+diff --git a/tweak/Sources/Native/Player/NowPlaying.h b/tweak/Sources/Native/Player/NowPlaying.h
+index 9c1e598fee137cb5cf5c9828a26b5106b3e00c93..b97acbd0a7974cb0bee90fedeb45f71e7654dcf0 100644
+--- a/tweak/Sources/Native/Player/NowPlaying.h
++++ b/tweak/Sources/Native/Player/NowPlaying.h
+@@ -30,8 +30,6 @@
+ // it; the hooks read the keys above.
+ #define SGKeyPlayerLyricsOnly @"spotifyglass.hide.playerLyricsOnly"
+ void SGSetPlayerLyricsOnly(BOOL on);
+-// The native preview can use the shared lyrics cache even when Spotify has no preview model.
+-BOOL SGNativeLyricsPreviewAvailable(void);
+ 
+ @class SGModRow, SGModSection;
+ // PlayerSettings.m: the player screen's sections of the Player page, the Queue & devices page and the
+diff --git a/tweak/Sources/Native/Player/PlayerDeclutter.x b/tweak/Sources/Native/Player/PlayerDeclutter.x
+index 169b34dd03bde0d2d9e2fcb0cd1b6fd10f4f7a06..083d1d26575cefb36f8db2029c017bd5d3106832 100644
+--- a/tweak/Sources/Native/Player/PlayerDeclutter.x
++++ b/tweak/Sources/Native/Player/PlayerDeclutter.x
+@@ -121,7 +121,7 @@ static void finish(UIViewController *unit, BOOL changed) {
+ 
+ %hook _TtC22Lyrics_NPVContainerKit19LyricsContainerView
+ - (void)setHidden:(BOOL)hidden {
+-    %orig(SGHidden(SGHideLyricsInline) ? YES : (SGNativeLyricsPreviewAvailable() ? NO : hidden));
++    %orig(SGHidden(SGHideLyricsInline) ? YES : hidden);
+ }
+ - (void)didMoveToWindow {
+     %orig;
+-- 
+2.34.1
+

@@ -1,0 +1,3090 @@
+From 4a9f45ee331a7dfc606b0cfa77689e95ef0ee167 Mon Sep 17 00:00:00 2001
+From: Codex <codex@users.noreply.github.com>
+Date: Wed, 30 Sep 2026 16:31:13 +0800
+Subject: [PATCH] fix: improve regional lyrics matching and add pronunciation
+ and native preview
+
+---
+ docs/lyrics-catalogue-audit-2026-09-30.json   | 1960 +++++++++++++++++
+ docs/lyrics-catalogue-audit-2026-09-30.md     |   70 +
+ docs/lyrics-matching.md                       |   32 +
+ scripts/probe-lyrics-catalogue.py             |  146 ++
+ scripts/test-lyrics-identity.py               |   47 +-
+ tweak/Sources/Native/Player/LyricsPreview.x   |  102 +
+ tweak/Sources/Native/Player/NowPlaying.h      |    2 +
+ tweak/Sources/Native/Player/PlayerDeclutter.x |    2 +-
+ .../Redesigned/Lyrics/SGRKaraokeView.m        |    6 +-
+ tweak/Sources/Shared/LyricsSources/KuGou.m    |   70 +-
+ .../Shared/LyricsSources/LyricsDiagnostics.m  |    2 +
+ .../Sources/Shared/LyricsSources/LyricsHook.x |    6 +-
+ .../Shared/LyricsSources/LyricsMatching.m     |   84 +-
+ .../Shared/LyricsSources/LyricsSources.h      |    8 +-
+ .../Shared/LyricsSources/LyricsSources.m      |   38 +-
+ tweak/Sources/Shared/LyricsSources/NetEase.m  |   39 +-
+ tweak/Sources/Shared/LyricsSources/QQMusic.m  |   37 +-
+ 17 files changed, 2606 insertions(+), 45 deletions(-)
+ create mode 100644 docs/lyrics-catalogue-audit-2026-09-30.json
+ create mode 100644 docs/lyrics-catalogue-audit-2026-09-30.md
+ create mode 100644 scripts/probe-lyrics-catalogue.py
+ create mode 100644 tweak/Sources/Native/Player/LyricsPreview.x
+
+diff --git a/docs/lyrics-catalogue-audit-2026-09-30.json b/docs/lyrics-catalogue-audit-2026-09-30.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..18599af8fb6627650807b7890c5a9c38e6a703a2
+--- /dev/null
++++ b/docs/lyrics-catalogue-audit-2026-09-30.json
+@@ -0,0 +1,1960 @@
++{
++  "captured_at": "2026-09-30T07:47:54.493086+00:00",
++  "seed": 20260930,
++  "method": "Stratified random chart entries; failed feeds retained and retried at top-10 if top-50 unavailable. Actual sample size is tracks length; Apple metadata input; portable metadata replay only. No Spotify lyric reference, no Objective-C execution, no audio identity proof. Kana/Latin transform is excluded from replay. Payload availability does not prove every selected candidate is correct.",
++  "production_source_sha256": "ec04cbc69aad4b05537b2def668665bfeed63f0df1566e328893d8cdd59ef993",
++  "feeds": [
++    {
++      "url": "https://rss.marketingtools.apple.com/api/v2/us/music/most-played/50/songs.json",
++      "error": "The read operation timed out"
++    },
++    {
++      "url": "https://rss.marketingtools.apple.com/api/v2/jp/music/most-played/50/songs.json",
++      "error": "The read operation timed out"
++    },
++    {
++      "url": "https://rss.marketingtools.apple.com/api/v2/cn/music/most-played/50/songs.json",
++      "error": "The read operation timed out"
++    },
++    {
++      "url": "https://rss.marketingtools.apple.com/api/v2/kr/music/most-played/50/songs.json",
++      "updated": "Wed, 30 Sep 2026 07:37:47 +0000"
++    },
++    {
++      "url": "https://rss.marketingtools.apple.com/api/v2/fr/music/most-played/50/songs.json",
++      "error": "The read operation timed out"
++    },
++    {
++      "url": "https://rss.marketingtools.apple.com/api/v2/gb/music/most-played/50/songs.json",
++      "updated": "Wed, 30 Sep 2026 07:38:06 +0000"
++    },
++    {
++      "url": "https://rss.marketingtools.apple.com/api/v2/us/music/most-played/50/songs.json",
++      "updated": "Wed, 30 Sep 2026 07:41:14 +0000",
++      "prior_errors": []
++    },
++    {
++      "url": "https://rss.marketingtools.apple.com/api/v2/jp/music/most-played/50/songs.json",
++      "updated": "Wed, 30 Sep 2026 07:41:14 +0000",
++      "prior_errors": []
++    },
++    {
++      "url": "https://rss.marketingtools.apple.com/api/v2/cn/music/most-played/50/songs.json",
++      "updated": "Wed, 30 Sep 2026 07:41:14 +0000",
++      "prior_errors": []
++    },
++    {
++      "url": "https://rss.marketingtools.apple.com/api/v2/fr/music/most-played/50/songs.json",
++      "updated": "Wed, 30 Sep 2026 07:41:12 +0000",
++      "prior_errors": []
++    }
++  ],
++  "tracks": [
++    {
++      "region": "kr",
++      "rank": 30,
++      "id": "1828393595",
++      "title": "0+0",
++      "artist": "한로로",
++      "url": "https://music.apple.com/kr/album/0-0/1828393588?i=1828393595",
++      "seconds": 192,
++      "providers": {
++        "netease": {
++          "search_count": 39,
++          "fitting_count": 1,
++          "selected": {
++            "id": 2733058708,
++            "title": "0+0",
++            "artist": "한로로",
++            "seconds": 192,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lrc_chars": 636,
++              "yrc_chars": 0,
++              "tlyric_chars": 424,
++              "romalrc_chars": 973,
++              "yromalrc_chars": 0
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        },
++        "qqmusic": {
++          "search_count": 40,
++          "fitting_count": 1,
++          "selected": {
++            "id": 591550228,
++            "title": "0+0",
++            "artist": "한로로",
++            "seconds": 192,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lyric_encoded_chars": 1432,
++              "trans_encoded_chars": 1220,
++              "roma_encoded_chars": 2768
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        },
++        "kugou": {
++          "search_count": 14,
++          "fitting_count": 14,
++          "selected": {
++            "id": "461891494",
++            "title": "0+0",
++            "artist": "한로로",
++            "seconds": 192,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "krc_chars": 3757,
++              "timed_rows": 22,
++              "has_language_tag": true
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        }
++      }
++    },
++    {
++      "region": "kr",
++      "rank": 26,
++      "id": "6763656876",
++      "title": "hate that i made you love me",
++      "artist": "Ariana Grande",
++      "url": "https://music.apple.com/kr/album/hate-that-i-made-you-love-me/1895420989?i=6763656876",
++      "seconds": 197,
++      "providers": {
++        "netease": {
++          "search_count": 40,
++          "fitting_count": 7,
++          "selected": {
++            "id": 3387362820,
++            "title": "hate that i made you love me",
++            "artist": "Ariana Grande",
++            "seconds": 197,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lrc_chars": 3221,
++              "yrc_chars": 0,
++              "tlyric_chars": 1135,
++              "romalrc_chars": 0,
++              "yromalrc_chars": 0
++            }
++          },
++          "requires_original_evidence": [
++            {
++              "id": 3399377530,
++              "title": "hate that i made you love me",
++              "artist": "砍爷",
++              "seconds": 197,
++              "aliases": [
++                "R&B福音版"
++              ],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            },
++            {
++              "id": 3395395359,
++              "title": "hate that i made you love me",
++              "artist": "aykich",
++              "seconds": 197,
++              "aliases": [],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            }
++          ],
++          "status": "lyric_payload"
++        },
++        "qqmusic": {
++          "search_count": 40,
++          "fitting_count": 1,
++          "selected": {
++            "id": 670505076,
++            "title": "hate that i made you love me",
++            "artist": "Ariana Grande",
++            "seconds": 197,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lyric_encoded_chars": 3216,
++              "trans_encoded_chars": 3380,
++              "roma_encoded_chars": 0
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        },
++        "kugou": {
++          "search_count": 10,
++          "fitting_count": 10,
++          "selected": {
++            "id": "811246295",
++            "title": "hate that i made you love me",
++            "artist": "Ariana Grande",
++            "seconds": 197,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "krc_chars": 9714,
++              "timed_rows": 41,
++              "has_language_tag": true
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        }
++      }
++    },
++    {
++      "region": "kr",
++      "rank": 41,
++      "id": "1889474652",
++      "title": "Runaway",
++      "artist": "리센느",
++      "url": "https://music.apple.com/kr/album/runaway/1889474645?i=1889474652",
++      "seconds": 182,
++      "providers": {
++        "netease": {
++          "search_count": 40,
++          "fitting_count": 0,
++          "selected": null,
++          "requires_original_evidence": [
++            {
++              "id": 3379150269,
++              "title": "Runaway",
++              "artist": "RESCENE",
++              "seconds": 182,
++              "aliases": [
++                "逃离梦境"
++              ],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            },
++            {
++              "id": 3440642197,
++              "title": "RUNAWAY",
++              "artist": "Afterglow Studio",
++              "seconds": 182,
++              "aliases": [],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            }
++          ],
++          "status": "needs_evidence"
++        },
++        "qqmusic": {
++          "search_count": 40,
++          "fitting_count": 1,
++          "selected": {
++            "id": 654620157,
++            "title": "Runaway",
++            "artist": "RESCENE (리센느)",
++            "seconds": 182,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lyric_encoded_chars": 3076,
++              "trans_encoded_chars": 2892,
++              "roma_encoded_chars": 5344
++            }
++          },
++          "requires_original_evidence": [
++            {
++              "id": 489435752,
++              "title": "Runaway (凯迪拉克进行曲)",
++              "artist": "走路摇zly",
++              "seconds": 184,
++              "aliases": [],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            },
++            {
++              "id": 217454069,
++              "title": "Run Away (国语)",
++              "artist": "黄明昊（Justin）, 朱正廷, Ghost (王琳凯), 毕雯珺, Jeffrey董又霖, 董岩磊",
++              "seconds": 183,
++              "aliases": [],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            },
++            {
++              "id": 553143,
++              "title": "Runaway",
++              "artist": "Groove Coverage",
++              "seconds": 187,
++              "aliases": [],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            }
++          ],
++          "status": "lyric_payload"
++        },
++        "kugou": {
++          "search_count": 0,
++          "fitting_count": 0,
++          "selected": null,
++          "requires_original_evidence": [],
++          "status": "no_metadata_match"
++        }
++      }
++    },
++    {
++      "region": "kr",
++      "rank": 47,
++      "id": "1796402200",
++      "title": "The Chase",
++      "artist": "Hearts2Hearts",
++      "url": "https://music.apple.com/kr/album/the-chase/1796402197?i=1796402200",
++      "seconds": 178,
++      "providers": {
++        "netease": {
++          "search_count": 40,
++          "fitting_count": 0,
++          "selected": null,
++          "requires_original_evidence": [
++            {
++              "id": 2686026885,
++              "title": "The Chase",
++              "artist": "SNOW啊, 顺儿, 酥栗, 啾咪福袋子Yeki",
++              "seconds": 178,
++              "aliases": [],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            },
++            {
++              "id": 2686038185,
++              "title": "The Chase 【纯人声】",
++              "artist": "SNOW啊, 顺儿, 酥栗, 啾咪福袋子Yeki",
++              "seconds": 178,
++              "aliases": [],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            },
++            {
++              "id": 2748563612,
++              "title": "The Chase（翻自心）",
++              "artist": "bambygu, 乔然",
++              "seconds": 180,
++              "aliases": [],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            }
++          ],
++          "status": "needs_evidence"
++        },
++        "qqmusic": {
++          "search_count": 40,
++          "fitting_count": 1,
++          "selected": {
++            "id": 563813741,
++            "title": "The Chase",
++            "artist": "Hearts2Hearts",
++            "seconds": 178,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lyric_encoded_chars": 3656,
++              "trans_encoded_chars": 3472,
++              "roma_encoded_chars": 5024
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        },
++        "kugou": {
++          "search_count": 10,
++          "fitting_count": 8,
++          "selected": {
++            "id": "326522500",
++            "title": "The Chase",
++            "artist": "Hearts2Hearts",
++            "seconds": 178,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "krc_chars": 9195,
++              "timed_rows": 83,
++              "has_language_tag": true
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        }
++      }
++    },
++    {
++      "region": "gb",
++      "rank": 15,
++      "id": "1884403093",
++      "title": "Boston",
++      "artist": "STELLA LEFTY",
++      "url": "https://music.apple.com/gb/album/boston/1884403092?i=1884403093",
++      "seconds": 170,
++      "providers": {
++        "netease": {
++          "search_count": 40,
++          "fitting_count": 5,
++          "selected": {
++            "id": 3362614644,
++            "title": "Boston",
++            "artist": "STELLA LEFTY",
++            "seconds": 170,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lrc_chars": 2824,
++              "yrc_chars": 0,
++              "tlyric_chars": 1035,
++              "romalrc_chars": 0,
++              "yromalrc_chars": 0
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        },
++        "qqmusic": {
++          "search_count": 40,
++          "fitting_count": 2,
++          "selected": {
++            "id": 650969386,
++            "title": "Boston",
++            "artist": "STELLA LEFTY",
++            "seconds": 170,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lyric_encoded_chars": 2920,
++              "trans_encoded_chars": 2700,
++              "roma_encoded_chars": 0
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        },
++        "kugou": {
++          "search_count": 10,
++          "fitting_count": 10,
++          "selected": {
++            "id": "772677244",
++            "title": "Boston",
++            "artist": "STELLA LEFTY",
++            "seconds": 170,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "krc_chars": 10447,
++              "timed_rows": 50,
++              "has_language_tag": true
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        }
++      }
++    },
++    {
++      "region": "gb",
++      "rank": 44,
++      "id": "1727526894",
++      "title": "Training Season",
++      "artist": "Dua Lipa",
++      "url": "https://music.apple.com/gb/album/training-season/1727526670?i=1727526894",
++      "seconds": 209,
++      "providers": {
++        "netease": {
++          "search_count": 40,
++          "fitting_count": 5,
++          "selected": {
++            "id": 2126654120,
++            "title": "Training Season",
++            "artist": "Dua Lipa",
++            "seconds": 209,
++            "aliases": [
++              "训练季"
++            ],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lrc_chars": 2382,
++              "yrc_chars": 0,
++              "tlyric_chars": 1208,
++              "romalrc_chars": 0,
++              "yromalrc_chars": 0
++            }
++          },
++          "requires_original_evidence": [
++            {
++              "id": 2602084145,
++              "title": "Training Season",
++              "artist": "于逸朗",
++              "seconds": 209,
++              "aliases": [],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            }
++          ],
++          "status": "lyric_payload"
++        },
++        "qqmusic": {
++          "search_count": 40,
++          "fitting_count": 1,
++          "selected": {
++            "id": 470573351,
++            "title": "Training Season",
++            "artist": "Dua Lipa",
++            "seconds": 209,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lyric_encoded_chars": 3388,
++              "trans_encoded_chars": 3880,
++              "roma_encoded_chars": 0
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        },
++        "kugou": {
++          "search_count": 10,
++          "fitting_count": 1,
++          "selected": {
++            "id": "784347617",
++            "title": "Training Season",
++            "artist": "Dua Lipa",
++            "seconds": 213,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "krc_chars": 6024,
++              "timed_rows": 51,
++              "has_language_tag": false
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        }
++      }
++    },
++    {
++      "region": "gb",
++      "rank": 20,
++      "id": "6768469976",
++      "title": "Dai Dai",
++      "artist": "Shakira & Burna Boy",
++      "url": "https://music.apple.com/gb/album/dai-dai/6768469975?i=6768469976",
++      "seconds": 223,
++      "providers": {
++        "netease": {
++          "search_count": 40,
++          "fitting_count": 10,
++          "selected": {
++            "id": 3381729685,
++            "title": "Dai Dai",
++            "artist": "Shakira, Burna Boy",
++            "seconds": 223,
++            "aliases": [
++              "2026年国际足联世界杯 (\"美加墨\"世界杯) 主题曲"
++            ],
++            "title_pass": true,
++            "artist_matches": 2,
++            "duration_pass": true,
++            "payload": {
++              "lrc_chars": 3689,
++              "yrc_chars": 0,
++              "tlyric_chars": 2220,
++              "romalrc_chars": 0,
++              "yromalrc_chars": 0
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        },
++        "qqmusic": {
++          "search_count": 40,
++          "fitting_count": 2,
++          "selected": {
++            "id": 686698084,
++            "title": "Dai Dai",
++            "artist": "Shakira, Burna Boy",
++            "seconds": 223,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 2,
++            "duration_pass": true,
++            "payload": {
++              "lyric_encoded_chars": 4436,
++              "trans_encoded_chars": 4808,
++              "roma_encoded_chars": 0
++            }
++          },
++          "requires_original_evidence": [
++            {
++              "id": 688015568,
++              "title": "Dai Dai（世界杯进行曲）",
++              "artist": "苏冰心",
++              "seconds": 226,
++              "aliases": [],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            }
++          ],
++          "status": "lyric_payload"
++        },
++        "kugou": {
++          "search_count": 0,
++          "fitting_count": 0,
++          "selected": null,
++          "requires_original_evidence": [],
++          "status": "no_metadata_match"
++        }
++      }
++    },
++    {
++      "region": "gb",
++      "rank": 41,
++      "id": "1867034427",
++      "title": "iloveitiloveitiloveit",
++      "artist": "Bella Kay",
++      "url": "https://music.apple.com/gb/album/iloveitiloveitiloveit/1867034426?i=1867034427",
++      "seconds": 183,
++      "providers": {
++        "netease": {
++          "search_count": 40,
++          "fitting_count": 3,
++          "selected": {
++            "id": 3337496871,
++            "title": "iloveitiloveitiloveit",
++            "artist": "Bella Kay",
++            "seconds": 183,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lrc_chars": 2791,
++              "yrc_chars": 0,
++              "tlyric_chars": 1250,
++              "romalrc_chars": 0,
++              "yromalrc_chars": 0
++            }
++          },
++          "requires_original_evidence": [
++            {
++              "id": 3367673468,
++              "title": "iloveitiloveitiloveit",
++              "artist": "Our Last Night",
++              "seconds": 183,
++              "aliases": [],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            },
++            {
++              "id": 3394366083,
++              "title": "iloveitiloveitiloveit",
++              "artist": "Charlize Tuozzo",
++              "seconds": 183,
++              "aliases": [],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            },
++            {
++              "id": 3392588726,
++              "title": "iloveitiloveitiloveit",
++              "artist": "CHVRT H!TS",
++              "seconds": 184,
++              "aliases": [],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            }
++          ],
++          "status": "lyric_payload"
++        },
++        "qqmusic": {
++          "search_count": 40,
++          "fitting_count": 0,
++          "selected": null,
++          "requires_original_evidence": [
++            {
++              "id": 647358919,
++              "title": "iloveitiloveitiloveit",
++              "artist": "Bella Kаy",
++              "seconds": 183,
++              "aliases": [],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            },
++            {
++              "id": 716612626,
++              "title": "iloveitiloveitiloveit",
++              "artist": "Sari SM",
++              "seconds": 189,
++              "aliases": [],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            },
++            {
++              "id": 706419444,
++              "title": "Iloveitiloveitiloveit",
++              "artist": "All4Us",
++              "seconds": 183,
++              "aliases": [],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            }
++          ],
++          "status": "needs_evidence"
++        },
++        "kugou": {
++          "search_count": 10,
++          "fitting_count": 10,
++          "selected": {
++            "id": "709933199",
++            "title": "iloveitiloveitiloveit",
++            "artist": "Bella Kay",
++            "seconds": 183,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "krc_chars": 11523,
++              "timed_rows": 48,
++              "has_language_tag": true
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        }
++      }
++    },
++    {
++      "region": "us",
++      "rank": 25,
++      "id": "1802103970",
++      "title": "I'm The Problem",
++      "artist": "Morgan Wallen",
++      "url": "https://music.apple.com/us/album/im-the-problem/1802103958?i=1802103970",
++      "seconds": 177,
++      "providers": {
++        "netease": {
++          "search_count": 40,
++          "fitting_count": 3,
++          "selected": {
++            "id": 2670677149,
++            "title": "I'm The Problem",
++            "artist": "Morgan Wallen",
++            "seconds": 177,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lrc_chars": 2502,
++              "yrc_chars": 0,
++              "tlyric_chars": 1176,
++              "romalrc_chars": 0,
++              "yromalrc_chars": 0
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        },
++        "qqmusic": {
++          "search_count": 40,
++          "fitting_count": 1,
++          "selected": {
++            "id": 558798864,
++            "title": "I'm The Problem",
++            "artist": "Morgan Wallen",
++            "seconds": 177,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lyric_encoded_chars": 3124,
++              "trans_encoded_chars": 2888,
++              "roma_encoded_chars": 0
++            }
++          },
++          "requires_original_evidence": [
++            {
++              "id": 560495311,
++              "title": "I’m The Problem (feat. Chase Morgan)",
++              "artist": "Wallen Walker, Chase Morgan",
++              "seconds": 172,
++              "aliases": [],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            },
++            {
++              "id": 726777859,
++              "title": "I'm The Problem?",
++              "artist": "Shadows Awake",
++              "seconds": 176,
++              "aliases": [],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            },
++            {
++              "id": 577742398,
++              "title": "I'm The Problem",
++              "artist": "Nina Cobham",
++              "seconds": 182,
++              "aliases": [],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            }
++          ],
++          "status": "lyric_payload"
++        },
++        "kugou": {
++          "search_count": 10,
++          "fitting_count": 10,
++          "selected": {
++            "id": "382710583",
++            "title": "I'm The Problem",
++            "artist": "Morgan Wallen",
++            "seconds": 177,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "krc_chars": 10170,
++              "timed_rows": 46,
++              "has_language_tag": true
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        }
++      }
++    },
++    {
++      "region": "us",
++      "rank": 18,
++      "id": "1621119447",
++      "title": "WAIT FOR U (feat. Drake & Tems)",
++      "artist": "Future",
++      "url": "https://music.apple.com/us/album/wait-for-u-feat-drake-tems/1621119097?i=1621119447",
++      "seconds": 189,
++      "providers": {
++        "netease": {
++          "search_count": 40,
++          "fitting_count": 5,
++          "selected": {
++            "id": 1942622839,
++            "title": "WAIT FOR U",
++            "artist": "Future, Drake, Tems",
++            "seconds": 189,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lrc_chars": 4386,
++              "yrc_chars": 0,
++              "tlyric_chars": 1512,
++              "romalrc_chars": 0,
++              "yromalrc_chars": 0
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        },
++        "qqmusic": {
++          "search_count": 40,
++          "fitting_count": 0,
++          "selected": null,
++          "requires_original_evidence": [
++            {
++              "id": 728585458,
++              "title": "WAIT FOR U",
++              "artist": "SONTRAP",
++              "seconds": 189,
++              "aliases": [],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            }
++          ],
++          "status": "needs_evidence"
++        },
++        "kugou": {
++          "search_count": 0,
++          "fitting_count": 0,
++          "selected": null,
++          "requires_original_evidence": [],
++          "status": "no_metadata_match"
++        }
++      },
++      "error": "<urlopen error timed out>"
++    },
++    {
++      "region": "us",
++      "rank": 31,
++      "id": "1621207921",
++      "title": "Frozen",
++      "artist": "Lil Baby",
++      "url": "https://music.apple.com/us/album/frozen/1621207919?i=1621207921",
++      "seconds": 179,
++      "providers": {
++        "netease": {
++          "search_count": 40,
++          "fitting_count": 3,
++          "selected": {
++            "id": 1942649092,
++            "title": "Frozen",
++            "artist": "Lil Baby",
++            "seconds": 179,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lrc_chars": 4346,
++              "yrc_chars": 15070,
++              "tlyric_chars": 1919,
++              "romalrc_chars": 0,
++              "yromalrc_chars": 0
++            }
++          },
++          "requires_original_evidence": [
++            {
++              "id": 2002359752,
++              "title": "Frozen",
++              "artist": "Dept, Ashley Alisha, prettyhappy",
++              "seconds": 177,
++              "aliases": [],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            }
++          ],
++          "status": "lyric_payload"
++        },
++        "qqmusic": {
++          "search_count": 40,
++          "fitting_count": 0,
++          "selected": null,
++          "requires_original_evidence": [],
++          "status": "no_metadata_match"
++        },
++        "kugou": {
++          "search_count": 10,
++          "fitting_count": 10,
++          "selected": {
++            "id": "219711366",
++            "title": "Frozen",
++            "artist": "Lil Baby",
++            "seconds": 179,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "krc_chars": 22143,
++              "timed_rows": 68,
++              "has_language_tag": true
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        }
++      }
++    },
++    {
++      "region": "us",
++      "rank": 20,
++      "id": "6810716062",
++      "title": "So Good (feat. Kendrick Lamar)",
++      "artist": "Jhené Aiko",
++      "url": "https://music.apple.com/us/album/so-good-feat-kendrick-lamar/6810715695?i=6810716062",
++      "seconds": 237,
++      "providers": {
++        "netease": {
++          "search_count": 22,
++          "fitting_count": 2,
++          "selected": {
++            "id": 3435030577,
++            "title": "So Good",
++            "artist": "Jhené Aiko, Kendrick Lamar",
++            "seconds": 237,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lrc_chars": 4261,
++              "yrc_chars": 0,
++              "tlyric_chars": 2107,
++              "romalrc_chars": 0,
++              "yromalrc_chars": 0
++            }
++          },
++          "requires_original_evidence": [
++            {
++              "id": 1483964181,
++              "title": "SoGood",
++              "artist": "Ay7",
++              "seconds": 236,
++              "aliases": [],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            }
++          ],
++          "status": "lyric_payload"
++        },
++        "qqmusic": {
++          "search_count": 40,
++          "fitting_count": 0,
++          "selected": null,
++          "requires_original_evidence": [],
++          "status": "no_metadata_match"
++        },
++        "kugou": {
++          "search_count": 0,
++          "fitting_count": 0,
++          "selected": null,
++          "requires_original_evidence": [],
++          "status": "no_metadata_match"
++        }
++      }
++    },
++    {
++      "region": "jp",
++      "rank": 8,
++      "id": "6808172970",
++      "title": "共犯",
++      "artist": "Mrs. GREEN APPLE",
++      "url": "https://music.apple.com/jp/album/%E5%85%B1%E7%8A%AF/6808172946?i=6808172970",
++      "seconds": 231,
++      "providers": {
++        "netease": {
++          "search_count": 39,
++          "fitting_count": 1,
++          "selected": null,
++          "requires_original_evidence": [
++            {
++              "id": 3441830524,
++              "title": "共犯",
++              "artist": "俊俊JUNJUN分享家",
++              "seconds": 228,
++              "aliases": [],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            }
++          ],
++          "status": "needs_evidence"
++        },
++        "qqmusic": {
++          "search_count": 40,
++          "fitting_count": 1,
++          "selected": {
++            "id": 729554354,
++            "title": "共犯",
++            "artist": "Mrs. GREEN APPLE",
++            "seconds": 231,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lyric_encoded_chars": 3212,
++              "trans_encoded_chars": 4896,
++              "roma_encoded_chars": 10624
++            }
++          },
++          "requires_original_evidence": [
++            {
++              "id": 372793068,
++              "title": "共犯",
++              "artist": "感覚ピエロ",
++              "seconds": 231,
++              "aliases": [],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            }
++          ],
++          "status": "lyric_payload"
++        },
++        "kugou": {
++          "search_count": 10,
++          "fitting_count": 10,
++          "selected": {
++            "id": "815229918",
++            "title": "共犯",
++            "artist": "Mrs. GREEN APPLE",
++            "seconds": 231,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "krc_chars": 15412,
++              "timed_rows": 57,
++              "has_language_tag": true
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        }
++      }
++    },
++    {
++      "region": "jp",
++      "rank": 7,
++      "id": "6785734870",
++      "title": "マイオンリー",
++      "artist": "SixTONES",
++      "url": "https://music.apple.com/jp/album/%E3%83%9E%E3%82%A4%E3%82%AA%E3%83%B3%E3%83%AA%E3%83%BC/6785734869?i=6785734870",
++      "seconds": 226,
++      "providers": {
++        "netease": {
++          "search_count": 29,
++          "fitting_count": 2,
++          "selected": {
++            "id": 3399767788,
++            "title": "マイオンリー",
++            "artist": "SixTONES",
++            "seconds": 226,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lrc_chars": 2179,
++              "yrc_chars": 0,
++              "tlyric_chars": 1921,
++              "romalrc_chars": 3474,
++              "yromalrc_chars": 0
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        },
++        "qqmusic": {
++          "search_count": 40,
++          "fitting_count": 1,
++          "selected": {
++            "id": 696014291,
++            "title": "マイオンリー",
++            "artist": "SixTONES",
++            "seconds": 226,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lyric_encoded_chars": 4864,
++              "trans_encoded_chars": 6656,
++              "roma_encoded_chars": 13328
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        },
++        "kugou": {
++          "search_count": 12,
++          "fitting_count": 12,
++          "selected": {
++            "id": "769967027",
++            "title": "マイオンリー",
++            "artist": "SixTONES",
++            "seconds": 226,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "krc_chars": 19579,
++              "timed_rows": 90,
++              "has_language_tag": true
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        }
++      }
++    },
++    {
++      "region": "jp",
++      "rank": 33,
++      "id": "6789046323",
++      "title": "You!Joy!Parade!",
++      "artist": "M!LK",
++      "url": "https://music.apple.com/jp/album/you-joy-parade/6789046108?i=6789046323",
++      "seconds": 181,
++      "providers": {
++        "netease": {
++          "search_count": 40,
++          "fitting_count": 2,
++          "selected": {
++            "id": 3405239084,
++            "title": "You!Joy!Parade!",
++            "artist": "M!LK",
++            "seconds": 181,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lrc_chars": 1767,
++              "yrc_chars": 0,
++              "tlyric_chars": 1481,
++              "romalrc_chars": 2481,
++              "yromalrc_chars": 0
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        },
++        "qqmusic": {
++          "search_count": 40,
++          "fitting_count": 1,
++          "selected": {
++            "id": 706643951,
++            "title": "You!Joy!Parade!",
++            "artist": "M!LK",
++            "seconds": 181,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lyric_encoded_chars": 3196,
++              "trans_encoded_chars": 4292,
++              "roma_encoded_chars": 8768
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        },
++        "kugou": {
++          "search_count": 9,
++          "fitting_count": 9,
++          "selected": {
++            "id": "724102834",
++            "title": "You!Joy!Parade!",
++            "artist": "M!LK",
++            "seconds": 181,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "krc_chars": 7448,
++              "timed_rows": 51,
++              "has_language_tag": false
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        }
++      }
++    },
++    {
++      "region": "jp",
++      "rank": 49,
++      "id": "1790599512",
++      "title": "ダーリン",
++      "artist": "Mrs. GREEN APPLE",
++      "url": "https://music.apple.com/jp/album/%E3%83%80%E3%83%BC%E3%83%AA%E3%83%B3/1790599503?i=1790599512",
++      "seconds": 280,
++      "providers": {
++        "netease": {
++          "search_count": 40,
++          "fitting_count": 2,
++          "selected": {
++            "id": 2667564835,
++            "title": "ダーリン",
++            "artist": "Mrs. GREEN APPLE",
++            "seconds": 278,
++            "aliases": [
++              "Darling"
++            ],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lrc_chars": 1471,
++              "yrc_chars": 0,
++              "tlyric_chars": 927,
++              "romalrc_chars": 1981,
++              "yromalrc_chars": 0
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        },
++        "qqmusic": {
++          "search_count": 40,
++          "fitting_count": 1,
++          "selected": {
++            "id": 557034888,
++            "title": "ダーリン",
++            "artist": "Mrs. GREEN APPLE",
++            "seconds": 280,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lyric_encoded_chars": 2900,
++              "trans_encoded_chars": 3864,
++              "roma_encoded_chars": 8240
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        },
++        "kugou": {
++          "search_count": 10,
++          "fitting_count": 10,
++          "selected": {
++            "id": "476918884",
++            "title": "ダーリン",
++            "artist": "Mrs. GREEN APPLE",
++            "seconds": 280,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "krc_chars": 13236,
++              "timed_rows": 50,
++              "has_language_tag": true
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        }
++      }
++    },
++    {
++      "region": "cn",
++      "rank": 18,
++      "id": "1443352465",
++      "title": "爱情转移",
++      "artist": "陈奕迅",
++      "url": "https://music.apple.com/cn/album/%E7%88%B1%E6%83%85%E8%BD%AC%E7%A7%BB/1443352354?i=1443352465",
++      "seconds": 259,
++      "providers": {
++        "netease": {
++          "search_count": 40,
++          "fitting_count": 1,
++          "selected": {
++            "id": 65536,
++            "title": "爱情转移",
++            "artist": "陈奕迅",
++            "seconds": 259,
++            "aliases": [
++              "电影《爱情呼叫转移》主题曲",
++              " 《富士山下》国语版"
++            ],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lrc_chars": 2539,
++              "yrc_chars": 0,
++              "tlyric_chars": 0,
++              "romalrc_chars": 0,
++              "yromalrc_chars": 0
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        },
++        "qqmusic": {
++          "search_count": 40,
++          "fitting_count": 1,
++          "selected": {
++            "id": 553145,
++            "title": "爱情转移",
++            "artist": "陈奕迅",
++            "seconds": 255,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lyric_encoded_chars": 3392,
++              "trans_encoded_chars": 0,
++              "roma_encoded_chars": 0
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        },
++        "kugou": {
++          "search_count": 11,
++          "fitting_count": 2,
++          "selected": {
++            "id": "677464496",
++            "title": "爱情转移",
++            "artist": "陈奕迅",
++            "seconds": 258,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "krc_chars": 8309,
++              "timed_rows": 63,
++              "has_language_tag": false
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        }
++      }
++    },
++    {
++      "region": "cn",
++      "rank": 1,
++      "id": "255921025",
++      "title": "我不难过",
++      "artist": "孙燕姿",
++      "url": "https://music.apple.com/cn/album/%E6%88%91%E4%B8%8D%E9%9A%BE%E8%BF%87/255920420?i=255921025",
++      "seconds": 320,
++      "providers": {
++        "netease": {
++          "search_count": 40,
++          "fitting_count": 6,
++          "selected": {
++            "id": 287398,
++            "title": "我不难过",
++            "artist": "孙燕姿",
++            "seconds": 320,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lrc_chars": 2974,
++              "yrc_chars": 0,
++              "tlyric_chars": 0,
++              "romalrc_chars": 0,
++              "yromalrc_chars": 0
++            }
++          },
++          "requires_original_evidence": [
++            {
++              "id": 2023557389,
++              "title": "我不难过",
++              "artist": "Itsuki",
++              "seconds": 321,
++              "aliases": [],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            },
++            {
++              "id": 28427756,
++              "title": "我不难过",
++              "artist": "品冠",
++              "seconds": 318,
++              "aliases": [
++                "原唱：孙燕姿"
++              ],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            }
++          ],
++          "status": "lyric_payload"
++        },
++        "qqmusic": {
++          "search_count": 40,
++          "fitting_count": 1,
++          "selected": {
++            "id": 8136,
++            "title": "我不难过",
++            "artist": "孙燕姿",
++            "seconds": 320,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lyric_encoded_chars": 2976,
++              "trans_encoded_chars": 0,
++              "roma_encoded_chars": 0
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        },
++        "kugou": {
++          "search_count": 20,
++          "fitting_count": 9,
++          "selected": {
++            "id": "114964169",
++            "title": "我不难过",
++            "artist": "孙燕姿",
++            "seconds": 320,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "krc_chars": 7316,
++              "timed_rows": 57,
++              "has_language_tag": true
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        }
++      }
++    },
++    {
++      "region": "cn",
++      "rank": 13,
++      "id": "1095630246",
++      "title": "情歌",
++      "artist": "梁静茹",
++      "url": "https://music.apple.com/cn/album/%E6%83%85%E6%AD%8C/1095630068?i=1095630246",
++      "seconds": 260,
++      "providers": {
++        "netease": {
++          "search_count": 40,
++          "fitting_count": 2,
++          "selected": {
++            "id": 254102,
++            "title": "情歌",
++            "artist": "梁静茹",
++            "seconds": 260,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lrc_chars": 2039,
++              "yrc_chars": 0,
++              "tlyric_chars": 0,
++              "romalrc_chars": 0,
++              "yromalrc_chars": 0
++            }
++          },
++          "requires_original_evidence": [
++            {
++              "id": 1434354649,
++              "title": "情歌",
++              "artist": "史一",
++              "seconds": 261,
++              "aliases": [
++                "你写给我 我的第一首歌"
++              ],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            }
++          ],
++          "status": "lyric_payload"
++        },
++        "qqmusic": {
++          "search_count": 40,
++          "fitting_count": 1,
++          "selected": {
++            "id": 462188,
++            "title": "情歌",
++            "artist": "梁静茹",
++            "seconds": 260,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lyric_encoded_chars": 2348,
++              "trans_encoded_chars": 0,
++              "roma_encoded_chars": 0
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        },
++        "kugou": {
++          "search_count": 11,
++          "fitting_count": 7,
++          "selected": {
++            "id": "17183741",
++            "title": "情歌",
++            "artist": "梁静茹",
++            "seconds": 260,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "krc_chars": 5320,
++              "timed_rows": 50,
++              "has_language_tag": false
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        }
++      }
++    },
++    {
++      "region": "cn",
++      "rank": 47,
++      "id": "1788007696",
++      "title": "可惜没如果",
++      "artist": "林俊杰",
++      "url": "https://music.apple.com/cn/album/%E5%8F%AF%E6%83%9C%E6%B2%A1%E5%A6%82%E6%9E%9C/1788007687?i=1788007696",
++      "seconds": 298,
++      "providers": {
++        "netease": {
++          "search_count": 40,
++          "fitting_count": 2,
++          "selected": {
++            "id": 29814898,
++            "title": "可惜没如果",
++            "artist": "林俊杰",
++            "seconds": 298,
++            "aliases": [
++              "If Only…"
++            ],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lrc_chars": 3411,
++              "yrc_chars": 8926,
++              "tlyric_chars": 0,
++              "romalrc_chars": 0,
++              "yromalrc_chars": 0
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        },
++        "qqmusic": {
++          "search_count": 40,
++          "fitting_count": 1,
++          "selected": {
++            "id": 330621486,
++            "title": "可惜没如果",
++            "artist": "林俊杰",
++            "seconds": 298,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lyric_encoded_chars": 2656,
++              "trans_encoded_chars": 0,
++              "roma_encoded_chars": 0
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        },
++        "kugou": {
++          "search_count": 11,
++          "fitting_count": 7,
++          "selected": {
++            "id": "72837484",
++            "title": "可惜没如果",
++            "artist": "林俊杰",
++            "seconds": 298,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "krc_chars": 6164,
++              "timed_rows": 59,
++              "has_language_tag": true
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        }
++      }
++    },
++    {
++      "region": "fr",
++      "rank": 43,
++      "id": "1707807608",
++      "title": "Tu connais",
++      "artist": "Werenoi",
++      "url": "https://music.apple.com/fr/album/tu-connais/1707807239?i=1707807608",
++      "seconds": 169,
++      "providers": {
++        "netease": {
++          "search_count": 40,
++          "fitting_count": 1,
++          "selected": null,
++          "requires_original_evidence": [
++            {
++              "id": 2707890272,
++              "title": "Tu Connais",
++              "artist": "ChakibMusic, Beendo Z",
++              "seconds": 167,
++              "aliases": [],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            }
++          ],
++          "status": "needs_evidence"
++        },
++        "qqmusic": {
++          "search_count": 40,
++          "fitting_count": 0,
++          "selected": null,
++          "requires_original_evidence": [
++            {
++              "id": 681525114,
++              "title": "TU CONNAIS",
++              "artist": "D-Frek",
++              "seconds": 163,
++              "aliases": [],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            },
++            {
++              "id": 651400188,
++              "title": "Tu connais",
++              "artist": "Les KompanionS",
++              "seconds": 171,
++              "aliases": [],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            }
++          ],
++          "status": "needs_evidence"
++        },
++        "kugou": {
++          "search_count": 0,
++          "fitting_count": 0,
++          "selected": null,
++          "requires_original_evidence": [],
++          "status": "no_metadata_match"
++        }
++      }
++    },
++    {
++      "region": "fr",
++      "rank": 34,
++      "id": "1879523794",
++      "title": "Pocahontas",
++      "artist": "PLK",
++      "url": "https://music.apple.com/fr/album/pocahontas/1879523679?i=1879523794",
++      "seconds": 168,
++      "providers": {
++        "netease": {
++          "search_count": 40,
++          "fitting_count": 1,
++          "selected": {
++            "id": 3358423302,
++            "title": "Pocahontas",
++            "artist": "PLK",
++            "seconds": 168,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lrc_chars": 3600,
++              "yrc_chars": 0,
++              "tlyric_chars": 1345,
++              "romalrc_chars": 0,
++              "yromalrc_chars": 0
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        },
++        "qqmusic": {
++          "search_count": 40,
++          "fitting_count": 0,
++          "selected": null,
++          "requires_original_evidence": [],
++          "status": "no_metadata_match"
++        },
++        "kugou": {
++          "search_count": 0,
++          "fitting_count": 0,
++          "selected": null,
++          "requires_original_evidence": [],
++          "status": "no_metadata_match"
++        }
++      }
++    },
++    {
++      "region": "fr",
++      "rank": 49,
++      "id": "1876522627",
++      "title": "Argent Sale - A COLORS SHOW",
++      "artist": "La Rvfleuze",
++      "url": "https://music.apple.com/fr/album/argent-sale-a-colors-show/1876522624?i=1876522627",
++      "seconds": 164,
++      "providers": {
++        "netease": {
++          "search_count": 1,
++          "fitting_count": 1,
++          "selected": {
++            "id": 3350389767,
++            "title": "Argent Sale - A COLORS SHOW",
++            "artist": "La Rvfleuze, COLORS",
++            "seconds": 164,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 1,
++            "duration_pass": true,
++            "payload": {
++              "lrc_chars": 3960,
++              "yrc_chars": 0,
++              "tlyric_chars": 0,
++              "romalrc_chars": 0,
++              "yromalrc_chars": 0
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        },
++        "qqmusic": {
++          "search_count": 40,
++          "fitting_count": 0,
++          "selected": null,
++          "requires_original_evidence": [],
++          "status": "no_metadata_match"
++        },
++        "kugou": {
++          "search_count": 0,
++          "fitting_count": 0,
++          "selected": null,
++          "requires_original_evidence": [],
++          "status": "no_metadata_match"
++        }
++      }
++    },
++    {
++      "region": "fr",
++      "rank": 24,
++      "id": "1840188177",
++      "title": "melodrama",
++      "artist": "disiz & Theodora",
++      "url": "https://music.apple.com/fr/album/melodrama/1840188173?i=1840188177",
++      "seconds": 176,
++      "providers": {
++        "netease": {
++          "search_count": 40,
++          "fitting_count": 2,
++          "selected": {
++            "id": 2750018154,
++            "title": "melodrama",
++            "artist": "Disiz, Theodora",
++            "seconds": 176,
++            "aliases": [],
++            "title_pass": true,
++            "artist_matches": 2,
++            "duration_pass": true,
++            "payload": {
++              "lrc_chars": 2235,
++              "yrc_chars": 0,
++              "tlyric_chars": 1107,
++              "romalrc_chars": 0,
++              "yromalrc_chars": 0
++            }
++          },
++          "requires_original_evidence": [],
++          "status": "lyric_payload"
++        },
++        "qqmusic": {
++          "search_count": 40,
++          "fitting_count": 1,
++          "selected": null,
++          "requires_original_evidence": [
++            {
++              "id": 576368740,
++              "title": "Melodrama",
++              "artist": "Beks",
++              "seconds": 179,
++              "aliases": [],
++              "title_pass": true,
++              "artist_matches": 0,
++              "duration_pass": true
++            }
++          ],
++          "status": "needs_evidence"
++        },
++        "kugou": {
++          "search_count": 0,
++          "fitting_count": 0,
++          "selected": null,
++          "requires_original_evidence": [],
++          "status": "no_metadata_match"
++        }
++      }
++    }
++  ],
++  "metadata_rechecked_at": "2026-09-30T08:01:31.165485+00:00"
++}
+\ No newline at end of file
+diff --git a/docs/lyrics-catalogue-audit-2026-09-30.md b/docs/lyrics-catalogue-audit-2026-09-30.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..6b2029a69082b8e114e4d7e42cd92fd75f81ae12
+--- /dev/null
++++ b/docs/lyrics-catalogue-audit-2026-09-30.md
+@@ -0,0 +1,70 @@
++# 流行歌曲歌词检索抽样 — 2026-09-30
++
++## 结论
++
++规则可以继续作为检索基础。六个地区各随机抽取 4 首，共 24 首不同歌曲；
++23 首在至少一个平台通过歌名、歌手及时长筛选，并实际取回歌词响应。
++此数字衡量接口候选覆盖情况，不能视为真机歌词匹配正确率。
++网易云 20/24、QQ 16/24、酷狗 16/24 取回歌词。
++
++本次发现并修正了尾部 `(feat. …)` 导致的标题差异，并在版本排除中增加了
++摇滚、爵士等改编标记。参与歌手标注可以省略，录音版本标记仍保留。
++《WAIT FOR U (feat. Drake & Tems)》和《So Good (feat. Kendrick Lamar)》现可取回网易云歌词。
++
++《Tu connais》未取得合适来源：网易云返回了一个符合元数据的候选，但未返回
++可用原文；其他同名、时长相近的候选歌手不同，需要原文证据，不能直接选用。
++未将这些候选计为命中。
++
++## 方法与限制
++
++- 从 Apple Music 官方 most-played 榜采样，参考种子 20260930；保存标题、艺人、地区、排名及 ID。
++- 榜单请求失败时保留错误，并尝试该地区 top-10；不会把请求失败计成平台没有歌词。
++- 使用 Apple 曲目元数据作国际发行输入，并通过 lookup 获取时长；未获取手机实际 Spotify 元数据。
++- 使用 Windows Python 重放元数据规则，直接提取生产代码里的正则表达式；不是原生 Objective-C 执行。
++- Foundation 的假名转写没有用猜测映射替代；跨文字歌手候选保留为待验证。
++- 无 Spotify 原文的候选不执行“不同署名但原文相同”的最终接受步骤。
++- 网易云读取 LRC/YRC，QQ 读取 LRC，酷狗下载并解码 KRC；未只凭搜索结果声称歌词可用。
++- 同步漂移、不同分句、翻译完整度与最终页面来源仍需下一次真机验收。
++- 输出仅包含元数据和响应长度，不保存完整歌词、凭证或歌词访问密钥。
++
++## 结果
++
++| 地区 | 曲目 | 艺人 | 秒 | 网易云 | QQ | 酷狗 |
++|---|---|---|---:|---|---|---|
++| kr | 0+0 | 한로로 | 192 | 已取回歌词 | 已取回歌词 | 已取回歌词 |
++| kr | hate that i made you love me | Ariana Grande | 197 | 已取回歌词 | 已取回歌词 | 已取回歌词 |
++| kr | Runaway | 리센느 | 182 | 待原文验证 | 已取回歌词 | 未命中 |
++| kr | The Chase | Hearts2Hearts | 178 | 待原文验证 | 已取回歌词 | 已取回歌词 |
++| gb | Boston | STELLA LEFTY | 170 | 已取回歌词 | 已取回歌词 | 已取回歌词 |
++| gb | Training Season | Dua Lipa | 209 | 已取回歌词 | 已取回歌词 | 已取回歌词 |
++| gb | Dai Dai | Shakira & Burna Boy | 223 | 已取回歌词 | 已取回歌词 | 未命中 |
++| gb | iloveitiloveitiloveit | Bella Kay | 183 | 已取回歌词 | 待原文验证 | 已取回歌词 |
++| us | I'm The Problem | Morgan Wallen | 177 | 已取回歌词 | 已取回歌词 | 已取回歌词 |
++| us | WAIT FOR U (feat. Drake & Tems) | Future | 189 | 已取回歌词 | 待原文验证 | 未命中 |
++| us | Frozen | Lil Baby | 179 | 已取回歌词 | 未命中 | 已取回歌词 |
++| us | So Good (feat. Kendrick Lamar) | Jhené Aiko | 237 | 已取回歌词 | 未命中 | 未命中 |
++| jp | 共犯 | Mrs. GREEN APPLE | 231 | 待原文验证 | 已取回歌词 | 已取回歌词 |
++| jp | マイオンリー | SixTONES | 226 | 已取回歌词 | 已取回歌词 | 已取回歌词 |
++| jp | You!Joy!Parade! | M!LK | 181 | 已取回歌词 | 已取回歌词 | 已取回歌词 |
++| jp | ダーリン | Mrs. GREEN APPLE | 280 | 已取回歌词 | 已取回歌词 | 已取回歌词 |
++| cn | 爱情转移 | 陈奕迅 | 259 | 已取回歌词 | 已取回歌词 | 已取回歌词 |
++| cn | 我不难过 | 孙燕姿 | 320 | 已取回歌词 | 已取回歌词 | 已取回歌词 |
++| cn | 情歌 | 梁静茹 | 260 | 已取回歌词 | 已取回歌词 | 已取回歌词 |
++| cn | 可惜没如果 | 林俊杰 | 298 | 已取回歌词 | 已取回歌词 | 已取回歌词 |
++| fr | Tu connais | Werenoi | 169 | 待原文验证 | 待原文验证 | 未命中 |
++| fr | Pocahontas | PLK | 168 | 已取回歌词 | 未命中 | 未命中 |
++| fr | Argent Sale - A COLORS SHOW | La Rvfleuze | 164 | 已取回歌词 | 未命中 | 未命中 |
++| fr | melodrama | disiz & Theodora | 176 | 已取回歌词 | 待原文验证 | 未命中 |
++
++详细响应摘要与榜单链接见 [JSON](lyrics-catalogue-audit-2026-09-30.json)。
++执行脚本：`scripts/probe-lyrics-catalogue.py`；`--replay` 重跑已采样的曲目。
++
++## 罗马音接口实测
++
++《夏霞》：网易云同次歌词响应含 `romalrc`（1456 字符）；QQ 的 `roma` 为十六进制加密 QRC。
++用 MSVC 编译仓库的 `QQMusicQRC.c`，真实解密并解压 QQ 原文与罗马音：两者均有 32 个 QRC 行头。
++31 对行的首字时间差在 800ms 内；另 1 对超过容差，将跳过而不借用邻行。
++实际请求到的两份酷狗 KRC 没有 language 数据，此时显示原文，不生成猜测读音。
++
++本轮已通过 Python 语法、生产代码抽取、规则静态检查和实际 C 解码器验证。
++新增加的 Foundation 发音对齐/解析回归用例已写入现有原生测试脚本，尚未在 macOS 执行。
+diff --git a/docs/lyrics-matching.md b/docs/lyrics-matching.md
+index bdbec0ec7fcf097a3bb1a75c3f90b39ae9b7871a..5ca3e85be182f847b084219e63470deade57fb1e 100644
+--- a/docs/lyrics-matching.md
++++ b/docs/lyrics-matching.md
+@@ -29,3 +29,35 @@ of an earlier unknown introductory row. This does not apply a global time shift.
+ and parsers on macOS. Its fixtures are synthetic. Windows can check script extraction,
+ source patterns and layer imports, but cannot establish iOS runtime acceptance.
+ Lyrics diagnostics can export candidate decisions, network status and the final source.
++
++Regional releases can have completely different artist credits. A matching title and
++known duration may enter an evidence stage once Spotify originals exist. With no
++shared artist, downloaded originals must meet the full recording-evidence threshold;
++a title and duration alone never establish identity. This also applies to translation
++lookups and does not use a per-song or per-artist alias table.
++
++NetEase attaches Chinese tlyric translations from the same lyric response, using the
++existing original-text and timestamp alignment, before returning its lines. Han in
++an original is not a language detector: Japanese originals containing kanji remain
++eligible for missing Chinese translations. Diagnostics distinguish a missing payload,
++an alignment yielding zero translations, and a lookup skipped because translations
++already exist or that exact line set has been queried.
++
++Pronunciation uses provider data only: NetEase romalrc/yromalrc, QQ encrypted roma
++QRC with LRC fallback, and optional KRC language type-0 syllables. Word clocks are
++retained when available; LRC pronunciation is estimated over the displayed line.
++Original-text groups and timestamp agreement prevent borrowing an unrelated row.
++Malformed KRC row/word counts suppress pronunciation, keeping original lyrics intact.
++A finer Spotify original can receive aligned pronunciation from the selected provider.
++The existing redesigned lyrics corner menu exposes Pronunciation when data is present.
++No synthesized Japanese kanji reading or machine translation is introduced.
++# Native player preview
++
++The native player now renders the shared cache's current timed line inside its existing
++`LyricsContainerView`, rather than depending on Spotify's separate preview model. This is
++enabled with any custom lyrics source unless **Hide on the player → Lyrics preview** is on.
++It uses the same playback clock and lead-line selection as the other lyric surfaces, clears
++on track changes and instrumental breaks, and polls only while attached to a window. No
++network or parsing work runs in its update. Unsynced/no-source tracks retain Spotify's preview.
++The redesigned player continues to use its existing full lyrics overlay. Device acceptance
++is required for the preview's bounds and visibility on the installed Spotify version.
+diff --git a/scripts/probe-lyrics-catalogue.py b/scripts/probe-lyrics-catalogue.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..8ec681a4b0fe82218a244c61ac7ac031d87bac3a
+--- /dev/null
++++ b/scripts/probe-lyrics-catalogue.py
+@@ -0,0 +1,146 @@
++#!/usr/bin/env python3
++"""Windows-native live catalogue audit. Metadata replay, not Objective-C/iOS execution.
++No full lyrics, authentication data or lyric access keys are written to the report.
++"""
++import concurrent.futures as cf
++import sys
++sys.stdout.reconfigure(encoding="utf-8")
++import base64, zlib
++import datetime, hashlib, json, random, re, unicodedata, urllib.parse, urllib.request
++from pathlib import Path
++ROOT = Path(__file__).resolve().parents[1]
++SOURCE = ROOT / 'tweak/Sources/Shared/LyricsSources/LyricsMatching.m'
++TEXT = SOURCE.read_text(encoding='utf-8')
++# Reuse production regex literals rather than maintain separate title/version tables.
++def pattern(variable, begin):
++    part = TEXT.split(begin, 1)[1]
++    return json.loads(re.search(variable + r' = \[NSRegularExpression regularExpressionWithPattern:\s*(@"(?:\\.|[^"\\])*")', part).group(1)[1:])
++SUFFIX = re.compile(pattern('suffix', 'NSString *SGLyricsSearchTitle('))
++THEME = re.compile(pattern('theme', 'NSString *SGLyricsSearchTitle('), re.I)
++VERSION = re.compile(pattern('version', 'NSString *SGLyricsSearchTitle('), re.I)
++FEATURED = re.compile(pattern('featured', 'NSString *SGLyricsSearchTitle('), re.I)
++REJECT_REST = json.loads(re.search(r'for \(NSString \*version in @(\[.*?\])\)', TEXT, re.S).group(1).replace('@"','"'))
++SEP = re.compile(pattern('separator','static NSArray<NSString *> *artistParts('), re.I)
++def comparable(s):
++    return ''.join(c for c in unicodedata.normalize('NFKD', s or '').casefold() if c.isalnum())
++def title_core(s):
++    value = FEATURED.sub('',unicodedata.normalize('NFKC', s or ''))
++    m=SUFFIX.search(value)
++    return value[:m.start()].strip() if m and m.start()>0 and THEME.search(m.group()) and not VERSION.search(m.group()) else value.strip()
++def title_match(a,b):
++    a,b=comparable(title_core(a)),comparable(title_core(b))
++    if not a or not b:return False
++    if a==b:return True
++    longer,shorter=sorted((a,b),key=len,reverse=True)
++    if shorter not in longer:return False
++    rest=longer.replace(shorter,'',1)
++    return bool(rest) and all('\u3400'<=c<='\u9fff' for c in rest) and not any('\u3400'<=c<='\u9fff' for c in shorter) and not any(v in rest for v in REJECT_REST)
++def artist_score(a,b):
++    # Literal and long-substring paths are replayed. Foundation kana transliteration is
++    # NOT substituted by a guessed mapping: uncertain kana/Latin pairs are reported.
++    score=0
++    for wanted in SEP.split(b or ''):
++        name=comparable(wanted)
++        if len(name)<2:continue
++        if any((other==name or (len(name)>=6 and len(other)>=6 and (name in other or other in name))) for other in map(comparable,SEP.split(a or ''))):score+=1
++    return score
++HEADERS={'User-Agent':'Mozilla/5.0','Referer':'https://music.163.com'}
++def fetch(url,body=None):
++    req=urllib.request.Request(url,data=json.dumps(body).encode() if body else None, headers=HEADERS|({'Content-Type':'application/json','Referer':'https://y.qq.com/'} if body else {}))
++    with urllib.request.urlopen(req,timeout=15) as response:return json.load(response)
++def get(url,**params):return fetch(url+'?'+urllib.parse.urlencode(params))
++def summary_payload(d):
++    result={}
++    for k in ('lrc','yrc','tlyric','romalrc','yromalrc'):
++        text=(d.get(k) or {}).get('lyric','');result[k+'_chars']=len(text)
++    return result
++QQ='https://u.y.qq.com/cgi-bin/musicu.fcg'
++def qq_search(q):
++    d=fetch(QQ,{'comm':{'ct':'19','cv':'1859','uin':'0'},'req':{'method':'DoSearchForQQMusicDesktop','module':'music.search.SearchCgiService','param':{'grp':1,'num_per_page':40,'page_num':1,'query':q,'search_type':0}}})
++    if d.get('req',{}).get('code')!=0:raise ValueError('QQ search rejected '+str(d.get('req',{}).get('code')))
++    return d.get('req',{}).get('data',{}).get('body',{}).get('song',{}).get('list',[])
++def qq_lyrics(songid):
++    key='music.musichallSong.PlayLyricInfo.GetPlayLyricInfo'
++    d=fetch(QQ,{key:{'method':'GetPlayLyricInfo','module':'music.musichallSong.PlayLyricInfo','param':{'crypt':0,'qrc':0,'trans':1,'roma':1,'songID':songid}}})
++    return d.get(key,{}).get('data',{})
++def probe(track):
++    try:
++        lookup=get('https://itunes.apple.com/lookup',id=track['id'],country=track['region']).get('results',[])
++        song=next((s for s in lookup if s.get('trackId')==int(track['id'])),None)
++        if not song or not song.get('trackTimeMillis'):raise ValueError('Apple duration missing')
++        track['seconds']=song['trackTimeMillis']//1000
++    except Exception as e:track['error']=str(e);return track
++    title,artist,seconds=track['title'],track['artist'],track['seconds']
++    lead=SEP.split(artist)[0];keyword=title_core(title)+' '+lead
++    providers={}
++    for provider in ('netease','qqmusic','kugou'):
++        try:
++            if provider=='netease':
++                root=get('https://music.163.com/api/search/get',s=keyword,type=1,limit=40)
++                if root.get('code')!=200:raise ValueError('search code '+str(root.get('code')))
++                raw=root.get('result',{}).get('songs',[])
++                rows=[dict(id=s['id'],title=s['name'],artist=', '.join(a['name'] for a in s.get('artists',[])),seconds=s.get('duration',0)//1000,aliases=s.get('alias',[])+s.get('transNames',[])+s.get('tns',[])) for s in raw]
++                slack=3
++            elif provider=='qqmusic':
++                raw=qq_search(keyword)
++                rows=[dict(id=s.get('id'),title=s.get('title',s.get('songname','')),artist=', '.join(a['name'] for a in s.get('singer',[])),seconds=s.get('interval',0),aliases=[]) for s in raw];slack=6
++                if not any(title_match(s['title'],title) and artist_score(s['artist'],artist) and abs(s['seconds']-seconds)<=slack for s in rows):
++                    raw=qq_search(title_core(title));rows=[dict(id=s.get('id'),title=s.get('title',s.get('songname','')),artist=', '.join(a['name'] for a in s.get('singer',[])),seconds=s.get('interval',0),aliases=[]) for s in raw]
++            else:
++                root=get('https://krcs.kugou.com/search',ver=1,man='yes',client='mobi',hash='',album_audio_id='',keyword=lead+' - '+title_core(title),duration=seconds*1000)
++                raw=root.get('candidates',[]);slack=8
++                rows=[dict(id=s.get('id'),title=s.get('song',''),artist=s.get('singer',''),seconds=s.get('duration',0)//1000,aliases=[]) for s in raw]
++            for s in rows:
++                s['title_pass']=any(title_match(t,title) for t in [s['title']]+s['aliases']);s['artist_matches']=artist_score(s['artist'],artist);s['duration_pass']=bool(s['seconds']) and abs(s['seconds']-seconds)<=slack
++            fitting=[s for s in rows if s['title_pass'] and s['artist_matches'] and s['duration_pass']]
++            fitting.sort(key=lambda s:(-s['artist_matches'],abs(s['seconds']-seconds)))
++            evidence=[s for s in rows if s['title_pass'] and not s['artist_matches'] and s['duration_pass']]
++            selected=None
++            for s in fitting[:3 if provider=='netease' else 6 if provider=='qqmusic' else 3]:
++                if provider=='netease':
++                    d=get('https://music.163.com/api/song/lyric/v1',id=s['id'],lv=1,yv=1,tv=-1,rv=-1,yrv=-1);s['payload']=summary_payload(d)
++                    usable=bool((d.get('lrc') or {}).get('lyric') or (d.get('yrc') or {}).get('lyric'))
++                elif provider=='qqmusic':
++                    d=qq_lyrics(s['id']);s['payload']={k+'_encoded_chars':len(d.get(k) or '') for k in ('lyric','trans','roma')};usable=bool(d.get('lyric'))
++                else:
++                    access=next((c.get('accesskey') for c in raw if str(c.get('id'))==str(s['id'])),None)
++                    d=get('https://lyrics.kugou.com/download',ver=1,client='pc',id=s['id'],accesskey=access,fmt='krc',charset='utf8')
++                    encoded=base64.b64decode(d.get('content') or '')
++                    if encoded[:4]!=b'krc1':usable=False
++                    else:
++                        key=bytes([64,71,97,119,94,50,116,71,81,54,49,45,206,210,110,105])
++                        decoded=zlib.decompress(bytes(c ^ key[i%16] for i,c in enumerate(encoded[4:])),bufsize=1024*1024).decode('utf-8')
++                        s['payload']={'krc_chars':len(decoded),'timed_rows':len(re.findall(r'^\[\d+,\d+\]',decoded,re.M)),'has_language_tag':'[language:' in decoded}
++                        usable=s['payload']['timed_rows']>0
++                if usable:selected=s;break
++            providers[provider]={'search_count':len(rows),'fitting_count':len(fitting),'selected':selected,'requires_original_evidence':evidence[:3],'status':('lyric_payload' if selected else 'needs_evidence' if evidence else 'no_metadata_match')}
++        except Exception as e:providers[provider]={'status':'request_error','error':str(e)[:180]}
++    track['providers']=providers;print(track['region'],title, {k:v['status'] for k,v in providers.items()},flush=True);return track
++if __name__=='__main__':
++    out=ROOT/'docs/lyrics-catalogue-audit-2026-09-30.json'
++    previous=json.loads(out.read_text(encoding='utf-8')) if out.exists() else {'tracks':[],'feeds':[]}
++    completed=[t for t in previous['tracks'] if t.get('providers')]
++    if '--replay' in sys.argv:
++        with cf.ThreadPoolExecutor(max_workers=3) as executor: results=list(executor.map(probe,completed))
++        previous['tracks']=results; previous['captured_at']=datetime.datetime.now(datetime.timezone.utc).isoformat(); previous['production_source_sha256']=hashlib.sha256(SOURCE.read_bytes()).hexdigest()
++        out.write_text(json.dumps(previous,ensure_ascii=False,indent=2),encoding='utf-8'); print('REPORT',out); sys.exit(0)
++    sampled_regions={t['region'] for t in completed}
++    tracks=[]; feeds=[]
++    def chart(region):
++        errors=[]
++        for limit in (50,10):
++            url=f'https://rss.marketingtools.apple.com/api/v2/{region}/music/most-played/{limit}/songs.json'
++            try:return region,url,fetch(url)['feed'],errors
++            except Exception as e:errors.append(str(e))
++        return region,url,None,errors
++    with cf.ThreadPoolExecutor(max_workers=4) as executor:
++        charts=list(executor.map(chart,[r for r in ('us','jp','cn','kr','fr','gb') if r not in sampled_regions]))
++    for region,url,feed,errors in charts:
++        if not feed:feeds.append({'url':url,'errors':errors});continue
++        feeds.append({'url':url,'updated':feed['updated'],'prior_errors':errors})
++        rng=random.Random(20260930+sum(map(ord,region)))
++        for rank,s in rng.sample(list(enumerate(feed['results'],1)),4):
++            tracks.append({'region':region,'rank':rank,'id':s['id'],'title':s['name'],'artist':s['artistName'],'url':s['url']})
++    with cf.ThreadPoolExecutor(max_workers=3) as executor:results=completed+list(executor.map(probe,tracks))
++    report={'captured_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'seed':20260930,'method':'Stratified random chart entries; failed feeds retained and retried at top-10 if top-50 unavailable. Actual sample size is tracks length; Apple metadata input; portable metadata replay only. No Spotify lyric reference, no Objective-C execution, no audio identity proof. Kana/Latin transform is excluded from replay. Payload availability does not prove every selected candidate is correct.','production_source_sha256':hashlib.sha256(SOURCE.read_bytes()).hexdigest(),'feeds':previous['feeds']+feeds,'tracks':results}
++    out.write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8');print('REPORT',out,flush=True)
+diff --git a/scripts/test-lyrics-identity.py b/scripts/test-lyrics-identity.py
+index 775c7cdd113cc080c15387c2cb1bb3efb6aaafc7..16e300fb65cc265d146b6fbfe0ac9c8b68f039b3 100644
+--- a/scripts/test-lyrics-identity.py
++++ b/scripts/test-lyrics-identity.py
+@@ -21,10 +21,14 @@ lrc = section(base / "LyricsSources/LrcLib.m", "NSArray<SGKaraokeLine *> *SGLyri
+ qrc = section(base / "LyricsSources/QQMusic.m", "static NSString *qrcBody(", "static SGLyricsResult *resultForLines(")
+ aliases = section(base / "LyricsSources/NetEase.m", "static BOOL titleMatches(", "static void get(")
+ matching = (base / "LyricsSources/LyricsMatching.m").read_text(encoding="utf-8").replace('#import "LyricsSources.h"', "")
++krc = section(base / "LyricsSources/KuGou.m", "static NSArray *krcPronunciationRows(", "static void deliverCandidate(")
++qqMetadata = section(base / "LyricsSources/QQMusic.m", "static NSString *singers(", "static void lyricReply(")
++qqEligibility = section(base / "LyricsSources/QQMusic.m", "static BOOL matches(", "static NSString *decoded(")
++eligibility = section(base / "LyricsSources/LyricsSources.m", "static BOOL needsChineseTranslations(", "// Calculate off main;")
+ source = ("#import <Foundation/Foundation.h>\n#import <dispatch/dispatch.h>\n#include <stdio.h>\n#include <stdlib.h>\n"
+           + model + query + "BOOL SGLyricsTimedCredit(NSString *);\n"
+           + "BOOL SGLyricsDiagnosticsEnabled(void) { return NO; }\nvoid SGLyricsLog(NSString *format, ...) {}\n"
+-          + timing + lrc + matching + aliases + qrc)
++          + timing + lrc + matching + aliases + qrc + eligibility + qqMetadata + qqEligibility + krc)
+ tests = r'''
+ static void check(BOOL ok, NSString *label) {
+     if (!ok) { NSLog(@"FAIL: %@", label); exit(1); }
+@@ -80,7 +84,19 @@ int main(void) {
+         check(SGLyricsTranslatedTitleCandidate(@"希望有羽毛和翅膀", query), @"Chinese title enters evidence stage");
+         check(!SGLyricsTranslatedTitleCandidate(@"希望有羽毛和翅膀（伴奏）", query), @"alias does not erase version");
+         check(!SGLyricsRecordingMatches(split, SGLyricsLinesFromLRC(@"[00:08]Other words from a different song\n[00:16]These lights have never returned")), @"unrelated lyrics rejected");
++        check(SGLyricsTitleEvidenceCandidate(@"Hope Is the Thing With Feathers", query), @"same title can enter artist evidence stage");
++        check(!SGLyricsTitleEvidenceCandidate(@"Hope Is the Thing With Feathers (Live)", query), @"artist evidence cannot erase live version");
++        check(!SGLyricsTitleEvidenceCandidate(@"Another Song", query), @"artist evidence cannot admit unrelated title");
++        NSDictionary *regional = @{@"title": @"Hope Is the Thing With Feathers", @"interval": @200,
++                                     @"singer": @[@{@"name": @"地区发行方"}]};
++        query.artist = @"International Label";
++        query.seconds = 200;
++        check(eligible(regional, query, YES), @"regional artist mismatch enters original evidence stage");
++        check(!eligible(@{@"title": @"Hope Is the Thing With Feathers", @"interval": @240,
++                          @"singer": @[@{@"name": @"地区发行方"}]}, query, YES), @"artist mismatch cannot bypass duration");
+         query.referenceLines = nil;
++        check(!eligible(regional, query, YES), @"regional artist mismatch needs original evidence");
++        check(!SGLyricsTitleEvidenceCandidate(@"Hope Is the Thing With Feathers", query), @"artist mismatch cannot bypass missing original evidence");
+         check(!SGLyricsTranslatedTitleCandidate(@"希望有羽毛和翅膀", query), @"no original evidence, no guessed alias");
+         check(titleMatches(@{@"name": @"希望有羽毛和翅膀", @"alias": @[@"Hope Is the Thing With Feathers"]}, query), @"explicit catalogue alias without original lyrics");
+         check(SGLyricsArtistMatchCount(@"HOYO-MiX", @"Chevy, Robin, HOYO-MiX") == 1, @"label retained while singers differ");
+@@ -98,6 +114,33 @@ int main(void) {
+         NSArray *qrc = linesFromQRC(@"[0,1000]歌手：(0,100)某某(100,100)\n[1000,1000]作词/作曲：(1000,100)某某(1100,100)\n[2000,9000]The (8000,100)paper (8100,100)birds (8200,100)fly(8300,100)");
+         check(qrc.count == 1 && ((SGKaraokeLine *)qrc[0]).start == 8000 && ((SGKaraokeLine *)qrc[0]).end == 8400,
+               @"credits removed and real word clock controls start/end");
++        NSArray *japanese = SGLyricsLinesFromLRC(@"[00:01]風が吹く\n[00:05]夏を待つ");
++        check(needsChineseTranslations(japanese), @"Japanese with Han characters still needs translation");
++        NSArray *kanjiOnly = SGLyricsLinesFromLRC(@"[00:01]夜空\n[00:05]希望");
++        check(needsChineseTranslations(kanjiOnly), @"Han alone does not prove original language");
++        map = SGLyricsChineseTranslationMap(japanese, @"[00:01]風が吹く\n[00:05]夏を待つ", @"[00:01]风吹过\n[00:05]等待夏天");
++        check(map.count == 2, @"Japanese original aligns with Chinese translation");
++        for (NSNumber *index in map) ((SGKaraokeLine *)japanese[index.unsignedIntegerValue]).translation = map[index];
++        check(!needsChineseTranslations(japanese), @"attached Chinese translations avoid redundant lookup");
++        check(!SGLyricsTitleMatches(@"Sung Birds 摇滚版", @"Sung Birds"), @"rock rendition is not a bilingual alias");
++        check(SGLyricsTitleMatches(@"Sung Birds (feat. Guest)", @"Sung Birds"), @"feature credits omitted by domestic catalogue");
++        check(!SGLyricsTitleMatches(@"Sung Birds (Live) (feat. Guest)", @"Sung Birds"), @"feature normalization retains recording variant");
++        NSDictionary *spokenMap = SGLyricsPronunciationMap(japanese, japanese,
++            SGLyricsLinesFromLRC(@"[00:01]kaze ga fuku\n[00:05]natsu wo matsu"));
++        check(spokenMap.count == 2 && ((SGKaraokeLine *)spokenMap[@0]).timing == SGKaraokeTimingLine, @"LRC pronunciation has estimated timing");
++        check(!SGLyricsPronunciationMap(split, split, split).count, @"English originals are not duplicated as pronunciation");
++        spokenMap = SGLyricsPronunciationMap(japanese, japanese, SGLyricsLinesFromLRC(@"[00:05]natsu wo matsu"));
++        check(!spokenMap[@0] && spokenMap[@1], @"missing pronunciation does not borrow neighbour");
++        NSString *lang = @"{\"content\":[{\"type\":0,\"lyricContent\":[[\"ka\",\"ze\"]]}]}";
++        NSString *tag = [[lang dataUsingEncoding:NSUTF8StringEncoding] base64EncodedStringWithOptions:0];
++        NSArray *krcLines = linesFromKRC([NSString stringWithFormat:@"[language:%@]\n[1000,1000]<0,400,0>か<400,600,0>ぜ", tag]);
++        SGKaraokeLine *krcLine = krcLines.firstObject;
++        check(krcLine.pronunciation.words.count == 2 && krcLine.pronunciation.words[1].start == 1400,
++            @"KRC romanised syllables retain original clocks");
++        krcLines = linesFromKRC([NSString stringWithFormat:@"[language:%@]\n[1000,1000]<0,1000,0>か", tag]);
++        check(!((SGKaraokeLine *)krcLines.firstObject).pronunciation, @"KRC syllable count mismatch rejects pronunciation");
++        krcLines = linesFromKRC(@"[language:bad]\n[1000,1000]<0,1000,0>か");
++        check(krcLines.count == 1 && !((SGKaraokeLine *)krcLines.firstObject).pronunciation, @"malformed romanisation never removes original lyrics");
+         puts("Lyrics identity regression checks passed");
+     }
+     return 0;
+@@ -105,7 +148,7 @@ int main(void) {
+ '''
+ with tempfile.TemporaryDirectory(prefix="lyrics-identity-") as directory:
+     path = Path(directory)
+-    (path / "identity.m").write_text(source + tests)
++    (path / "identity.m").write_text(source + tests, encoding="utf-8")
+     subprocess.run(["xcrun", "clang", "-fobjc-arc", "-fblocks", "-framework", "Foundation",
+                     str(path / "identity.m"), "-o", str(path / "identity")], check=True)
+     subprocess.run([str(path / "identity")], check=True)
+diff --git a/tweak/Sources/Native/Player/LyricsPreview.x b/tweak/Sources/Native/Player/LyricsPreview.x
+new file mode 100644
+index 0000000000000000000000000000000000000000..b0ff3157cc4ad71abdaeefa77a6efa07b2417c56
+--- /dev/null
++++ b/tweak/Sources/Native/Player/LyricsPreview.x
+@@ -0,0 +1,102 @@
++// Native player/Player.x already proves LyricsContainerView and layoutSubviews against the
++// recorded player tree. Its parent is a plain artwork view, not an Encore arranged stack.
++// Spotify's preview model need not receive the lyrics that our color-lyrics hook supplies.
++// Render those cached lines in the existing preview bounds, using the shared player clock.
++#import "Core/SGCore.h"
++#import "Shared/Lyrics/Lyrics.h"
++#import "Shared/LyricsSources/LyricsSources.h"
++#import "NowPlaying.h"
++
++BOOL SGNativeLyricsPreviewAvailable(void) {
++    if (SGHidden(SGHideLyricsInline) || !SGLyricsEnabled()) return NO;
++    NSArray *lines = SGKaraokeLinesForTrack(SGKaraokePlayingTrack());
++    return lines.count && SGKaraokeLinesTiming(lines) != SGKaraokeTimingNone;
++}
++
++@interface SGNativeLyricsPreview : UILabel
++@property (nonatomic, strong) NSTimer *timer;
++@property (nonatomic, strong) NSMapTable<UIView *, NSNumber *> *savedAlpha;
++- (void)refresh;
++@end
++
++@implementation SGNativeLyricsPreview
++- (instancetype)initWithFrame:(CGRect)frame {
++    if (!(self = [super initWithFrame:frame])) return nil;
++    self.font = [UIFont systemFontOfSize:16 weight:UIFontWeightSemibold];
++    self.textColor = UIColor.whiteColor;
++    self.textAlignment = NSTextAlignmentCenter;
++    self.numberOfLines = 2;
++    self.userInteractionEnabled = NO;
++    self.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
++    self.savedAlpha = [NSMapTable weakToStrongObjectsMapTable];
++    return self;
++}
++- (void)didMoveToWindow {
++    [super didMoveToWindow];
++    [self.timer invalidate];
++    self.timer = nil;
++    if (!self.window) return;
++    __weak SGNativeLyricsPreview *weakSelf = self;
++    self.timer = [NSTimer timerWithTimeInterval:0.25 repeats:YES block:^(NSTimer *timer) {
++        [weakSelf refresh];
++    }];
++    [NSRunLoop.mainRunLoop addTimer:self.timer forMode:NSRunLoopCommonModes];
++    [self refresh];
++}
++- (void)refresh {
++    if (UIApplication.sharedApplication.applicationState != UIApplicationStateActive) return;
++    UIView *host = self.superview;
++    if (!host) return;
++    BOOL available = SGNativeLyricsPreviewAvailable();
++    NSString *text = nil;
++    if (available) {
++        NSArray<SGKaraokeLine *> *lines = SGKaraokeLinesForTrack(SGKaraokePlayingTrack());
++        NSInteger ms = SGKaraokePositionMs();
++        NSInteger index = ms >= 0 ? SGKaraokeLeadLine(lines, ms) : -1;
++        if (index >= 0) {
++            SGKaraokeLine *line = lines[index];
++            // A long instrumental break should not keep the previous sentence on screen.
++            if (ms <= SGKaraokeSungEnd(line) + 4000) text = SGKaraokeLineText(line);
++        }
++    }
++    if (![self.text isEqualToString:text]) self.text = text;
++    for (UIView *child in host.subviews) {
++        if (child == self) continue;
++        if (available) {
++            if (![self.savedAlpha objectForKey:child]) [self.savedAlpha setObject:@(child.alpha) forKey:child];
++            child.alpha = 0;
++        } else {
++            NSNumber *alpha = [self.savedAlpha objectForKey:child];
++            if (alpha) child.alpha = alpha.doubleValue;
++        }
++    }
++    if (!available) [self.savedAlpha removeAllObjects];
++    self.alpha = available ? 1 : 0;
++    if (available && host.hidden) host.hidden = NO;
++}
++- (void)dealloc { [_timer invalidate]; }
++@end
++
++static char kPreviewKey;
++%hook _TtC22Lyrics_NPVContainerKit19LyricsContainerView
++- (void)layoutSubviews {
++    %orig;
++    UIView *host = (UIView *)self;
++    SGNativeLyricsPreview *preview = objc_getAssociatedObject(host, &kPreviewKey);
++    if (!preview && SGLyricsEnabled()) {
++        preview = [[SGNativeLyricsPreview alloc] initWithFrame:host.bounds];
++        objc_setAssociatedObject(host, &kPreviewKey, preview, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++        [host addSubview:preview];
++    }
++    if (!preview) return;
++    preview.frame = CGRectInset(host.bounds, 8, 0);
++    [host bringSubviewToFront:preview];
++    [preview refresh];
++}
++%end
++
++%ctor {
++    if (!SGNativeUI()) return;
++    %init;
++    SGRequireClasses(@[@"_TtC22Lyrics_NPVContainerKit19LyricsContainerView"]);
++}
+diff --git a/tweak/Sources/Native/Player/NowPlaying.h b/tweak/Sources/Native/Player/NowPlaying.h
+index b97acbd0a7974cb0bee90fedeb45f71e7654dcf0..9c1e598fee137cb5cf5c9828a26b5106b3e00c93 100644
+--- a/tweak/Sources/Native/Player/NowPlaying.h
++++ b/tweak/Sources/Native/Player/NowPlaying.h
+@@ -30,6 +30,8 @@
+ // it; the hooks read the keys above.
+ #define SGKeyPlayerLyricsOnly @"spotifyglass.hide.playerLyricsOnly"
+ void SGSetPlayerLyricsOnly(BOOL on);
++// The native preview can use the shared lyrics cache even when Spotify has no preview model.
++BOOL SGNativeLyricsPreviewAvailable(void);
+ 
+ @class SGModRow, SGModSection;
+ // PlayerSettings.m: the player screen's sections of the Player page, the Queue & devices page and the
+diff --git a/tweak/Sources/Native/Player/PlayerDeclutter.x b/tweak/Sources/Native/Player/PlayerDeclutter.x
+index 083d1d26575cefb36f8db2029c017bd5d3106832..169b34dd03bde0d2d9e2fcb0cd1b6fd10f4f7a06 100644
+--- a/tweak/Sources/Native/Player/PlayerDeclutter.x
++++ b/tweak/Sources/Native/Player/PlayerDeclutter.x
+@@ -121,7 +121,7 @@ static void finish(UIViewController *unit, BOOL changed) {
+ 
+ %hook _TtC22Lyrics_NPVContainerKit19LyricsContainerView
+ - (void)setHidden:(BOOL)hidden {
+-    %orig(SGHidden(SGHideLyricsInline) ? YES : hidden);
++    %orig(SGHidden(SGHideLyricsInline) ? YES : (SGNativeLyricsPreviewAvailable() ? NO : hidden));
+ }
+ - (void)didMoveToWindow {
+     %orig;
+diff --git a/tweak/Sources/Redesigned/Lyrics/SGRKaraokeView.m b/tweak/Sources/Redesigned/Lyrics/SGRKaraokeView.m
+index cf6d14714396805a62e5debf1881be1a3841424f..92e3c8de60e428f78930a434fd64b3edd98c471c 100644
+--- a/tweak/Sources/Redesigned/Lyrics/SGRKaraokeView.m
++++ b/tweak/Sources/Redesigned/Lyrics/SGRKaraokeView.m
+@@ -1354,11 +1354,11 @@ typedef struct {
+ 
+ - (void)translationUpdated:(NSNotification *)notification {
+     if (![_track isEqualToString:notification.object] || !_lines) return;
+-    BOOL available = NO;
++    _hasSpoken = _hasTranslation = NO;
+     for (SGKaraokeLine *line in _lines) {
+-        if (line.translation.length) { available = YES; break; }
++        _hasSpoken = _hasSpoken || line.pronunciation || line.backing.pronunciation;
++        _hasTranslation = _hasTranslation || line.translation.length;
+     }
+-    _hasTranslation = available;
+     // The source may fill previously empty rows while the translation control was already on.
+     // Rebuild those labels even when availability itself did not change.
+     [self restyle];
+diff --git a/tweak/Sources/Shared/LyricsSources/KuGou.m b/tweak/Sources/Shared/LyricsSources/KuGou.m
+index ad324566235c2725ebe71e62e52ce0d8ac41efa3..176b2aa4f42c86769bd8bc3323f5ecbb8a949c9b 100644
+--- a/tweak/Sources/Shared/LyricsSources/KuGou.m
++++ b/tweak/Sources/Shared/LyricsSources/KuGou.m
+@@ -12,7 +12,8 @@ static BOOL matches(NSDictionary *candidate, SGLyricsQuery *query) {
+     if (!([candidate[@"id"] isKindOfClass:NSString.class] || [candidate[@"id"] isKindOfClass:NSNumber.class]) ||
+         ![candidate[@"accesskey"] isKindOfClass:NSString.class] ||
+         !(SGLyricsTitleMatches(candidate[@"song"], query.title) || SGLyricsTranslatedTitleCandidate(candidate[@"song"], query))) return NO;
+-    if (!SGLyricsArtistMatchCount(candidate[@"singer"], query.artist)) return NO;
++    if (!SGLyricsArtistMatchCount(candidate[@"singer"], query.artist) &&
++        !(duration > 0 && query.seconds > 0 && SGLyricsTitleEvidenceCandidate(candidate[@"song"], query))) return NO;
+     return query.seconds <= 0 || duration <= 0 || labs(duration / 1000 - query.seconds) <= 8;
+ }
+ 
+@@ -30,6 +31,23 @@ static NSString *decodeKRC(NSString *encoded) {
+     return [[NSString alloc] initWithBytes:inflated.bytes length:(NSUInteger)length encoding:NSUTF8StringEncoding];
+ }
+ 
++// KRC embeds an optional base64 JSON language block. Type 0 carries romanised
++// syllables. An inconsistent row/word count is rejected rather than shifted.
++static NSArray *krcPronunciationRows(NSString *krc) {
++    for (NSString *row in [krc componentsSeparatedByCharactersInSet:NSCharacterSet.newlineCharacterSet]) {
++        if (![row hasPrefix:@"[language:"] || ![row hasSuffix:@"]"] || row.length > 2 * 1024 * 1024) continue;
++        NSString *encoded = [row substringWithRange:NSMakeRange(10, row.length - 11)];
++        NSData *data = [[NSData alloc] initWithBase64EncodedString:encoded options:0];
++        id root = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
++        NSArray *content = [root isKindOfClass:NSDictionary.class] && [root[@"content"] isKindOfClass:NSArray.class] ? root[@"content"] : @[];
++        for (id language in content) {
++            if (![language isKindOfClass:NSDictionary.class] || ![language[@"type"] isKindOfClass:NSNumber.class] || [language[@"type"] integerValue] != 0) continue;
++            if ([language[@"lyricContent"] isKindOfClass:NSArray.class]) return language[@"lyricContent"];
++        }
++    }
++    return nil;
++}
++
+ static NSArray<SGKaraokeLine *> *linesFromKRC(NSString *krc) {
+     static NSRegularExpression *header, *part;
+     static dispatch_once_t once;
+@@ -38,7 +56,20 @@ static NSArray<SGKaraokeLine *> *linesFromKRC(NSString *krc) {
+         part = [NSRegularExpression regularExpressionWithPattern:@"<(\\d+),(\\d+),-?\\d+>" options:0 error:nil];
+     });
+     NSMutableArray<SGKaraokeLine *> *lines = [NSMutableArray array];
+-    BOOL singing = NO;
++    NSArray *romanRows = krcPronunciationRows(krc);
++    NSUInteger rawRow = 0, rowCount = 0;
++    for (NSString *row in [krc componentsSeparatedByCharactersInSet:NSCharacterSet.newlineCharacterSet]) {
++        NSTextCheckingResult *head = [header firstMatchInString:row options:0 range:NSMakeRange(0, row.length)];
++        if (!head) continue;
++        NSArray *pieces = [part matchesInString:row options:0 range:NSMakeRange(NSMaxRange(head.range), row.length - NSMaxRange(head.range))];
++        NSString *body = [row substringFromIndex:NSMaxRange(head.range)];
++        NSString *text = [part stringByReplacingMatchesInString:body options:0 range:NSMakeRange(0, body.length) withTemplate:@""];
++        if (pieces.count && [text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet].length) rowCount++;
++    }
++    if (romanRows.count != rowCount) {
++        if (romanRows.count) SGLyricsLog(@"kugou: pronunciation row count mismatch (%lu/%lu), not attached", (unsigned long)romanRows.count, (unsigned long)rowCount);
++        romanRows = nil;
++    }
+     for (NSString *row in [krc componentsSeparatedByCharactersInSet:NSCharacterSet.newlineCharacterSet]) {
+         NSTextCheckingResult *head = [header firstMatchInString:row options:0 range:NSMakeRange(0, row.length)];
+         if (!head) continue;
+@@ -81,9 +112,32 @@ static NSArray<SGKaraokeLine *> *linesFromKRC(NSString *krc) {
+         line.end = MAX(lineEnd, words.lastObject.end);
+         line.timing = SGKaraokeTimingWords;
+         NSString *text = SGKaraokeLineText(line);
+-        if (!singing && line.start < 30000 && SGLyricsTimedCredit(text)) continue;
+-        if (!singing && line.start < 2500 && [text containsString:@" - "]) continue;
+-        singing = YES;
++        NSString *rawLine = row;
++        id roman = rawRow < romanRows.count ? romanRows[rawRow] : nil;
++        rawRow++;
++        if ([roman isKindOfClass:NSArray.class] && [roman count] == parts.count) {
++            NSMutableArray<SGKaraokeWord *> *spokenWords = [NSMutableArray array];
++            BOOL valid = YES;
++            for (NSUInteger i = 0; i < parts.count; i++) {
++                if (![roman[i] isKindOfClass:NSString.class]) { valid = NO; break; }
++                NSString *spokenText = [roman[i] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
++                if (!spokenText.length) { valid = NO; break; }
++                SGKaraokeWord *word = [SGKaraokeWord new];
++                word.text = spokenText;
++                word.start = lineStart + [rawLine substringWithRange:[parts[i] rangeAtIndex:1]].integerValue;
++                word.end = MAX(word.start + 1, word.start + [rawLine substringWithRange:[parts[i] rangeAtIndex:2]].integerValue);
++                word.joined = NO;
++                [spokenWords addObject:word];
++            }
++            if (valid && spokenWords.count) {
++                SGKaraokeLine *spoken = [SGKaraokeLine new];
++                spoken.start = line.start; spoken.end = line.end; spoken.timing = SGKaraokeTimingWords;
++                spoken.words = spokenWords;
++                NSDictionary *mapped = SGLyricsPronunciationMap(@[line], @[line], @[spoken]);
++                line.pronunciation = mapped[@0];
++            }
++        }
++        if (SGLyricsTimedCredit(text)) continue;
+         [lines addObject:line];
+     }
+     return lines.count ? lines : nil;
+@@ -91,7 +145,7 @@ static NSArray<SGKaraokeLine *> *linesFromKRC(NSString *krc) {
+ 
+ static void deliverCandidate(NSDictionary *song, SGLyricsQuery *query, SGLyricsResult *result, void (^done)(SGLyricsResult *)) {
+     dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+-        BOOL verified = SGLyricsTitleMatches(song[@"song"], query.title) || SGLyricsRecordingMatches(query.referenceLines, result.karaokeLines);
++        BOOL verified = (SGLyricsTitleMatches(song[@"song"], query.title) && SGLyricsArtistMatchCount(song[@"singer"], query.artist)) || SGLyricsRecordingMatches(query.referenceLines, result.karaokeLines);
+         dispatch_async(dispatch_get_main_queue(), ^{
+             SGLyricsLog(@"kugou: candidate %@ original-text evidence %@", song[@"id"], verified ? @"accepted" : @"rejected");
+             done(verified ? result : nil);
+@@ -107,9 +161,11 @@ static void tryCandidates(NSArray<NSDictionary *> *songs, NSUInteger index, SGLy
+         @"ver": @"1", @"client": @"pc", @"id": songID, @"accesskey": song[@"accesskey"],
+         @"fmt": @"krc", @"charset": @"utf8"});
+     SGLyricsGetJSON(url, @{@"User-Agent": @"Mozilla/5.0"}, ^(id root) {
++      dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+         NSDictionary *reply = [root isKindOfClass:NSDictionary.class] ? root : nil;
+         NSString *krc = [reply[@"status"] integerValue] == 200 ? decodeKRC(reply[@"content"]) : nil;
+         NSArray<SGKaraokeLine *> *lines = krc ? linesFromKRC(krc) : nil;
++        dispatch_async(dispatch_get_main_queue(), ^{
+         if (!lines.count) {
+             SGLyricsLog(@"kugou: KRC %@ status %ld, decoded %@; trying LRC", songID,
+                   (long)[reply[@"status"] integerValue], krc ? @"yes" : @"no");
+@@ -152,6 +208,8 @@ static void tryCandidates(NSArray<NSDictionary *> *songs, NSUInteger index, SGLy
+         deliverCandidate(song, query, result, ^(SGLyricsResult *verified) {
+             if (verified) done(verified); else tryCandidates(songs, index + 1, query, done);
+         });
++        });
++      });
+     });
+ }
+ 
+diff --git a/tweak/Sources/Shared/LyricsSources/LyricsDiagnostics.m b/tweak/Sources/Shared/LyricsSources/LyricsDiagnostics.m
+index ec54094d370028627d242df40e6750809c2a761b..bb0057581e559bea97f7c529d6e43170dd6cc108 100644
+--- a/tweak/Sources/Shared/LyricsSources/LyricsDiagnostics.m
++++ b/tweak/Sources/Shared/LyricsSources/LyricsDiagnostics.m
+@@ -98,6 +98,8 @@ void SGLyricsDiagnosticCandidate(NSString *provider, SGLyricsQuery *query, NSStr
+     BOOL titleOK = !requireTitle || SGLyricsTitleMatches(title, query.title);
+     NSString *titleCheck = titleOK ? @"pass" : SGLyricsTranslatedTitleCandidate(title, query) ? @"requires original-text evidence" : @"reject";
+     NSUInteger artistsOK = SGLyricsArtistMatchCount(artists, query.artist);
++    if (!artistsOK && SGLyricsTitleEvidenceCandidate(title, query))
++        SGLyricsLog(@"candidate: track %@ source %@ artist mismatch requires downloaded original-text evidence", query.trackID, provider);
+     NSInteger gap = labs(seconds - query.seconds);
+     NSString *duration = seconds <= 0 || query.seconds <= 0 ? @"unknown" : gap <= slack ? @"pass" : @"reject";
+     SGLyricsLog(@"candidate: track %@ source %@ title '%@' artists '%@' duration %lds; title %@, artist matches %lu, duration %@ (gap %lds, tolerance %lds)",
+diff --git a/tweak/Sources/Shared/LyricsSources/LyricsHook.x b/tweak/Sources/Shared/LyricsSources/LyricsHook.x
+index b8762d9a407c4aab879f3331c555ed330f371d86..b202a04d2d2e086e8c3c5dffbb7a924d8af3800f 100644
+--- a/tweak/Sources/Shared/LyricsSources/LyricsHook.x
++++ b/tweak/Sources/Shared/LyricsSources/LyricsHook.x
+@@ -177,6 +177,7 @@ static NSData *decide(NSString *track, SGLyricsResult *chain, NSData *spotifyBod
+     }
+     if (viewLines) {
+         SGKaraokeKeepLines(track, viewLines);
++        SGLyricsEnrichPronunciations(track, viewLines, chain.karaokeLines);
+         SGLyricsFetchChineseTranslations(track, viewLines);
+     }
+     SGLyricsSetCredit(track, credit);
+@@ -470,7 +471,10 @@ static void finishSpotify(id delegate, NSURLSession *session, NSURLSessionDataTa
+         SGLyricsFetch(track, ^(SGLyricsResult *chain) {
+             if (!chain.karaokeLines.count) return;
+             NSArray<SGKaraokeLine *> *shown = SGKaraokeLinesForTrack(track);
+-            if (shown && SGKaraokeLinesTiming(shown) < SGKaraokeLinesTiming(chain.karaokeLines)) return;
++            if (shown && SGKaraokeLinesTiming(shown) < SGKaraokeLinesTiming(chain.karaokeLines)) {
++                SGLyricsEnrichPronunciations(track, shown, chain.karaokeLines);
++                return;
++            }
+             SGKaraokeKeepLines(track, chain.karaokeLines);
+             SGLyricsSetCredit(track, chain.provider);
+             SGLyricsFetchChineseTranslations(track, chain.karaokeLines);
+diff --git a/tweak/Sources/Shared/LyricsSources/LyricsMatching.m b/tweak/Sources/Shared/LyricsSources/LyricsMatching.m
+index 25d7ce055079623ee63f99000db05f41d92aba04..4da7a37837fe3e03a389af95f05e829faeb9caf9 100644
+--- a/tweak/Sources/Shared/LyricsSources/LyricsMatching.m
++++ b/tweak/Sources/Shared/LyricsSources/LyricsMatching.m
+@@ -105,18 +105,24 @@ BOOL SGLyricsTimedCredit(NSString *text) {
+ NSString *SGLyricsSearchTitle(NSString *title) {
+     if (![title isKindOfClass:NSString.class]) return @"";
+     NSString *value = [title precomposedStringWithCompatibilityMapping];
+-    static NSRegularExpression *suffix, *theme, *version;
++    static NSRegularExpression *suffix, *theme, *version, *featured;
+     static dispatch_once_t once;
+     dispatch_once(&once, ^{
++        featured = [NSRegularExpression regularExpressionWithPattern:
++            @"\\s*[\\(\\[（【](?:feat\\.?|ft\\.?|featuring)\\s+[^)\\]）】]+[)\\]）】]\\s*$"
++            options:NSRegularExpressionCaseInsensitive error:nil];
+         suffix = [NSRegularExpression regularExpressionWithPattern:
+             @"\\s+(?:[-–—:]\\s+)(.+)$|\\s*[\\(\\[（【](.+)[\\)\\]）】]\\s*$" options:0 error:nil];
+         theme = [NSRegularExpression regularExpressionWithPattern:
+             @"\\b(?:theme|soundtrack|OST)\\b|主题曲|主題曲|片头曲|片頭曲|片尾曲|插曲|印象曲"
+             options:NSRegularExpressionCaseInsensitive error:nil];
+         version = [NSRegularExpression regularExpressionWithPattern:
+-            @"\\b(?:live|remix|mix|bootleg|cover|instrumental|acoustic|karaoke|demo|remaster(?:ed)?|piano|sped[ -]+up|slowed)\\b|现场|現場|伴奏|翻唱|混音|加速|降速|重制|重製|片段|剪辑|剪輯|钢琴|鋼琴|纯音乐|純音樂"
++            @"\\b(?:live|remix|mix|bootleg|cover|instrumental|acoustic|karaoke|demo|remaster(?:ed)?|piano|sped[ -]+up|slowed)\\b|现场|現場|伴奏|翻唱|混音|加速|降速|重制|重製|片段|剪辑|剪輯|钢琴|鋼琴|纯音乐|純音樂|摇滚|搖滾|爵士|重金属|重金屬|翻奏|演绎|演繹"
+             options:NSRegularExpressionCaseInsensitive error:nil];
+     });
++    // Featured performers are credits, often absent from another catalogue's title.
++    // Strip only a trailing feature-credit bracket; live/remix markers stay intact.
++    value = [featured stringByReplacingMatchesInString:value options:0 range:NSMakeRange(0, value.length) withTemplate:@""];
+     // Check the whole suffix, including a nested version such as
+     // Song - Soundtrack Theme (Instrumental), before removing anything.
+     NSTextCheckingResult *match = [suffix firstMatchInString:value options:0 range:NSMakeRange(0, value.length)];
+@@ -128,7 +134,7 @@ NSString *SGLyricsSearchTitle(NSString *title) {
+                 stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+         }
+     }
+-    return [title stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
++    return [value stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+ }
+ 
+ BOOL SGLyricsTitleMatches(NSString *candidate, NSString *wanted) {
+@@ -149,7 +155,7 @@ BOOL SGLyricsTitleMatches(NSString *candidate, NSString *wanted) {
+     // Chinese-only substrings are not evidence of a bilingual alias.
+     if (SGLyricsContainsHan(shorter)) return NO;
+     for (NSString *version in @[@"现场", @"現場", @"伴奏", @"翻唱", @"混音", @"加速", @"降速",
+-                                @"片段", @"剪辑", @"剪輯", @"演绎", @"演繹", @"钢琴", @"鋼琴", @"纯音乐", @"純音樂", @"重制", @"重製"]) {
++                                @"片段", @"剪辑", @"剪輯", @"演绎", @"演繹", @"钢琴", @"鋼琴", @"纯音乐", @"純音樂", @"重制", @"重製", @"摇滚", @"搖滾", @"爵士", @"重金属", @"重金屬", @"翻奏"]) {
+         if ([rest containsString:version]) return NO;
+     }
+     return YES;
+@@ -163,13 +169,19 @@ BOOL SGLyricsTranslatedTitleCandidate(NSString *candidate, SGLyricsQuery *query)
+     static dispatch_once_t once;
+     dispatch_once(&once, ^{
+         version = [NSRegularExpression regularExpressionWithPattern:
+-            @"\\b(?:live|remix|mix|edit|extended|bootleg|cover|instrumental|acoustic|karaoke|demo|piano|remaster(?:ed)?|sped[ -]+up|slowed)\\b|现场|現場|伴奏|翻唱|混音|加速|降速|片段|剪辑|剪輯|重制|重製|钢琴|鋼琴|纯音乐|純音樂"
++            @"\\b(?:live|remix|mix|edit|extended|bootleg|cover|instrumental|acoustic|karaoke|demo|piano|remaster(?:ed)?|sped[ -]+up|slowed)\\b|现场|現場|伴奏|翻唱|混音|加速|降速|片段|剪辑|剪輯|重制|重製|钢琴|鋼琴|纯音乐|純音樂|摇滚|搖滾|爵士|重金属|重金屬|翻奏|演绎|演繹"
+             options:NSRegularExpressionCaseInsensitive error:nil];
+     });
+     for (NSString *title in @[a, b]) if ([version firstMatchInString:title options:0 range:NSMakeRange(0, title.length)]) return NO;
+     return YES; // Tentative only: the downloaded original lyrics MUST validate it.
+ }
+ 
++// An identical/bilingual title can bridge different regional artist credits only
++// tentatively. Callers must also check duration and validate the downloaded original.
++BOOL SGLyricsTitleEvidenceCandidate(NSString *candidate, SGLyricsQuery *query) {
++    return query.referenceLines.count && SGLyricsTitleMatches(candidate, query.title);
++}
++
+ static NSDictionary<NSString *, NSArray<NSNumber *> *> *textIndex(NSArray<SGKaraokeLine *> *lines) {
+     NSMutableDictionary *index = [NSMutableDictionary dictionary];
+     [lines enumerateObjectsUsingBlock:^(SGKaraokeLine *line, NSUInteger i, BOOL *stop) {
+@@ -350,3 +362,65 @@ NSDictionary<NSNumber *, NSString *> *SGLyricsChineseTranslationMap(NSArray<SGKa
+     }];
+     return updates;
+ }
++
++
++NSDictionary<NSNumber *, SGKaraokeLine *> *SGLyricsPronunciationMap(NSArray<SGKaraokeLine *> *target,
++    NSArray<SGKaraokeLine *> *original, NSArray<SGKaraokeLine *> *pronunciation) {
++    NSMutableDictionary<NSNumber *, SGKaraokeLine *> *updates = [NSMutableDictionary dictionary];
++    if (!target.count || !original.count || !pronunciation.count) return updates;
++    NSDictionary<NSNumber *, NSNumber *> *pairs = aligned(target, original);
++    NSMutableIndexSet *used = [NSMutableIndexSet indexSet];
++    NSMutableDictionary<NSNumber *, NSNumber *> *offsets = [NSMutableDictionary dictionary];
++    for (NSUInteger i = 0; i < original.count; i++) {
++        NSNumber *destination = pairs[@(i)];
++        if (!destination) continue;
++        NSInteger nearest = 801;
++        NSUInteger best = NSNotFound;
++        for (NSUInteger j = 0; j < pronunciation.count; j++) {
++            if ([used containsIndex:j]) continue;
++            NSInteger gap = labs(pronunciation[j].start - original[i].start);
++            if (i && labs(pronunciation[j].start - original[i - 1].start) < gap) continue;
++            if (i + 1 < original.count && labs(pronunciation[j].start - original[i + 1].start) < gap) continue;
++            NSString *text = SGKaraokeLineText(pronunciation[j]);
++            BOOL latin = [text rangeOfCharacterFromSet:[NSCharacterSet characterSetWithCharactersInString:
++                @"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"]].location != NSNotFound;
++            if (gap < nearest && latin && !SGLyricsContainsHan(text) &&
++                ![comparable(text) isEqualToString:comparable(SGKaraokeLineText(original[i]))]) {
++                nearest = gap; best = j;
++            }
++        }
++        if (best == NSNotFound) continue;
++        [used addIndex:best];
++        SGKaraokeLine *of = target[destination.unsignedIntegerValue];
++        SGKaraokeLine *spoken = pronunciation[best];
++        SGKaraokeLine *attached = updates[destination];
++        if (!attached) {
++            attached = [SGKaraokeLine new];
++            attached.start = of.start; attached.end = of.end; attached.align = of.align;
++            attached.timing = spoken.timing;
++            attached.words = @[];
++            offsets[destination] = @(of.start - original[i].start);
++            updates[destination] = attached;
++        }
++        NSMutableArray<SGKaraokeWord *> *words = [attached.words mutableCopy];
++        // Keep timed syllables when available. LRC only supplies line starts, so
++        // estimate over the displayed sentence instead of claiming word precision.
++        if (spoken.timing != SGKaraokeTimingWords) {
++            NSString *text = words.count ? [SGKaraokeLineText(attached) stringByAppendingFormat:@" %@", SGKaraokeLineText(spoken)] : SGKaraokeLineText(spoken);
++            SGKaraokeLine *estimated = SGKaraokeEstimatedLines(@[@(of.start), @(MAX(of.end, of.start + 1))], @[text, @""]).firstObject;
++            attached.words = estimated.words;
++            attached.timing = SGKaraokeTimingLine;
++        } else {
++            NSInteger offset = offsets[destination].integerValue;
++            for (SGKaraokeWord *source in spoken.words) {
++                SGKaraokeWord *word = [SGKaraokeWord new];
++                word.text = source.text; word.start = source.start + offset; word.end = source.end + offset;
++                word.joined = source.joined;
++                [words addObject:word];
++            }
++            attached.words = words;
++            attached.end = MAX(of.end, words.lastObject.end);
++        }
++    }
++    return updates;
++}
+diff --git a/tweak/Sources/Shared/LyricsSources/LyricsSources.h b/tweak/Sources/Shared/LyricsSources/LyricsSources.h
+index 86ac9773523b81e982a74953b5224cf6da1c4400..54532030565e4557ef9558e0750875b48561497b 100644
+--- a/tweak/Sources/Shared/LyricsSources/LyricsSources.h
++++ b/tweak/Sources/Shared/LyricsSources/LyricsSources.h
+@@ -125,8 +125,10 @@ NSArray<NSString *> *SGLyricsTranslationLanguages(void);
+ NSArray<NSString *> *SGLyricsTranslationLanguageNames(void);
+ // The tag of the language asked for, nil for whatever the source has.
+ NSString *SGLyricsTranslationLanguage(void);
+-// Posted on the main queue with the Spotify track id as object when a late translation arrives.
++// Posted on the main queue with the track id when translation or pronunciation arrives.
+ extern NSNotificationName const SGLyricsTranslationUpdatedNotification;
++// Donate pronunciation without replacing the displayed original text or timing.
++void SGLyricsEnrichPronunciations(NSString *trackID, NSArray<SGKaraokeLine *> *target, NSArray<SGKaraokeLine *> *source);
+ // Adds Chinese translations to the lines actually shown in the lyrics view. The original lines
+ // are returned immediately; QQ Music and NetEase are queried only after the page has its lyrics.
+ void SGLyricsFetchChineseTranslations(NSString *trackID, NSArray<SGKaraokeLine *> *lines);
+@@ -134,6 +136,7 @@ void SGLyricsFetchChineseTranslations(NSString *trackID, NSArray<SGKaraokeLine *
+ BOOL SGLyricsTitleMatches(NSString *candidate, NSString *wanted);
+ NSString *SGLyricsSearchTitle(NSString *title);
+ NSArray<NSString *> *SGLyricsSearchArtists(NSString *artists);
++BOOL SGLyricsTitleEvidenceCandidate(NSString *candidate, SGLyricsQuery *query);
+ BOOL SGLyricsTranslatedTitleCandidate(NSString *candidate, SGLyricsQuery *query);
+ BOOL SGLyricsRecordingMatches(NSArray<SGKaraokeLine *> *target, NSArray<SGKaraokeLine *> *candidate);
+ void SGLyricsNoteReference(NSString *trackID, NSArray<SGKaraokeLine *> *lines);
+@@ -148,6 +151,9 @@ BOOL SGLyricsTimedCredit(NSString *text);
+ NSUInteger SGLyricsOriginalOverlap(NSArray<SGKaraokeLine *> *target, NSString *originalLRC);
+ NSDictionary<NSNumber *, NSString *> *SGLyricsChineseTranslationMap(NSArray<SGKaraokeLine *> *target,
+                                                                     NSString *originalLRC, NSString *translatedLRC);
++// Align provider pronunciation to verified original text; native word times are retained.
++NSDictionary<NSNumber *, SGKaraokeLine *> *SGLyricsPronunciationMap(NSArray<SGKaraokeLine *> *target,
++    NSArray<SGKaraokeLine *> *original, NSArray<SGKaraokeLine *> *pronunciation);
+ typedef void (^SGLyricsTranslationReply)(NSString *originalLRC, NSString *translatedLRC);
+ void SGQQMusicTranslationAsk(SGLyricsQuery *query, NSArray<SGKaraokeLine *> *target, SGLyricsTranslationReply done);
+ void SGNetEaseTranslationAsk(SGLyricsQuery *query, NSArray<SGKaraokeLine *> *target, SGLyricsTranslationReply done);
+diff --git a/tweak/Sources/Shared/LyricsSources/LyricsSources.m b/tweak/Sources/Shared/LyricsSources/LyricsSources.m
+index 3f71334b4bb145b41f0cbeab2ae522e916c8e2fb..e941369d2631d95656b9b56e6e0d08440b56c9dd 100644
+--- a/tweak/Sources/Shared/LyricsSources/LyricsSources.m
++++ b/tweak/Sources/Shared/LyricsSources/LyricsSources.m
+@@ -259,11 +259,12 @@ static BOOL named(SGLyricsQuery *query);
+ // timed lyrics; waiting for QQ or NetEase here would delay Spotify's lyrics card.
+ static NSMutableDictionary<NSString *, NSArray<SGKaraokeLine *> *> *sg_translationAsked;
+ 
++// Han characters also occur in Japanese; they cannot establish that an original is Chinese.
+ static BOOL needsChineseTranslations(NSArray<SGKaraokeLine *> *lines) {
+     for (SGKaraokeLine *line in lines) {
+         NSString *original = SGKaraokeLineText(line);
+         if ([original rangeOfCharacterFromSet:NSCharacterSet.alphanumericCharacterSet].location != NSNotFound &&
+-            !SGLyricsContainsHan(line.translation) && !SGLyricsContainsHan(original)) return YES;
++            !SGLyricsContainsHan(line.translation)) return YES;
+     }
+     return NO;
+ }
+@@ -297,11 +298,20 @@ void SGLyricsFetchChineseTranslations(NSString *trackID, NSArray<SGKaraokeLine *
+     if (![language.lowercaseString hasPrefix:@"zh"]) return;
+     dispatch_async(dispatch_get_main_queue(), ^{
+         if (!sg_translationAsked) sg_translationAsked = [NSMutableDictionary dictionary];
+-        if (sg_translationAsked[trackID] == lines || !needsChineseTranslations(lines)) return;
++        if (sg_translationAsked[trackID] == lines) {
++            SGLyricsLog(@"translation: %@ skipped, this line set already queried", trackID);
++            return;
++        }
++        if (!needsChineseTranslations(lines)) {
++            SGLyricsLog(@"translation: %@ skipped, no untranslated text lines", trackID);
++            return;
++        }
+         SGLyricsQuery *query = queryFor(trackID);
+         if (!named(query) || query.seconds <= 0) return;
+         if (sg_translationAsked.count >= kKeptTracks) [sg_translationAsked removeAllObjects];
++        query.referenceLines = lines;
+         sg_translationAsked[trackID] = lines;
++        SGLyricsLog(@"translation: %@ querying Chinese translations for %lu lines", trackID, (unsigned long)lines.count);
+         NSUInteger failures = atomic_load(&sg_failures);
+         SGQQMusicTranslationAsk(query, lines, ^(NSString *original, NSString *translated) {
+             if (sg_translationAsked[trackID] != lines) return;
+@@ -322,6 +332,30 @@ void SGLyricsFetchChineseTranslations(NSString *trackID, NSArray<SGKaraokeLine *
+     });
+ }
+ 
++// A finer Spotify clock can stay visible while a verified provider supplies pronunciation.
++void SGLyricsEnrichPronunciations(NSString *trackID, NSArray<SGKaraokeLine *> *target, NSArray<SGKaraokeLine *> *source) {
++    if (!trackID.length || !target.count || !source.count || target == source) return;
++    NSMutableArray *spoken = [NSMutableArray array];
++    for (SGKaraokeLine *line in source) if (line.pronunciation) [spoken addObject:line.pronunciation];
++    if (!spoken.count) return;
++    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
++        NSDictionary<NSNumber *, SGKaraokeLine *> *updates = SGLyricsPronunciationMap(target, source, spoken);
++        dispatch_async(dispatch_get_main_queue(), ^{
++            if (SGKaraokeLinesForTrack(trackID) != target) return;
++            NSUInteger added = 0;
++            for (NSNumber *index in updates) {
++                SGKaraokeLine *line = target[index.unsignedIntegerValue];
++                if (line.pronunciation) continue;
++                line.pronunciation = updates[index]; added++;
++            }
++            if (added) {
++                SGLyricsLog(@"lyrics: added %lu provider pronunciation lines for %@", (unsigned long)added, trackID);
++                [NSNotificationCenter.defaultCenter postNotificationName:SGLyricsTranslationUpdatedNotification object:trackID];
++            }
++        });
++    });
++}
++
+ static void learnFrom(SGLyricsQuery *query, SGLyricsResult *result) {
+     if (!query.title.length && result.title.length) query.title = result.title;
+     if (!query.artist.length && result.artist.length) query.artist = result.artist;
+diff --git a/tweak/Sources/Shared/LyricsSources/NetEase.m b/tweak/Sources/Shared/LyricsSources/NetEase.m
+index ad71cdbb1a6aafc69b95fd78c4b40b5ebf6e534a..78aa5613d9faf739e823a1c9bc19f56da49253e5 100644
+--- a/tweak/Sources/Shared/LyricsSources/NetEase.m
++++ b/tweak/Sources/Shared/LyricsSources/NetEase.m
+@@ -1,7 +1,4 @@
+-// Word timing from NetEase Cloud Music, for the tracks the other sources only line-time, e.g. most
+-// of Eminem. It has no text of its own to offer Spotify's page, only the time of every word, so it
+-// earns its place at the end of the order rather than the front. Searched by title, artist and
+-// length; NetEase censors swear words with asterisks.
++// NetEase word-timed YRC with line-timed LRC fallback and translations from the same recording.
+ #import "Core/SGCore.h"
+ #import "LyricsSources.h"
+ 
+@@ -111,7 +108,7 @@ static void tryLyrics(NSArray<NSDictionary *> *songs, NSUInteger index, SGLyrics
+         return;
+     }
+     NSDictionary *song = songs[index];
+-    get(@"song/lyric/v1", @{@"id": [song[@"id"] description], @"lv": @"1", @"yv": @"1", @"tv": @"-1"}, ^(NSDictionary *root) {
++    get(@"song/lyric/v1", @{@"id": [song[@"id"] description], @"lv": @"1", @"yv": @"1", @"tv": @"-1", @"rv": @"-1", @"yrv": @"-1"}, ^(NSDictionary *root) {
+         id yrc = [root[@"yrc"] isKindOfClass:NSDictionary.class] ? root[@"yrc"][@"lyric"] : nil;
+         dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+             NSArray<SGKaraokeLine *> *lines = [yrc isKindOfClass:NSString.class] ? linesFromYrc(yrc) : nil;
+@@ -119,7 +116,22 @@ static void tryLyrics(NSArray<NSDictionary *> *songs, NSUInteger index, SGLyrics
+                 id lrc = [root[@"lrc"] isKindOfClass:NSDictionary.class] ? root[@"lrc"][@"lyric"] : nil;
+                 lines = [lrc isKindOfClass:NSString.class] ? SGLyricsLinesFromLRC(lrc) : nil;
+             }
+-            BOOL verified = lines.count && (titleMatches(song, query) || SGLyricsRecordingMatches(query.referenceLines, lines));
++            NSString *lrc = [root[@"lrc"] isKindOfClass:NSDictionary.class] && [root[@"lrc"][@"lyric"] isKindOfClass:NSString.class] ? root[@"lrc"][@"lyric"] : nil;
++            NSString *translated = [root[@"tlyric"] isKindOfClass:NSDictionary.class] && [root[@"tlyric"][@"lyric"] isKindOfClass:NSString.class] ? root[@"tlyric"][@"lyric"] : nil;
++            NSString *language = SGLyricsTranslationLanguage() ?: NSLocale.preferredLanguages.firstObject;
++            NSDictionary<NSNumber *, NSString *> *updates = [language.lowercaseString hasPrefix:@"zh"]
++                ? SGLyricsChineseTranslationMap(lines, lrc, translated) : @{};
++            for (NSNumber *index in updates) lines[index.unsignedIntegerValue].translation = updates[index];
++            SGLyricsLog(@"netease: song %@ translation payload %@, attached %lu Chinese translations", song[@"id"],
++                        translated.length ? @"present" : @"absent", (unsigned long)updates.count);
++            NSString *yroma = [root[@"yromalrc"] isKindOfClass:NSDictionary.class] && [root[@"yromalrc"][@"lyric"] isKindOfClass:NSString.class] ? root[@"yromalrc"][@"lyric"] : nil;
++            NSString *roma = [root[@"romalrc"] isKindOfClass:NSDictionary.class] && [root[@"romalrc"][@"lyric"] isKindOfClass:NSString.class] ? root[@"romalrc"][@"lyric"] : nil;
++            NSMutableDictionary<NSNumber *, SGKaraokeLine *> *spoken = [SGLyricsPronunciationMap(lines, lines, SGLyricsLinesFromLRC(yroma)) mutableCopy];
++            NSDictionary *fallback = SGLyricsPronunciationMap(lines, SGLyricsLinesFromLRC(lrc), SGLyricsLinesFromLRC(roma));
++            for (NSNumber *index in fallback) if (!spoken[index]) spoken[index] = fallback[index];
++            for (NSNumber *index in spoken) lines[index.unsignedIntegerValue].pronunciation = spoken[index];
++            SGLyricsLog(@"netease: song %@ pronunciation payload %@, attached %lu lines", song[@"id"], (yroma.length || roma.length) ? @"present" : @"absent", (unsigned long)spoken.count);
++            BOOL verified = lines.count && ((titleMatches(song, query) && SGLyricsArtistMatchCount(artistsOf(song), query.artist)) || SGLyricsRecordingMatches(query.referenceLines, lines));
+             dispatch_async(dispatch_get_main_queue(), ^{
+                 SGLyricsLog(@"netease: song %@ has %lu lines (word timing %@), evidence %@", song[@"id"], (unsigned long)lines.count,
+                             SGKaraokeLinesTiming(lines) == SGKaraokeTimingWords ? @"yes" : @"no", verified ? @"accepted" : @"rejected");
+@@ -154,7 +166,7 @@ static void findSongsAt(SGLyricsQuery *query, BOOL requireTitle, NSUInteger atte
+             }
+             if (![song isKindOfClass:NSDictionary.class] || ![song[@"id"] isKindOfClass:NSNumber.class] || labs([song[@"duration"] integerValue] / 1000 - seconds) > kLengthSlack ||
+                 (requireTitle && !titleMatches(song, query) && !SGLyricsTranslatedTitleCandidate(song[@"name"], query))) continue;
+-            if (SGLyricsArtistMatchCount(artistsOf(song), query.artist)) {
++            if (SGLyricsArtistMatchCount(artistsOf(song), query.artist) || (query.referenceLines.count && titleMatches(song, query))) {
+                 NSMutableDictionary *candidate = [song mutableCopy];
+                 candidate[@"sg_searchAttempt"] = @(attempt);
+                 [fitting addObject:candidate];
+@@ -203,25 +215,26 @@ static void askAt(SGLyricsQuery *query, NSUInteger attempt, void (^done)(SGLyric
+ 
+ SGLyricsAsk SGNetEaseAsk = ^(SGLyricsQuery *query, void (^done)(SGLyricsResult *result)) { askAt(query, 0, done); };
+ 
+-static void tryTranslations(NSArray<NSNumber *> *ids, NSUInteger index, NSArray<SGKaraokeLine *> *target,
++static void tryTranslations(NSArray<NSDictionary *> *ids, NSUInteger index, NSArray<SGKaraokeLine *> *target, SGLyricsQuery *query,
+                             SGLyricsTranslationReply done) {
+     if (index >= ids.count) { done(nil, nil); return; }
+-    get(@"song/lyric/v1", @{@"id": ids[index].stringValue, @"lv": @"-1", @"tv": @"-1"}, ^(NSDictionary *root) {
++    get(@"song/lyric/v1", @{@"id": [ids[index][@"id"] description], @"lv": @"-1", @"tv": @"-1", @"rv": @"-1", @"yrv": @"-1"}, ^(NSDictionary *root) {
+         NSDictionary *original = [root[@"lrc"] isKindOfClass:NSDictionary.class] ? root[@"lrc"] : nil;
+         NSDictionary *translated = [root[@"tlyric"] isKindOfClass:NSDictionary.class] ? root[@"tlyric"] : nil;
+         NSString *lrc = [original[@"lyric"] isKindOfClass:NSString.class] ? original[@"lyric"] : nil;
+         NSString *tlyric = [translated[@"lyric"] isKindOfClass:NSString.class] ? translated[@"lyric"] : nil;
+         dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+             NSUInteger overlap = tlyric.length ? SGLyricsOriginalOverlap(target, lrc) : 0;
++            BOOL identity = SGLyricsArtistMatchCount(artistsOf(ids[index]), query.artist) || SGLyricsRecordingMatches(target, SGLyricsLinesFromLRC(lrc));
+             dispatch_async(dispatch_get_main_queue(), ^{
+-                SGLyricsLog(@"netease: translation candidate %@, %lu original lines match", ids[index], (unsigned long)overlap);
+-                if (overlap >= MIN((NSUInteger)2, target.count)) done(lrc, tlyric);
+-                else tryTranslations(ids, index + 1, target, done);
++                SGLyricsLog(@"netease: translation candidate %@, %lu original lines match, recording identity %@", ids[index][@"id"], (unsigned long)overlap, identity ? @"accepted" : @"rejected");
++                if (identity && overlap >= MIN((NSUInteger)2, target.count)) done(lrc, tlyric);
++                else tryTranslations(ids, index + 1, target, query, done);
+             });
+         });
+     });
+ }
+ 
+ void SGNetEaseTranslationAsk(SGLyricsQuery *query, NSArray<SGKaraokeLine *> *target, SGLyricsTranslationReply done) {
+-    findSongsAt(query, NO, 0, ^(NSArray<NSDictionary *> *songs) { tryTranslations([songs valueForKey:@"id"], 0, target, done); });
++    findSongsAt(query, NO, 0, ^(NSArray<NSDictionary *> *songs) { tryTranslations(songs, 0, target, query, done); });
+ }
+diff --git a/tweak/Sources/Shared/LyricsSources/QQMusic.m b/tweak/Sources/Shared/LyricsSources/QQMusic.m
+index 565797b7190e55ed7e2e9333016163b9ac9a880f..5dcb1374248fa42f1111e4d295983778b759b72f 100644
+--- a/tweak/Sources/Shared/LyricsSources/QQMusic.m
++++ b/tweak/Sources/Shared/LyricsSources/QQMusic.m
+@@ -23,13 +23,15 @@ static NSString *singers(NSDictionary *song) {
+ static BOOL matchesRecording(NSDictionary *song, SGLyricsQuery *query) {
+     if (query.seconds > 0 && [song[@"interval"] respondsToSelector:@selector(integerValue)] &&
+         labs([song[@"interval"] integerValue] - query.seconds) > 6) return NO;
+-    return SGLyricsArtistMatchCount(singers(song), query.artist) > 0;
++    return SGLyricsArtistMatchCount(singers(song), query.artist) > 0 ||
++        (query.seconds > 0 && [song[@"interval"] integerValue] > 0 &&
++         SGLyricsTitleEvidenceCandidate(song[@"title"] ?: song[@"songname"], query));
+ }
+ 
+ static void lyricReply(NSNumber *songID, BOOL translation, BOOL qrc, void (^done)(NSDictionary *data)) {
+     NSDictionary *request = @{@"music.musichallSong.PlayLyricInfo.GetPlayLyricInfo": @{
+         @"method": @"GetPlayLyricInfo", @"module": @"music.musichallSong.PlayLyricInfo",
+-        @"param": @{@"crypt": @0, @"qrc": qrc ? @1 : @0, @"trans": translation ? @1 : @0, @"songID": songID}}};
++        @"param": @{@"crypt": @0, @"qrc": qrc ? @1 : @0, @"trans": translation ? @1 : @0, @"roma": @1, @"songID": songID}}};
+     SGLyricsPostJSON([NSURL URLWithString:kMusicu], headers(), request, ^(id root) {
+         id value = [root isKindOfClass:NSDictionary.class]
+             ? root[@"music.musichallSong.PlayLyricInfo.GetPlayLyricInfo"] : nil;
+@@ -55,8 +57,8 @@ static NSString *decoded(NSDictionary *data, NSString *key) {
+     return bytes ? [[NSString alloc] initWithData:bytes encoding:NSUTF8StringEncoding] : nil;
+ }
+ 
+-static NSString *decodedQRC(NSDictionary *data) {
+-    NSString *hex = [data[@"lyric"] isKindOfClass:NSString.class] ? data[@"lyric"] : nil;
++static NSString *decodedQRCKey(NSDictionary *data, NSString *key) {
++    NSString *hex = [data[key] isKindOfClass:NSString.class] ? data[key] : nil;
+     if (!hex.length || hex.length > 2 * 1024 * 1024 || hex.length % 16) return nil;
+     NSMutableData *encrypted = [NSMutableData dataWithLength:hex.length / 2];
+     const char *source = hex.UTF8String;
+@@ -174,10 +176,16 @@ static SGLyricsResult *resultForLines(NSArray<SGKaraokeLine *> *lines) {
+ }
+ 
+ static void lyricsForSong(NSNumber *songID, void (^done)(SGLyricsResult *)) {
+-    lyricReply(songID, NO, YES, ^(NSDictionary *data) {
++    lyricReply(songID, YES, YES, ^(NSDictionary *data) {
+         dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+-            NSString *xml = decodedQRC(data);
++            NSString *xml = decodedQRCKey(data, @"lyric");
+             NSArray<SGKaraokeLine *> *lines = xml ? linesFromQRC(xml) : nil;
++            NSString *romaXML = decodedQRCKey(data, @"roma");
++            NSString *romaText = romaXML ?: decoded(data, @"roma");
++            NSArray *romanLines = linesFromQRC(romaText) ?: SGLyricsLinesFromLRC(romaText);
++            NSDictionary<NSNumber *, SGKaraokeLine *> *spoken = SGLyricsPronunciationMap(lines, lines, romanLines);
++            for (NSNumber *index in spoken) lines[index.unsignedIntegerValue].pronunciation = spoken[index];
++            SGLyricsLog(@"qqmusic: song %@ attached %lu pronunciation lines from QRC", songID, (unsigned long)spoken.count);
+             dispatch_async(dispatch_get_main_queue(), ^{
+                 if (lines.count) {
+                     SGLyricsLog(@"qqmusic: QRC %@ decoded %lu word timed lines", songID, (unsigned long)lines.count);
+@@ -185,10 +193,16 @@ static void lyricsForSong(NSNumber *songID, void (^done)(SGLyricsResult *)) {
+                     return;
+                 }
+                 SGLyricsLog(@"qqmusic: QRC %@ unavailable; trying LRC", songID);
+-                lyricReply(songID, NO, NO, ^(NSDictionary *lrcData) {
++                lyricReply(songID, YES, NO, ^(NSDictionary *lrcData) {
+                     NSString *lrc = decoded(lrcData, @"lyric");
+                     dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+                         SGLyricsResult *result = resultForLines(lrc ? SGLyricsLinesFromLRC(lrc) : nil);
++                        NSString *romaXML = decodedQRCKey(lrcData, @"roma");
++                        NSString *romaText = romaXML ?: decoded(lrcData, @"roma");
++                        NSArray *romanLines = linesFromQRC(romaText) ?: SGLyricsLinesFromLRC(romaText);
++                        NSDictionary<NSNumber *, SGKaraokeLine *> *spoken = SGLyricsPronunciationMap(result.karaokeLines, result.karaokeLines, romanLines);
++                        for (NSNumber *index in spoken) result.karaokeLines[index.unsignedIntegerValue].pronunciation = spoken[index];
++                        SGLyricsLog(@"qqmusic: song %@ attached %lu pronunciation lines from LRC", songID, (unsigned long)spoken.count);
+                         dispatch_async(dispatch_get_main_queue(), ^{ done(result); });
+                     });
+                 });
+@@ -288,7 +302,7 @@ static void tryLyrics(NSArray<NSDictionary *> *ids, NSUInteger index, SGLyricsQu
+     NSDictionary *song = ids[index];
+     lyricsForSong(song[@"id"], ^(SGLyricsResult *result) {
+         dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+-            BOOL verified = result && (matches(song, query) || SGLyricsRecordingMatches(query.referenceLines, result.karaokeLines));
++            BOOL verified = result && ((matches(song, query) && SGLyricsArtistMatchCount(singers(song), query.artist)) || SGLyricsRecordingMatches(query.referenceLines, result.karaokeLines));
+             dispatch_async(dispatch_get_main_queue(), ^{
+                 SGLyricsLog(@"qqmusic: candidate %@ title '%@' recording evidence %@", song[@"id"], song[@"title"], verified ? @"accepted" : @"rejected");
+                 if (verified) done(result);
+@@ -324,10 +338,11 @@ static void tryTranslations(NSArray<NSDictionary *> *songs, NSUInteger index, SG
+         NSString *translated = decoded(data, @"trans");
+         dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+             NSUInteger overlap = translated.length ? SGLyricsOriginalOverlap(target, original) : 0;
++            BOOL identity = SGLyricsArtistMatchCount(singers(song), query.artist) || SGLyricsRecordingMatches(target, SGLyricsLinesFromLRC(original));
+             dispatch_async(dispatch_get_main_queue(), ^{
+-                SGLyricsLog(@"qqmusic: translation candidate %@ title %@, %lu original lines match",
+-                      songID, song[@"title"], (unsigned long)overlap);
+-                if (overlap >= MIN((NSUInteger)2, target.count)) done(original, translated);
++                SGLyricsLog(@"qqmusic: translation candidate %@ title %@, %lu original lines match, recording identity %@",
++                      songID, song[@"title"], (unsigned long)overlap, identity ? @"accepted" : @"rejected");
++                if (identity && overlap >= MIN((NSUInteger)2, target.count)) done(original, translated);
+                 else tryTranslations(songs, index + 1, query, target, done);
+             });
+         });
+-- 
+2.34.1
+

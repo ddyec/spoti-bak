@@ -1,0 +1,6 @@
+tree e4a0c0e49c82e400b868df903ba07830c67f82c6
+parent 702daf6c95617be1a834984a3b0abdb9d46e1b3c
+author Codex <codex@users.noreply.github.com> 1790606423 +0800
+committer Codex <codex@users.noreply.github.com> 1790606423 +0800
+
+fix: match translated titles and keep lyrics processing off main

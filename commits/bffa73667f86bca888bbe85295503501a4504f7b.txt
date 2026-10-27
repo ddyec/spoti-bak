@@ -1,0 +1,6 @@
+tree e20d39577f9003acca099c2da4bc594e70acf750
+parent 2c175a7e7401fb1a05d047e493cd2ae098dc1513
+author Codex <codex@openai.com> 1792757168 +0000
+committer Codex <codex@openai.com> 1792757168 +0000
+
+test: parenthesize Objective-C format calls in localization assertions

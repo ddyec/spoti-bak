@@ -1,0 +1,6 @@
+tree 37c2830d033112015f168e9fa26c47cf77469622
+parent 78ee51343c64ea812850065d5f556bd5f8086f41
+author ddyec <89333385+ddyec@users.noreply.github.com> 1792558804 +0000
+committer ddyec <89333385+ddyec@users.noreply.github.com> 1792558804 +0000
+
+fix: continuously scale lyric canvas without clipping or delayed reflow

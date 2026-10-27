@@ -1,0 +1,1156 @@
+From 9751e54dbd32920ef3c6a81a439675ab7bb616e8 Mon Sep 17 00:00:00 2001
+From: ddyec <89333385+ddyec@users.noreply.github.com>
+Date: Wed, 21 Oct 2026 02:32:05 +0000
+Subject: [PATCH] feat: diagnose repeated operations and preserve lyric motion
+ continuity
+
+---
+ .github/workflows/performance-checks.yml      |  57 +++++
+ docs/performance-review-2026-10-21.md         |  89 +++++++
+ harness/player/build.sh                       |   3 +-
+ harness/player/main.m                         |  35 +++
+ harness/player/stubs.m                        |   4 +
+ scripts/test-performance.c                    |  25 ++
+ scripts/test-performance.sh                   |   7 +
+ tweak/Makefile                                |   3 +-
+ tweak/Sources/App/ModSettings.x               |   4 +
+ .../Sources/App/Performance/PerformancePage.h |   2 +
+ .../Sources/App/Performance/PerformancePage.m |  64 +++++
+ tweak/Sources/Diagnostics/SGPerformance.h     |  20 ++
+ tweak/Sources/Diagnostics/SGPerformance.m     | 241 ++++++++++++++++++
+ tweak/Sources/Diagnostics/SGPerformanceMath.h |  40 +++
+ tweak/Sources/Redesigned/Kit/SGRWarp.m        |   4 +-
+ .../Redesigned/NowPlayingBar/NowPlayingBar.x  |  25 +-
+ tweak/Sources/Redesigned/Player/Player.h      |   1 +
+ .../Sources/Redesigned/Player/PlayerArtwork.x |  16 +-
+ .../Sources/Redesigned/Player/PlayerLyrics.x  |  70 +++--
+ .../Sources/Redesigned/Player/PlayerPreview.x |  29 ++-
+ 20 files changed, 710 insertions(+), 29 deletions(-)
+ create mode 100644 .github/workflows/performance-checks.yml
+ create mode 100644 docs/performance-review-2026-10-21.md
+ create mode 100644 scripts/test-performance.c
+ create mode 100644 scripts/test-performance.sh
+ create mode 100644 tweak/Sources/App/Performance/PerformancePage.h
+ create mode 100644 tweak/Sources/App/Performance/PerformancePage.m
+ create mode 100644 tweak/Sources/Diagnostics/SGPerformance.h
+ create mode 100644 tweak/Sources/Diagnostics/SGPerformance.m
+ create mode 100644 tweak/Sources/Diagnostics/SGPerformanceMath.h
+
+diff --git a/.github/workflows/performance-checks.yml b/.github/workflows/performance-checks.yml
+new file mode 100644
+index 0000000000000000000000000000000000000000..4f49e14d7cedfb2362b246397555d17655b1be3b
+--- /dev/null
++++ b/.github/workflows/performance-checks.yml
+@@ -0,0 +1,57 @@
++name: Performance and lyric motion checks
++
++on:
++  push:
++    branches: [feat/performance-diagnostics-20261021]
++  workflow_dispatch:
++
++permissions:
++  contents: read
++
++concurrency:
++  group: performance-checks-${{ github.ref }}
++  cancel-in-progress: true
++
++env:
++  THEOS: ${{ github.workspace }}/theos
++
++jobs:
++  check:
++    runs-on: macos-15-intel
++    timeout-minutes: 45
++    steps:
++      - uses: actions/checkout@v5
++      - uses: maxim-lobanov/setup-xcode@v1
++        with:
++          xcode-version: latest-stable
++      - name: Regression checks
++        run: |
++          bash scripts/test-performance.sh
++          scripts/check-layers.sh
++          python3 scripts/test-lyrics-identity.py
++          python3 scripts/test-lyrics-order.py
++          python3 scripts/test-lyrics-requests.py
++      - uses: actions/checkout@v5
++        with:
++          repository: theos/theos
++          path: theos
++          submodules: recursive
++      - name: Install compiler tools
++        run: brew install make dpkg ldid
++      - name: Read verified input flags without modifying the IPA
++        run: |
++          mkdir -p ipa
++          curl -fL --retry 3 https://github.com/ddyec/python38/releases/download/22/com.spotify.client_9.1.78_und3fined.2.ipa -o ipa/spotify.ipa
++          echo 'dc1706972885217081b3a9debcf07e3a5762a5d59ef5873aa2533ebd8bd719b5  ipa/spotify.ipa' | shasum -a 256 -c -
++          python3 scripts/extract-flags.py ipa/spotify.ipa
++      - name: Compile the full tweak
++        run: gmake -C tweak package
++      - name: Compile the player animation harness
++        env:
++          HARNESS_ARCH: x86_64
++        run: sh harness/player/build.sh
++      - uses: actions/upload-artifact@v5
++        with:
++          name: performance-source-build
++          path: tweak/packages/*.deb
++          if-no-files-found: error
+diff --git a/docs/performance-review-2026-10-21.md b/docs/performance-review-2026-10-21.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..6aa57615c3bc7257802699bfb8f053149cfa9e89
+--- /dev/null
++++ b/docs/performance-review-2026-10-21.md
+@@ -0,0 +1,89 @@
++# Repeated operations and lyric motion
++
++Baseline: `b522102` (`fix/native-missing-lyrics-roll-20261020`), retaining its
++custom QQ/KuGou and native-missing lyric behavior. EEVEE was inspected at
++`fb0dc75` (`feat/ev1-spoti-companion-20261019`). This is a source review and
++optimization, not a new IPA patching chain. Existing packaging is unchanged.
++
++## Findings backed by call paths
++
++| Operation | Existing behavior | Change |
++| --- | --- | --- |
++| Now-playing bar styling | Both container and child `viewDidLayoutSubviews` call `styleNowPlayingBar` on the same tree, including background and card walks | Coalesce requests per container until the next main-queue turn; tree changes in later passes are still processed |
++| Full lyric geometry | Player, information, duration and floating units each call `replace` | Coalesce their requests into one application after layout; animation completion still reconciles geometry |
++| Lyric grace checks | Each track change queues two callbacks; old callbacks can act on the next track | Only the newest generation may update availability or close the lyrics |
++| Preview cover transform | Clearing an already empty `(nil, 0)` lift fails the string-only equality check and rescales covers repeatedly | Treat identical pointers, including nil, as equal; skip unchanged cover/shadow transforms |
++| Preview timers | A view still in a window keeps its 250 ms timer in the background; visible paused text keeps a display link | Stop both on inactive/background and restart in foreground; run the word display link only during playback |
++| Full lyric reversal | Every toggle resets thumb/line starting states; any old completion can clear `sg_moving` and remove the overlay | Retarget from current motion and ignore superseded completions |
++| Opening while pausing | Overlay uses the cover's model target, although its spring is still visibly shrinking | Read the presentation geometry for the opening stand-in |
++
++The bar/layout coalescing defers work by one main-queue turn. The player harness
++must check initial appearance and transitions; no blanket cache skips future
++layout passes. Counter rows expose requests versus actual applications.
++
++## What is already deduplicated
++
++`SGLyricsFetch` uses `sg_waiting` to combine simultaneous requests for the same
++source cache key. `SGKaraokeRequestLyrics` tracks pending requests and retries.
++The two EEVEE URLSession delegates are different delivery paths; duplicated
++source text alone is not evidence that a response is processed twice. They must
++not be removed indiscriminately.
++
++Native and Redesigned repaint hooks run under mutually exclusive UI gates.
++EV1's appearance/lyrics/gesture/flag groups are already inactive in its entry
++point; their source files alone do not establish ongoing duplicate work.
++Its two lyrics-only player-capture hooks still belonged to Premium groups on
++older-version paths. The separate companion branch moves them to the inactive
++lyrics group and stops starting global notification probes (`notifOn = true`).
++No main branch or installed app has been changed.
++
++## Visual acceptance takes priority
++
++Full cover travel keeps a critically damped spring (420 ms opening, 360 ms
++closing) because the picture moves across much of the player. Line entry is
++240 ms after 40 ms; exit is 160 ms. Fast reversals do not restart at a preset
++endpoint. Reduced Motion removes the spatial transition. Preview visibility
++fades independently; consecutive lyric lines still roll upward with no text
++crossfade and travel by their own height instead of the whole available gap.
++
++`HARNESS_SCENARIO=lyrics-interruptions` exercises open-close-open, close-open-close,
++repeated layout and opening during pause shrink. It checks attachment, final
++thumbnail size and cleanup. Those checks do not prove every animation frame
++looks natural; inspect a simulator recording and the actual Spotify player.
++
++## Performance diagnostics
++
++Mod Settings → Performance diagnostics is opt-in and works without FLEX. A
++utility timer sends at most one pending main-queue heartbeat every two seconds;
++inactive/background cancels it and invalidates old callbacks. CPU uses cumulative
++process Mach time (100% means one core); memory is physical footprint, in MiB.
++Main queue p95 is a sampled delay, not FPS or a count of all stalls.
++
++Save a baseline after at least 30 samples in one context (about 62 seconds).
++Context matches device model, iOS, Spotify, UI mode, power, thermal state,
++EEVEE presence and the selected test scenario. Match playback, scrolling,
++feature settings and EEVEE version manually; a baseline cannot infer workloads.
++Three non-overlapping 30-sample windows must exceed a relative and absolute
++limit to report a sustained regression: CPU +25% and +10 percentage points;
++memory +20% and +30 MiB; main-queue p95 +50% and +50 ms. Changing context or
++returning from background resets the window and streak. Baselines survive app
++upgrades and remain explicitly replaceable; no automatic rebaselining masks
++a slowdown.
++
++Keeps the latest 600 timestamped samples across launches in Application Support,
++with session/build identifiers and operation counters. Writes every 30 seconds
++and on lifecycle changes, off-main. Clear removes baseline, history and the
++temporary export. JSON export is manual. It contains no track titles, tokens or
++lyric text and is never automatically uploaded. Device CPU/GPU gains are not
++claimed without before/after measurements.
++
++## Verification
++
++- `bash scripts/test-performance.sh`: production summary/regression math.
++- `scripts/check-layers.sh`: architecture boundaries.
++- The macOS workflow runs existing lyric regressions, compiles the full tweak
++  using flags from the SHA-256 verified clean 9.1.78 IPA, and compiles the player
++  harness. The downloaded IPA is not modified or redistributed.
++- On iOS 26+ in Redesigned UI, inspect preview lines, full lyric open/close,
++  rapid reversal, pause/resume, track changes and Reduced Motion. Check Native
++  UI diagnostics separately. Record before/after runs in matching scenarios.
+diff --git a/harness/player/build.sh b/harness/player/build.sh
+index 4b35b836431b02d06f1b5e340962bb3956658434..df67098cb63f5981f78d8631d53c0a5b3af8fee4 100755
+--- a/harness/player/build.sh
++++ b/harness/player/build.sh
+@@ -13,7 +13,8 @@ for f in Redesigned/Player/PlayerLyrics.x Redesigned/Player/PlayerArtwork.x Rede
+ done
+ 
+ SDK=$(xcrun --sdk iphonesimulator --show-sdk-path)
+-xcrun -sdk iphonesimulator clang -target arm64-apple-ios17.0-simulator -fobjc-arc -g -O0 \
++HARNESS_ARCH=${HARNESS_ARCH:-arm64}
++xcrun -sdk iphonesimulator clang -target "$HARNESS_ARCH-apple-ios17.0-simulator" -fobjc-arc -g -O0 \
+     -I"$SRC" -I"$SRC/Redesigned/Player" -I"$SRC/Redesigned/Kit" -I"$OUT/gen" -isysroot "$SDK" \
+     -Wno-deprecated-declarations \
+     "$(dirname "$0")/main.m" "$(dirname "$0")/stubs.m" "$(dirname "$0")/touches.m" \
+diff --git a/harness/player/main.m b/harness/player/main.m
+index f2b81c43a47441b40a9cffca8ebbdffa23efe9c7..02c218ba4e0418317255dd15d58c9fb0956bb9d3 100644
+--- a/harness/player/main.m
++++ b/harness/player/main.m
+@@ -45,6 +45,7 @@ extern NSMutableDictionary<NSString *, NSURL *> *SGRHarnessAppleClips;
+ extern NSMutableDictionary<NSString *, NSNumber *> *SGRHarnessClipDelays;
+ NSUInteger SGRHarnessLineSeeks(void);
+ NSUInteger SGRHarnessSkipTaps(void);
++static UIView *viewOfClass(UIView *root, NSString *name);
+ 
+ static NSString *scenario(void) {
+     const char *value = getenv("HARNESS_SCENARIO");
+@@ -656,6 +657,7 @@ static void loadLyrics(void) {
+     else if ([scenario() isEqualToString:@"fluid"]) [self runFluid];
+     else if ([scenario() isEqualToString:@"animated"]) [self runAnimated];
+     else if ([scenario() isEqualToString:@"taps"]) [self runTaps];
++    else if ([scenario() isEqualToString:@"lyrics-interruptions"]) [self runLyricsInterruptions];
+     // Opened, closed and opened again, so a screenshot can be taken of each state and of the move itself.
+     else for (NSNumber *at in @[@2, @6, @10]) {
+         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(at.doubleValue * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+@@ -1022,6 +1024,39 @@ static UIView *viewOfClass(UIView *root, NSString *name);
+     after(8.4, ^{ [self showOnScreen:second]; });
+ }
+ 
++// Exercise the real lyrics transition with reversals faster than its completion and repeated layouts.
++// Keep the player mock's geometry fixed so jumps and stale cleanup are observable in the video.
++- (void)runLyricsInterruptions {
++    after(2, ^{ SGRPlayerToggleLyrics(); });
++    after(2.12, ^{ SGRPlayerToggleLyrics(); [self layOut]; });
++    after(2.24, ^{ SGRPlayerToggleLyrics(); [self layOut]; });
++    after(3, ^{
++        UIView *overlay = viewOfClass(self.window, @"SGRPlayerLyricsOverlay");
++        UIView *thumb = viewOfClass(self.window, @"SGRPlayerLyricsThumb");
++        [self expect:SGRPlayerLyricsOpen() && overlay.window && thumb.window
++                that:@"rapid open-close-open keeps the current overlay attached"];
++        [self expect:fabs([self.window convertRect:thumb.bounds fromView:thumb].size.width - 72) < 1
++                that:@"thumbnail settles at 72 points after reversal"];
++    });
++    after(4, ^{ SGRPlayerToggleLyrics(); });
++    after(4.12, ^{ SGRPlayerToggleLyrics(); });
++    after(4.24, ^{ SGRPlayerToggleLyrics(); [self layOut]; });
++    after(5, ^{
++        [self expect:!SGRPlayerLyricsOpen() && !viewOfClass(self.window, @"SGRPlayerLyricsOverlay")
++                that:@"rapid close-open-close removes only the finished overlay"];
++    });
++    after(6, ^{
++        SGRHarnessSetTrackWith(@"spotify:track:harnessA", imageURI(@"aaaa"), YES, nil, nil);
++    });
++    after(6.12, ^{ SGRPlayerToggleLyrics(); });
++    after(7, ^{
++        [self expect:SGRPlayerLyricsOpen() that:@"lyrics open during paused-cover shrink"];
++        NSLog(@"[harness] lyrics interruption checks: %lu of %lu right -- %@",
++            (unsigned long)(self->_checks - self->_failures), (unsigned long)self->_checks,
++            self->_failures ? @"FAIL" : @"PASS");
++    });
++}
++
+ #pragma mark - taps
+ 
+ static UIView *findView(UIView *root, BOOL (^match)(UIView *view)) {
+diff --git a/harness/player/stubs.m b/harness/player/stubs.m
+index 1b06403640c25e9c0ddb453f9013bfc8920bc9e1..429ed90c4ebe5309694e241da5c2431aaf80cd84 100644
+--- a/harness/player/stubs.m
++++ b/harness/player/stubs.m
+@@ -10,6 +10,10 @@
+ #import "Shared/LockScreenArtwork/SGCanvas.h"
+ #import "Headers/SPTPlayer.h"
+ #import "Shared/Player/PlayerState.h"
++#import "Diagnostics/SGPerformance.h"
++
++// The harness measures animation behavior; on-device collection is compiled by the full tweak build.
++void SGPerformanceCount(SGPerformanceEvent event) {}
+ 
+ #pragma mark - SGRAccent.x, SGRRepaint.x
+ 
+diff --git a/scripts/test-performance.c b/scripts/test-performance.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..2f6fd7bce2c948717d82474623d11898e9c14793
+--- /dev/null
++++ b/scripts/test-performance.c
+@@ -0,0 +1,25 @@
++#include "../tweak/Sources/Diagnostics/SGPerformanceMath.h"
++#include <assert.h>
++#include <stdio.h>
++
++int main(void) {
++    SGPerfPoint points[35];
++    for (size_t i = 0; i < 35; i++) points[i] = (SGPerfPoint){20, 100, (double)i};
++    SGPerfSummary base = SGPerfSummarize(points, 30);
++    assert(base.count == 30 && base.cpu == 20 && base.memory == 100 && base.p95 == 28);
++    SGPerfSummary tail = SGPerfSummarize(points, 35);
++    assert(tail.count == 30 && tail.p95 == 33);
++    assert(!SGPerfRegressed(base, base));
++    SGPerfSummary high = base;
++    high.cpu = 31; assert(SGPerfRegressed(high, base));
++    high.cpu = 29; assert(!SGPerfRegressed(high, base));
++    high = base; high.memory = 131; assert(SGPerfRegressed(high, base));
++    high.memory = 129; assert(!SGPerfRegressed(high, base));
++    high = base; high.p95 = 79; assert(SGPerfRegressed(high, base));
++    high.p95 = 77; assert(!SGPerfRegressed(high, base));
++    high.count = 29; assert(!SGPerfRegressed(high, base));
++    points[0].cpu = NAN; points[1].memory = 0; points[2].delay = -1;
++    assert(SGPerfSummarize(points, 30).count == 27);
++    assert(SGPerfSummarize(points, 0).count == 0);
++    puts("PASS: percentile, bounded window, invalid counters, relative/absolute regression limits");
++}
+diff --git a/scripts/test-performance.sh b/scripts/test-performance.sh
+new file mode 100644
+index 0000000000000000000000000000000000000000..1daeace78a8630358e1d29280ef9f7deebf886cd
+--- /dev/null
++++ b/scripts/test-performance.sh
+@@ -0,0 +1,7 @@
++#!/usr/bin/env bash
++set -euo pipefail
++root="$(cd "$(dirname "$0")/.." && pwd)"
++binary="$(mktemp)"
++trap 'rm -f "$binary"' EXIT
++cc -std=c11 -Wall -Wextra -Werror "$root/scripts/test-performance.c" -lm -o "$binary"
++"$binary"
+diff --git a/tweak/Makefile b/tweak/Makefile
+index 937c48e9d0d6e13a71ec5517c437237056bb3c6f..fa04feae3af615e9dc1fd5181051956d18b38758 100644
+--- a/tweak/Makefile
++++ b/tweak/Makefile
+@@ -15,7 +15,8 @@ TWEAK_NAME := spotifyglass
+ # Every source under Sources/, so a new feature needs no Makefile edit. Shared/Flags/SGFlagList.m
+ # is generated from the IPA by scripts/extract-flags.py.
+ spotifyglass_FILES := $(shell find Sources -name '*.m' -o -name '*.c' -o -name '*.x' -o -name '*.swift' | sort)
+-spotifyglass_CFLAGS := -fobjc-arc -ISources -DSG_VERSION=\"$(SG_VERSION)\"
++SG_BUILD_SHA := $(or $(shell git rev-parse --short=12 HEAD 2>/dev/null),local)
++spotifyglass_CFLAGS := -fobjc-arc -ISources -DSG_VERSION=\"$(SG_VERSION)\" -DSG_BUILD_SHA=\"$(SG_BUILD_SHA)\"
+ spotifyglass_FRAMEWORKS := UIKit QuartzCore UniformTypeIdentifiers MediaPlayer CoreImage AudioToolbox AVFoundation CoreHaptics Accelerate Network Metal
+ spotifyglass_LIBRARIES := z
+ # Runtime swizzling instead of Substrate so the dylib has no extra dependency inside the IPA.
+diff --git a/tweak/Sources/App/ModSettings.x b/tweak/Sources/App/ModSettings.x
+index d9fb52869922fbe5dcaa4a36e280ee819c30dee4..2c95f0ff492c5ae08b9b444efeeb0cbb5d95d581 100644
+--- a/tweak/Sources/App/ModSettings.x
++++ b/tweak/Sources/App/ModSettings.x
+@@ -28,6 +28,8 @@
+ #import "App/About/About.h"
+ #import "App/Donate/Donate.h"
+ #import "Pages.h"
++#import "App/Performance/PerformancePage.h"
++#import "Diagnostics/SGPerformance.h"
+ 
+ static const CGFloat kRowHeight = 56;
+ static char kRowKey, kInsetKey;
+@@ -88,6 +90,7 @@ static UIViewController *modSettingsPage(void) {
+         ]),
+         SGSection(nil, @[
+             pageRow(@"All flags", @"flag", ^UIViewController *{ return SGAllFlagsPage(); }),
++            pageRow(@"Performance diagnostics", @"gauge.with.dots.needle.50percent", ^UIViewController *{ return SGPerformancePage(); }),
+             mod,
+         ]),
+     ]];
+@@ -277,6 +280,7 @@ static SGModSettingsRow *ensureDrawerRow(UICollectionView *list) {
+ %end
+ 
+ %ctor {
++    dispatch_async(dispatch_get_main_queue(), ^{ SGPerformanceStart(); });
+     %init;
+     SGRequireClasses(@[@"_TtC21Settings_PlatformImpl26SettingsListViewController", @"_TtC23SideDrawer_ListPageImpl18ListViewController"]);
+     SGRegisterPages();
+diff --git a/tweak/Sources/App/Performance/PerformancePage.h b/tweak/Sources/App/Performance/PerformancePage.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..b20eacd8ced40282b943b4ff9413af8325b5c1c7
+--- /dev/null
++++ b/tweak/Sources/App/Performance/PerformancePage.h
+@@ -0,0 +1,2 @@
++#import <UIKit/UIKit.h>
++UIViewController *SGPerformancePage(void);
+diff --git a/tweak/Sources/App/Performance/PerformancePage.m b/tweak/Sources/App/Performance/PerformancePage.m
+new file mode 100644
+index 0000000000000000000000000000000000000000..bda07283337f4e6e1bf369486000b85256e9921e
+--- /dev/null
++++ b/tweak/Sources/App/Performance/PerformancePage.m
+@@ -0,0 +1,64 @@
++#import "PerformancePage.h"
++#import "Core/SGCore.h"
++#import "Settings/SGModPage.h"
++#import "Diagnostics/SGPerformance.h"
++
++static void message(NSString *title, NSString *text) {
++    UIAlertController *alert = [UIAlertController alertControllerWithTitle:title message:text preferredStyle:UIAlertControllerStyleAlert];
++    [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
++    [SGTopController() presentViewController:alert animated:YES completion:nil];
++}
++static SGModRow *metric(NSString *title, NSString *key, NSString *unit) {
++    return SGStatRow(title, ^NSString *{
++        NSDictionary *window = SGPerformanceSnapshot()[@"window"];
++        return [window[@"count"] unsignedIntegerValue] ? [NSString stringWithFormat:@"%.1f %@", [window[key] doubleValue], unit] : @"Waiting for samples";
++    });
++}
++UIViewController *SGPerformancePage(void) {
++    SGModRow *enabled = SGOptionRow(@"Record performance", @"Applies now. Samples every 2 seconds while Spotify is active.", SGKeyPerformance);
++    enabled.changed = ^(BOOL on) { SGPerformanceRefresh(); };
++    SGModRow *scenario = SGChoiceRow(@"Test scenario", @"Use the same activity when comparing builds.", SGKeyPerformanceScenario,
++        @[@"General use", @"Home scrolling", @"Player", @"Lyrics", @"Idle playback"], 0);
++    scenario.chosen = ^(NSInteger choice) { SGPerformanceRefresh(); };
++    SGModRow *baseline = SGActionRow(@"Save current baseline", @"After a minute of representative use, save the current window.", ^{
++        BOOL saved = SGPerformanceSaveBaseline();
++        message(saved ? @"Baseline saved" : @"More samples needed", saved ? @"Compare the same scenario and device conditions after your next change." : @"Enable recording and keep Spotify active in one scenario for at least 62 seconds.");
++    });
++    SGModRow *export = SGActionRow(@"Export performance history", @"JSON with build, device conditions, samples and baseline.", ^{
++        SGPerformanceExport(^(NSURL *file) {
++            if (!file) { message(@"Export failed", @"Could not write the performance report. Try again."); return; }
++            UIViewController *top = SGTopController();
++            UIActivityViewController *sheet = [[UIActivityViewController alloc] initWithActivityItems:@[file] applicationActivities:nil];
++            sheet.popoverPresentationController.sourceView = top.view;
++            sheet.popoverPresentationController.sourceRect = top.view.bounds;
++            [top presentViewController:sheet animated:YES completion:nil];
++        });
++    });
++    return [[SGModPage alloc] initWithTitle:@"Performance diagnostics" intro:nil sections:@[
++        SGSection(nil, @[enabled, scenario]),
++        SGNotedSection(@"Current one-minute window", @[
++            SGStatRow(@"Status", ^NSString *{ return SGPerformanceSnapshot()[@"status"]; }),
++            metric(@"Process CPU", @"cpu", @"% of one core"),
++            metric(@"Memory footprint", @"memory", @"MiB"),
++            metric(@"Main queue delay p95", @"p95", @"ms"),
++            SGStatRow(@"Retained samples", ^NSString *{ return [SGPerformanceSnapshot()[@"retained"] stringValue]; }),
++        ], @"CPU includes Spotify and all injected modules and can exceed 100%. Heartbeats sample responsiveness, not FPS or every short stall. Thermal state and Low Power Mode are recorded; a change starts a fresh window."),
++        SGNotedSection(@"Repeated operations", @[
++            SGStatRow(@"Bar passes / requests", ^NSString *{
++                NSDictionary *counts = SGPerformanceSnapshot()[@"operations"];
++                return [NSString stringWithFormat:@"%@ / %@", counts[@"bar_applied"], counts[@"bar_requests"]];
++            }),
++            SGStatRow(@"Lyrics passes / requests", ^NSString *{
++                NSDictionary *counts = SGPerformanceSnapshot()[@"operations"];
++                return [NSString stringWithFormat:@"%@ / %@", counts[@"lyrics_applied"], counts[@"lyrics_requests"]];
++            }),
++            SGStatRow(@"Stale lyric checks skipped", ^NSString *{ return [SGPerformanceSnapshot()[@"operations"][@"stale_lyrics_waits_skipped"] stringValue]; }),
++        ], @"Counts for this process while recording is active. Multiple layout requests in one pass share one application. Counts reset when history is cleared."),
++        SGSection(nil, @[
++            baseline,
++            SGStatRow(@"Baseline build", ^NSString *{ return SGPerformanceSnapshot()[@"baseline"][@"build"] ?: @"None"; }),
++            export,
++            SGActionRow(@"Clear history and baseline", @"Remove local measurements and start a fresh window.", ^{ SGPerformanceClear(); }),
++        ]),
++    ] footer:@"Stored locally; no automatic uploads. Keeps the most recent 600 samples across launches. A warning needs three consecutive one-minute windows above the baseline limits. Match scenario, iOS, Spotify, UI, device, power, thermal state and EEVEE profile. Other settings must be matched manually. Export before and after a change to investigate regressions."];
++}
+diff --git a/tweak/Sources/Diagnostics/SGPerformance.h b/tweak/Sources/Diagnostics/SGPerformance.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..66e827841d29fb956381ac82cdf2cf0d616dadf0
+--- /dev/null
++++ b/tweak/Sources/Diagnostics/SGPerformance.h
+@@ -0,0 +1,20 @@
++#import <Foundation/Foundation.h>
++
++#define SGKeyPerformance @"spotifyglass.performance.enabled"
++#define SGKeyPerformanceScenario @"spotifyglass.performance.scenario"
++
++typedef NS_ENUM(NSUInteger, SGPerformanceEvent) {
++    SGPerformanceBarRequested, SGPerformanceBarApplied,
++    SGPerformanceLyricsRequested, SGPerformanceLyricsApplied,
++    SGPerformanceStaleLyricsWait, SGPerformanceEventCount
++};
++// Constant-time, allocation-free counters; call on main. No work while collection is off.
++void SGPerformanceCount(SGPerformanceEvent event);
++
++// Main-thread API. Collection is opt-in, foreground-only and independent of FLEX.
++void SGPerformanceStart(void);
++void SGPerformanceRefresh(void);
++NSDictionary *SGPerformanceSnapshot(void);
++BOOL SGPerformanceSaveBaseline(void);
++void SGPerformanceClear(void);
++void SGPerformanceExport(void (^done)(NSURL *file));
+diff --git a/tweak/Sources/Diagnostics/SGPerformance.m b/tweak/Sources/Diagnostics/SGPerformance.m
+new file mode 100644
+index 0000000000000000000000000000000000000000..939904d4e8562e4abf02314292f3c05b534470a5
+--- /dev/null
++++ b/tweak/Sources/Diagnostics/SGPerformance.m
+@@ -0,0 +1,241 @@
++#import "SGPerformance.h"
++#import "SGPerformanceMath.h"
++#import "Core/SGCore.h"
++#import <mach-o/dyld.h>
++#import <mach/mach.h>
++#import <mach/mach_time.h>
++#import <sys/utsname.h>
++#import <stdatomic.h>
++#include <string.h>
++
++#ifndef SG_BUILD_SHA
++#define SG_BUILD_SHA "local"
++#endif
++
++static NSString *const kBaseline = @"spotifyglass.performance.baseline";
++static const NSUInteger kHistoryLimit = 600;
++static atomic_bool sg_pending;
++static BOOL sg_collecting;
++static uint64_t sg_events[SGPerformanceEventCount];
++
++void SGPerformanceCount(SGPerformanceEvent event) {
++    if (sg_collecting && event < SGPerformanceEventCount) sg_events[event]++;
++}
++
++static NSDictionary *eventCounts(void) {
++    return @{@"bar_requests": @(sg_events[SGPerformanceBarRequested]),
++        @"bar_applied": @(sg_events[SGPerformanceBarApplied]),
++        @"lyrics_requests": @(sg_events[SGPerformanceLyricsRequested]),
++        @"lyrics_applied": @(sg_events[SGPerformanceLyricsApplied]),
++        @"stale_lyrics_waits_skipped": @(sg_events[SGPerformanceStaleLyricsWait])};
++}
++
++static NSString *eeveeProfile(void) {
++    for (uint32_t i = 0; i < _dyld_image_count(); i++) {
++        const char *name = _dyld_get_image_name(i);
++        if (name && strcasestr(name, "eevee")) return @"loaded";
++    }
++    return @"absent";
++}
++
++@interface SGPerformanceMonitor : NSObject
++@property (nonatomic, strong) dispatch_source_t timer;
++@property (nonatomic, strong) dispatch_queue_t files;
++@property (nonatomic, strong) NSMutableArray<NSDictionary *> *history;
++@property (nonatomic, copy) NSDictionary *latest;
++@property (nonatomic, copy) NSString *session, *context;
++@property (nonatomic) SGPerfSummary summary;
++@property (nonatomic) NSUInteger generation, historyEpoch, windowCount, streak, sinceSave;
++@property (nonatomic) double lastTime, lastCPU;
++@property (nonatomic) BOOL regressed, loaded;
++- (void)refresh;
++- (void)persist;
++- (void)sample:(double)delay;
++@end
++
++static NSString *historyPath(void) {
++    return [NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES).firstObject
++        stringByAppendingPathComponent:@"spoti.pw/performance.json"];
++}
++
++static double cpuSeconds(void) {
++    task_absolutetime_info_data_t info;
++    mach_msg_type_number_t count = TASK_ABSOLUTETIME_INFO_COUNT;
++    if (task_info(mach_task_self(), TASK_ABSOLUTETIME_INFO, (task_info_t)&info, &count) != KERN_SUCCESS) return -1;
++    mach_timebase_info_data_t base;
++    mach_timebase_info(&base);
++    return ((double)info.total_user + info.total_system) * base.numer / base.denom / 1e9;
++}
++
++static NSDictionary *summaryJSON(SGPerfSummary s) {
++    return @{@"cpu": @(s.cpu), @"memory": @(s.memory), @"p95": @(s.p95), @"count": @(s.count)};
++}
++static SGPerfSummary readSummary(NSDictionary *s) {
++    return (SGPerfSummary){[s[@"cpu"] doubleValue], [s[@"memory"] doubleValue],
++        [s[@"p95"] doubleValue], [s[@"count"] unsignedIntegerValue]};
++}
++
++@implementation SGPerformanceMonitor {
++    SGPerfPoint _window[30];
++}
++- (instancetype)init {
++    if (!(self = [super init])) return nil;
++    _files = dispatch_queue_create("spotifyglass.performance.files", DISPATCH_QUEUE_SERIAL);
++    _history = [NSMutableArray array];
++    _session = NSUUID.UUID.UUIDString;
++    NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
++    for (NSString *name in @[UIApplicationDidBecomeActiveNotification, UIApplicationWillResignActiveNotification])
++        [center addObserver:self selector:@selector(refresh) name:name object:nil];
++    // Read bounded history off-main. Current-process samples always stay last.
++    dispatch_async(_files, ^{
++        NSDictionary *attrs = [NSFileManager.defaultManager attributesOfItemAtPath:historyPath() error:nil];
++        NSData *data = [attrs[NSFileSize] unsignedLongLongValue] <= 2 * 1024 * 1024 ? [NSData dataWithContentsOfFile:historyPath()] : nil;
++        id saved = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
++        NSArray *rows = [saved isKindOfClass:NSDictionary.class] && [saved[@"samples"] isKindOfClass:NSArray.class] ? saved[@"samples"] : @[];
++        if (rows.count > kHistoryLimit) rows = [rows subarrayWithRange:NSMakeRange(rows.count - kHistoryLimit, kHistoryLimit)];
++        dispatch_async(dispatch_get_main_queue(), ^{
++            // Clearing while the read was in flight must not resurrect deleted samples.
++            self.loaded = YES;
++            if (self.historyEpoch) { [self persist]; return; }
++            NSMutableArray *combined = [NSMutableArray arrayWithArray:rows];
++            [combined addObjectsFromArray:self.history];
++            if (combined.count > kHistoryLimit) [combined removeObjectsInRange:NSMakeRange(0, combined.count - kHistoryLimit)];
++            self.history = combined;
++            [self persist];
++        });
++    });
++    return self;
++}
++- (void)refresh {
++    sg_collecting = NO;
++    self.generation++;
++    if (self.timer) dispatch_source_cancel(self.timer);
++    self.timer = nil;
++    self.lastTime = 0;
++    self.windowCount = self.streak = 0;
++    self.summary = (SGPerfSummary){0};
++    self.regressed = NO;
++    [self persist];
++    if (!SGFlag(SGKeyPerformance, NO) || UIApplication.sharedApplication.applicationState != UIApplicationStateActive) return;
++    sg_collecting = YES;
++    NSUInteger generation = self.generation;
++    dispatch_source_t timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_global_queue(QOS_CLASS_UTILITY, 0));
++    self.timer = timer;
++    dispatch_source_set_timer(timer, dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC), 2 * NSEC_PER_SEC, NSEC_PER_SEC / 4);
++    dispatch_source_set_event_handler(timer, ^{
++        // At most one outstanding heartbeat, even during a long main-thread stall.
++        if (atomic_exchange(&sg_pending, true)) return;
++        double sent = CACurrentMediaTime();
++        dispatch_async(dispatch_get_main_queue(), ^{
++            atomic_store(&sg_pending, false);
++            if (generation != self.generation || UIApplication.sharedApplication.applicationState != UIApplicationStateActive) return;
++            [self sample:(CACurrentMediaTime() - sent) * 1000];
++        });
++    });
++    dispatch_resume(timer);
++}
++- (void)sample:(double)delay {
++    double now = CACurrentMediaTime(), cpu = cpuSeconds();
++    double elapsed = now - self.lastTime, previousCPU = self.lastCPU;
++    BOOL primed = self.lastTime > 0;
++    self.lastTime = now;
++    self.lastCPU = cpu;
++    if (!primed || cpu < 0 || previousCPU < 0 || cpu < previousCPU || elapsed <= 0) return;
++    task_vm_info_data_t vm;
++    mach_msg_type_number_t count = TASK_VM_INFO_COUNT;
++    if (task_info(mach_task_self(), TASK_VM_INFO, (task_info_t)&vm, &count) != KERN_SUCCESS) return;
++    NSProcessInfo *process = NSProcessInfo.processInfo;
++    NSString *profile = eeveeProfile();
++    struct utsname device;
++    uname(&device);
++    NSString *context = [NSString stringWithFormat:@"%s|%@|%@|%@|%d|%ld|%ld|%@", device.machine,
++        UIDevice.currentDevice.systemVersion,
++        [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"?",
++        SGRedesignedUI() ? @"redesigned" : @"native", process.lowPowerModeEnabled,
++        (long)process.thermalState, (long)[NSUserDefaults.standardUserDefaults integerForKey:SGKeyPerformanceScenario], profile];
++    if (![context isEqualToString:self.context]) {
++        self.context = context;
++        self.windowCount = self.streak = 0;
++        self.regressed = NO;
++    }
++    SGPerfPoint point = {(cpu - previousCPU) / elapsed * 100, vm.phys_footprint / 1048576.0, delay};
++    NSUInteger slot = self.windowCount % 30;
++    _window[slot] = point;
++    self.windowCount++;
++    self.summary = SGPerfSummarize(_window, MIN(self.windowCount, 30));
++    NSDictionary *baseline = [NSUserDefaults.standardUserDefaults dictionaryForKey:kBaseline];
++    BOOL comparable = [baseline[@"context"] isEqual:context];
++    // Three independent, non-overlapping one-minute windows avoid one spike setting an alarm.
++    if (self.windowCount % 30 == 0) {
++        self.streak = comparable && SGPerfRegressed(self.summary, readSummary(baseline[@"summary"])) ? self.streak + 1 : 0;
++        self.regressed = self.streak >= 3;
++    }
++    self.latest = @{@"time": @(NSDate.date.timeIntervalSince1970), @"session": self.session,
++        @"build": @(SG_BUILD_SHA), @"mod": @(SG_VERSION), @"context": context,
++        @"cpu": @(point.cpu), @"memory": @(point.memory), @"delay": @(point.delay),
++        @"regressed": @(self.regressed), @"operations": eventCounts()};
++    [self.history addObject:self.latest];
++    if (self.history.count > kHistoryLimit) [self.history removeObjectAtIndex:0];
++    if (++self.sinceSave >= 15) { self.sinceSave = 0; [self persist]; }
++}
++- (void)persist {
++    if (!self.loaded) return;
++    NSDictionary *report = @{@"schema": @1, @"samples": [self.history copy]};
++    dispatch_async(self.files, ^{
++        NSData *data = [NSJSONSerialization dataWithJSONObject:report options:0 error:nil];
++        NSString *path = historyPath();
++        [NSFileManager.defaultManager createDirectoryAtPath:path.stringByDeletingLastPathComponent
++            withIntermediateDirectories:YES attributes:nil error:nil];
++        [data writeToFile:path options:NSDataWritingAtomic error:nil];
++    });
++}
++@end
++
++static SGPerformanceMonitor *monitor(void) {
++    static SGPerformanceMonitor *value;
++    static dispatch_once_t once;
++    dispatch_once(&once, ^{ value = [SGPerformanceMonitor new]; });
++    return value;
++}
++void SGPerformanceStart(void) { [monitor() refresh]; }
++void SGPerformanceRefresh(void) { [monitor() refresh]; }
++NSDictionary *SGPerformanceSnapshot(void) {
++    SGPerformanceMonitor *m = monitor();
++    NSDictionary *baseline = [NSUserDefaults.standardUserDefaults dictionaryForKey:kBaseline];
++    NSString *status = !SGFlag(SGKeyPerformance, NO) ? @"Off" : !m.timer ? @"Paused" :
++        m.summary.count < 30 ? @"Collecting a one-minute window" : !baseline ? @"No baseline saved" :
++        ![baseline[@"context"] isEqual:m.context] ? @"Baseline context differs" : m.regressed ? @"Sustained regression detected" : @"Within baseline limits";
++    return @{@"status": status, @"latest": m.latest ?: @{}, @"window": summaryJSON(m.summary),
++        @"baseline": baseline ?: @{}, @"retained": @(m.history.count), @"operations": eventCounts()};
++}
++BOOL SGPerformanceSaveBaseline(void) {
++    SGPerformanceMonitor *m = monitor();
++    if (!m.timer || m.summary.count < 30) return NO;
++    [NSUserDefaults.standardUserDefaults setObject:@{@"summary": summaryJSON(m.summary), @"context": m.context,
++        @"build": @(SG_BUILD_SHA), @"time": @(NSDate.date.timeIntervalSince1970)} forKey:kBaseline];
++    m.streak = 0;
++    m.regressed = NO;
++    return YES;
++}
++void SGPerformanceClear(void) {
++    SGPerformanceMonitor *m = monitor();
++    m.historyEpoch++;
++    memset(sg_events, 0, sizeof(sg_events));
++    [m.history removeAllObjects];
++    m.latest = nil;
++    [NSUserDefaults.standardUserDefaults removeObjectForKey:kBaseline];
++    [m refresh];
++    dispatch_async(m.files, ^{
++        [NSFileManager.defaultManager removeItemAtPath:[NSTemporaryDirectory() stringByAppendingPathComponent:@"spoti-performance.json"] error:nil];
++    });
++}
++void SGPerformanceExport(void (^done)(NSURL *file)) {
++    SGPerformanceMonitor *m = monitor();
++    NSDictionary *report = @{@"schema": @1, @"snapshot": SGPerformanceSnapshot(), @"samples": [m.history copy]};
++    dispatch_async(m.files, ^{
++        NSData *data = [NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil];
++        NSURL *file = [NSURL fileURLWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:@"spoti-performance.json"]];
++        BOOL ok = [data writeToURL:file options:NSDataWritingAtomic error:nil];
++        dispatch_async(dispatch_get_main_queue(), ^{ done(ok ? file : nil); });
++    });
++}
+diff --git a/tweak/Sources/Diagnostics/SGPerformanceMath.h b/tweak/Sources/Diagnostics/SGPerformanceMath.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..7244dbb6456baf42b0ed38bb45990bb07befa467
+--- /dev/null
++++ b/tweak/Sources/Diagnostics/SGPerformanceMath.h
+@@ -0,0 +1,40 @@
++#pragma once
++#include <math.h>
++#include <stdbool.h>
++#include <stddef.h>
++#include <stdlib.h>
++
++typedef struct { double cpu, memory, delay; } SGPerfPoint;
++typedef struct { double cpu, memory, p95; size_t count; } SGPerfSummary;
++static inline int SGPerfCompare(const void *a, const void *b) {
++    double x = *(const double *)a, y = *(const double *)b;
++    return (x > y) - (x < y);
++}
++// A fixed one-minute window. Reject invalid counters instead of reporting false improvements.
++static inline SGPerfSummary SGPerfSummarize(const SGPerfPoint *points, size_t count) {
++    SGPerfSummary result = {0};
++    double delays[30];
++    if (count > 30) { points += count - 30; count = 30; }
++    for (size_t i = 0; i < count; i++) {
++        SGPerfPoint p = points[i];
++        if (!isfinite(p.cpu) || !isfinite(p.memory) || !isfinite(p.delay) ||
++            p.cpu < 0 || p.memory <= 0 || p.delay < 0) continue;
++        result.cpu += p.cpu;
++        result.memory += p.memory;
++        delays[result.count++] = p.delay;
++    }
++    if (result.count) {
++        result.cpu /= result.count;
++        result.memory /= result.count;
++        qsort(delays, result.count, sizeof(double), SGPerfCompare);
++        result.p95 = delays[(size_t)ceil(result.count * 0.95) - 1];
++    }
++    return result;
++}
++// Relative AND absolute floors prevent near-zero baselines producing noisy warnings.
++static inline bool SGPerfRegressed(SGPerfSummary current, SGPerfSummary baseline) {
++    return current.count >= 30 && baseline.count >= 30 &&
++        ((current.cpu > baseline.cpu * 1.25 && current.cpu > baseline.cpu + 10) ||
++         (current.memory > baseline.memory * 1.20 && current.memory > baseline.memory + 30) ||
++         (current.p95 > baseline.p95 * 1.50 && current.p95 > baseline.p95 + 50));
++}
+diff --git a/tweak/Sources/Redesigned/Kit/SGRWarp.m b/tweak/Sources/Redesigned/Kit/SGRWarp.m
+index 06fcf20bed416dd9f8fb068272f2b46b2bb22e86..66e85bb8e2ce2dd8d7ba562174690ed16da7ed0c 100644
+--- a/tweak/Sources/Redesigned/Kit/SGRWarp.m
++++ b/tweak/Sources/Redesigned/Kit/SGRWarp.m
+@@ -662,6 +662,7 @@ static NSUInteger sg_costLogs;
+     NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
+     for (NSNotificationName name in @[UIApplicationDidBecomeActiveNotification, UIApplicationWillResignActiveNotification,
+                                       UIApplicationDidEnterBackgroundNotification, UIApplicationWillEnterForegroundNotification,
++                                      NSProcessInfoPowerStateDidChangeNotification, NSProcessInfoThermalStateDidChangeNotification,
+                                       UIAccessibilityReduceMotionStatusDidChangeNotification]) {
+         [center addObserver:self selector:@selector(updatePace) name:name object:nil];
+     }
+@@ -686,7 +687,8 @@ static NSUInteger sg_costLogs;
+     SGRWarpPace pace = SGRWarpPaceMoving;
+     if (!self.window || state == UIApplicationStateBackground) pace = SGRWarpPaceHidden;
+     else if (state != UIApplicationStateActive) pace = SGRWarpPaceFrozen;
+-    else if (SGRReduceMotion()) pace = SGRWarpPaceStill;
++    else if (SGRReduceMotion() || NSProcessInfo.processInfo.lowPowerModeEnabled ||
++             NSProcessInfo.processInfo.thermalState >= NSProcessInfoThermalStateSerious) pace = SGRWarpPaceStill;
+     self.warpLayer.pace = pace;
+ }
+ 
+diff --git a/tweak/Sources/Redesigned/NowPlayingBar/NowPlayingBar.x b/tweak/Sources/Redesigned/NowPlayingBar/NowPlayingBar.x
+index 599d5508cec421e1ace5a21ed9123dd5b90b36e1..67b14765b55d5a273d6eb1a95da198afc79d0513 100644
+--- a/tweak/Sources/Redesigned/NowPlayingBar/NowPlayingBar.x
++++ b/tweak/Sources/Redesigned/NowPlayingBar/NowPlayingBar.x
+@@ -15,9 +15,10 @@
+ #import "Redesigned/Kit/SGRRepaint.h"
+ #import "Redesigned/Navbar/Navbar.h"
+ #import "NowPlayingBar.h"
++#import "Diagnostics/SGPerformance.h"
+ 
+ static const CGFloat kCardRadius = 24;
+-static char kGlassKey;
++static char kGlassKey, kStyleQueuedKey;
+ static __weak UIVisualEffectView *sg_cardGlass;
+ static __weak UIView *sg_cardArtwork;
+ static __weak UIView *sg_barContainer;
+@@ -205,10 +206,28 @@ static void styleNowPlayingBar(UIViewController *container) {
+     });
+ }
+ 
++// Parent and child both lay out in one UIKit pass. Walk their shared tree once after that pass.
++// The marker is per container, so a newly created bar never loses its first style pass.
++static void scheduleBarStyle(UIViewController *container) {
++    SGPerformanceCount(SGPerformanceBarRequested);
++    if (!container || objc_getAssociatedObject(container, &kStyleQueuedKey)) return;
++    objc_setAssociatedObject(container, &kStyleQueuedKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++    __weak UIViewController *weakContainer = container;
++    dispatch_async(dispatch_get_main_queue(), ^{
++        UIViewController *current = weakContainer;
++        if (!current) return;
++        objc_setAssociatedObject(current, &kStyleQueuedKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++        if (current.viewIfLoaded.window) {
++            SGPerformanceCount(SGPerformanceBarApplied);
++            styleNowPlayingBar(current);
++        }
++    });
++}
++
+ %hook _TtC18NowPlaying_BarImpl36NowPlayingBarContainerViewController
+ - (void)viewDidLayoutSubviews {
+     %orig;
+-    styleNowPlayingBar((UIViewController *)self);
++    scheduleBarStyle((UIViewController *)self);
+ }
+ %end
+ 
+@@ -216,7 +235,7 @@ static void styleNowPlayingBar(UIViewController *container) {
+ - (void)viewDidLayoutSubviews {
+     %orig;
+     UIViewController *parent = ((UIViewController *)self).parentViewController;
+-    if ([NSStringFromClass(parent.class) containsString:@"NowPlayingBarContainer"]) styleNowPlayingBar(parent);
++    if ([NSStringFromClass(parent.class) containsString:@"NowPlayingBarContainer"]) scheduleBarStyle(parent);
+ }
+ %end
+ 
+diff --git a/tweak/Sources/Redesigned/Player/Player.h b/tweak/Sources/Redesigned/Player/Player.h
+index bb9014772e36ca6649abd0fbfe7c58f90116c6b1..b21cd4329eb30b8eedebc670999441d7ee73be76 100644
+--- a/tweak/Sources/Redesigned/Player/Player.h
++++ b/tweak/Sources/Redesigned/Player/Player.h
+@@ -97,6 +97,7 @@ UIView *SGRPlayerCoverList(void);
+ CGRect SGRPlayerCoverFrameIn(UIView *host);
+ // A preview-only vertical compensation; the upstream paused scale is unchanged.
+ CGFloat SGRPlayerPreviewLift(void);
++CGRect SGRPlayerCoverPresentationFrameIn(UIView *host);
+ void SGRPlayerSetPreviewLift(NSString *trackID, CGFloat lift);
+ // The band that cover sits in -- the room the player gives its artwork, between the header row and the
+ // title -- in `host`'s coordinates; CGRectNull when no cover has laid out.
+diff --git a/tweak/Sources/Redesigned/Player/PlayerArtwork.x b/tweak/Sources/Redesigned/Player/PlayerArtwork.x
+index d68784cb540a1a14114b687db5fa617378d09422..f52b9546e12536752bf24ae917507f103cf19602 100644
+--- a/tweak/Sources/Redesigned/Player/PlayerArtwork.x
++++ b/tweak/Sources/Redesigned/Player/PlayerArtwork.x
+@@ -66,8 +66,8 @@ static void scaleCover(UIView *tilt, CGFloat scale) {
+     SGRShadowPlate *plate = SGRShadowPlateIn(tilt, &kPlateKey);
+     CGAffineTransform transform = CGAffineTransformMakeScale(scale, scale);
+     transform.ty = -SGRPlayerPreviewLift();
+-    cover.transform = transform;
+-    plate.transform = transform;
++    if (!CGAffineTransformEqualToTransform(cover.transform, transform)) cover.transform = transform;
++    if (!CGAffineTransformEqualToTransform(plate.transform, transform)) plate.transform = transform;
+ }
+ 
+ #pragma mark - where the cover is
+@@ -98,6 +98,16 @@ CGRect SGRPlayerCoverFrameIn(UIView *host) {
+     return cover && host ? [host convertRect:cover.bounds fromView:cover] : CGRectNull;
+ }
+ 
++// The lyrics can open halfway through the paused-cover spring. Start their stand-in at the
++// picture currently on screen, rather than the model layer's already-final paused size.
++CGRect SGRPlayerCoverPresentationFrameIn(UIView *host) {
++    UIView *cover = coverIn(showingTilt());
++    if (!cover || !host) return CGRectNull;
++    CALayer *shown = (CALayer *)cover.layer.presentationLayer;
++    CALayer *target = (CALayer *)host.layer.presentationLayer;
++    return shown && target ? [shown convertRect:shown.bounds toLayer:target] : SGRPlayerCoverFrameIn(host);
++}
++
+ CGRect SGRPlayerArtworkAreaIn(UIView *host) {
+     UIView *tilt = showingTilt();
+     if (!tilt || !host) return CGRectNull;
+@@ -191,7 +201,7 @@ static void scaleEveryCover(BOOL animated) {
+ 
+ void SGRPlayerSetPreviewLift(NSString *trackID, CGFloat lift) {
+     lift = MAX(0, lift);
+-    if ([sg_previewLiftTrack isEqualToString:trackID] && fabs(sg_previewLift - lift) < 0.5) return;
++    if ((sg_previewLiftTrack == trackID || [sg_previewLiftTrack isEqualToString:trackID]) && fabs(sg_previewLift - lift) < 0.5) return;
+     sg_previewLiftTrack = [trackID copy]; sg_previewLift = lift;
+     scaleEveryCover(NO);
+ }
+diff --git a/tweak/Sources/Redesigned/Player/PlayerLyrics.x b/tweak/Sources/Redesigned/Player/PlayerLyrics.x
+index c2a979646973f9e70863412bc3efb80beedc3790..c360a73999b138a276704c131259d2b082cb50fe 100644
+--- a/tweak/Sources/Redesigned/Player/PlayerLyrics.x
++++ b/tweak/Sources/Redesigned/Player/PlayerLyrics.x
+@@ -53,6 +53,7 @@
+ #import "Shared/Lyrics/Lyrics.h"
+ #import "Shared/Sing/SGSingController.h"
+ #import "Player.h"
++#import "Diagnostics/SGPerformance.h"
+ 
+ static const CGFloat kThumbSide = 72;          // the cover once the lyrics are up
+ static const CGFloat kThumbGap = 16;           // between the thumbnail and the title beside it
+@@ -64,7 +65,9 @@ static const CGFloat kLyricsBottom = 8;        // above the progress bar
+ // The lines are a surface arriving, not something moving: they come up from just under full size as the
+ // room for them opens, and go at once when it closes. An exit the eye waits through reads as a stall.
+ static const CGFloat kLyricsEnterScale = 0.96;
+-static const NSTimeInterval kLyricsIn = 0.3, kLyricsInDelay = 0.12, kLyricsOut = 0.16;
++static const NSTimeInterval kLyricsIn = 0.24, kLyricsInDelay = 0.04, kLyricsOut = 0.16;
++// The cover crosses most of the player: give the travel room to settle, rather than a short snap.
++static const NSTimeInterval kCoverOpen = 0.42, kCoverClose = 0.36;
+ // A track that changes while the lines are up has this long to bring its own before they are put away.
+ static const NSTimeInterval kLyricsGrace = 3;
+ // Below this the player has not laid out yet and nothing can be measured from it.
+@@ -81,6 +84,9 @@ static const CGFloat kThumbAppearScale = 0.8;
+ static char kOverlayKey, kPlateKey, kTitleKey, kWatcherKey;
+ static BOOL sg_open;
+ static BOOL sg_moving;                      // the transition is in flight, so no layout pass may re-place it
++static NSUInteger sg_motionGeneration, sg_lyricsWaitGeneration;
++static BOOL sg_replaceQueued;
++static void replace(void);
+ static BOOL sg_alone;                       // the controls are away and the lines have the player
+ static BOOL sg_tapBroughtBack;              // the touch going on began with them away, so its tap seeks nowhere
+ static NSTimer *sg_aloneTimer;
+@@ -560,6 +566,12 @@ static void setOpen(BOOL open, BOOL animated) {
+         setAlone(NO, animated);
+         stopAloneTimer();
+     }
++    BOOL reversing = sg_moving;
++    if (open && !reversing) {
++        CGRect visibleCover = SGRPlayerCoverPresentationFrameIn(host);
++        if (!CGRectIsNull(visibleCover) && !CGRectIsEmpty(visibleCover)) l.cover = visibleCover;
++    }
++    NSUInteger generation = ++sg_motionGeneration;
+     sg_open = open;
+     SGRPlayerLyricsChanged();
+     SGRPlayerAnimatedFollowLyrics(open, animated);
+@@ -572,16 +584,21 @@ static void setOpen(BOOL open, BOOL animated) {
+     CGAffineTransform small = CGAffineTransformConcat(CGAffineTransformMakeScale(kThumbAppearScale, kThumbAppearScale), away);
+     CGAffineTransform full = inPlace ? small : CGAffineTransformIdentity;
+     // The state it starts from, so the animation has both ends of every value and nothing jumps into it.
+-    overlay.thumb.transform = open ? full : away;
+-    overlay.cover.layer.cornerRadius = thumbRadius(l, inPlace || !open);
++    // A reversal retargets the visible animation; resetting its model to an endpoint causes a jump.
++    if (!reversing) {
++        overlay.thumb.transform = open ? full : away;
++        overlay.cover.layer.cornerRadius = thumbRadius(l, inPlace || !open);
++    }
+     if (open) {
+-        overlay.thumb.alpha = inPlace ? 0 : 1;
+-        overlay.cover.image = SGRNowPlayingArtwork(NULL, NULL);
+-        overlay.stage.alpha = 0;
+-        overlay.stage.transform = CGAffineTransformMakeScale(kLyricsEnterScale, kLyricsEnterScale);
++        if (!reversing) {
++            overlay.thumb.alpha = inPlace ? 0 : 1;
++            overlay.stage.alpha = 0;
++            overlay.stage.transform = CGAffineTransformMakeScale(kLyricsEnterScale, kLyricsEnterScale);
++        }
++        overlay.cover.image = picture;
+         [overlay.lyrics setLineInsets:bandOf(l, NO) duration:0];
+         placeSing(overlay, l);
+-        sg_sing.alpha = 0;
++        if (!reversing) sg_sing.alpha = 0;
+         // Spotify's cover goes the moment the redesign's own takes its place: the same picture at the
+         // same size with the same corners, so there is nothing to see in the swap. Coming back it waits
+         // for the thumbnail to land on it, or the two would be on screen at once, one of them half size.
+@@ -602,22 +619,26 @@ static void setOpen(BOOL open, BOOL animated) {
+         sg_sing.alpha = open ? 1 : 0;
+     };
+     void (^settled)(BOOL) = ^(BOOL finished) {
++        if (generation != sg_motionGeneration) return;
+         sg_moving = NO;
+-        if (sg_open) return;   // opened again while it was going away
++        if (sg_open) { replace(); return; }
+         SGRPlayerCoverList().alpha = 1;
+         [overlay removeFromSuperview];
+     };
+ 
+-    if (!animated) {
++    if (!animated || SGRReduceMotion()) {
+         move();
+         show();
+         settled(YES);
+     } else {
+         sg_moving = YES;
+-        SGRAnimate(SGRMotionLayout, move, settled);
++        [UIView animateWithDuration:open ? kCoverOpen : kCoverClose delay:0
++             usingSpringWithDamping:1 initialSpringVelocity:0
++             options:UIViewAnimationOptionAllowUserInteraction | UIViewAnimationOptionBeginFromCurrentState
++             animations:move completion:settled];
+         // The lines come in behind the cover leaving, and go before it comes back.
+         [UIView animateWithDuration:open ? kLyricsIn : kLyricsOut delay:open ? kLyricsInDelay : 0
+-                            options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState
++                            options:UIViewAnimationOptionCurveEaseOut | UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction
+                          animations:show completion:nil];
+     }
+     if (open) scheduleAlone();
+@@ -653,6 +674,18 @@ static void replace(void) {
+     SGRPlayerCoverList().alpha = 0;
+ }
+ 
++// The player, information, duration and floating units all report the same layout pass.
++static void scheduleReplace(void) {
++    SGPerformanceCount(SGPerformanceLyricsRequested);
++    if (sg_replaceQueued) return;
++    sg_replaceQueued = YES;
++    dispatch_async(dispatch_get_main_queue(), ^{
++        sg_replaceQueued = NO;
++        SGPerformanceCount(SGPerformanceLyricsApplied);
++        replace();
++    });
++}
++
+ #pragma mark - the units
+ 
+ %hook _TtC19NowPlaying_ViewImpl24NowPlayingViewController
+@@ -666,7 +699,7 @@ static void replace(void) {
+     }
+     sg_player = (UIViewController *)self;
+     watchTouches(host);
+-    replace();
++    scheduleReplace();
+ }
+ 
+ // The bar morphs back out of a full size cover as the player closes, so the thumbnail is put away first.
+@@ -696,12 +729,12 @@ static void infoLaidOut(UIViewController *unit) {
+         static dispatch_once_t once;
+         dispatch_once(&once, ^{ SGLog(@"redesign player: the title rides on %@ %@", NSStringFromClass(element.class), NSStringFromCGRect(element.frame)); });
+     }
+-    replace();
++    scheduleReplace();
+ }
+ 
+ static void durationLaidOut(UIViewController *unit) {
+     sg_duration = unit;
+-    replace();
++    scheduleReplace();
+ }
+ 
+ %hook _TtC20NowPlaying_ModesImpl18HeaderElementsUnit
+@@ -755,7 +788,7 @@ static void durationLaidOut(UIViewController *unit) {
+ - (void)viewDidLayoutSubviews {
+     %orig;
+     sg_floating = (UIViewController *)self;
+-    replace();
++    scheduleReplace();
+ }
+ %end
+ 
+@@ -765,8 +798,13 @@ static void durationLaidOut(UIViewController *unit) {
+ // the lines already up wait out the same grace before they go. Not in the background, where Spotify may
+ // not ask for lyrics until the app is back, so coming back starts it over.
+ static void awaitLyrics(void) {
++    NSUInteger generation = ++sg_lyricsWaitGeneration;
+     for (NSNumber *delay in @[@1, @(kLyricsGrace)]) {
+         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay.doubleValue * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
++            if (generation != sg_lyricsWaitGeneration) {
++                SGPerformanceCount(SGPerformanceStaleLyricsWait);
++                return;
++            }
+             if (UIApplication.sharedApplication.applicationState != UIApplicationStateActive) return;
+             SGRPlayerLyricsChanged();
+             if (sg_open && delay.doubleValue >= kLyricsGrace && !SGRPlayerLyricsAvailable()) {
+diff --git a/tweak/Sources/Redesigned/Player/PlayerPreview.x b/tweak/Sources/Redesigned/Player/PlayerPreview.x
+index 094d4a3f7986b5f1c623564b31e991b26fb87451..78aa8ee895b6aae37929317b7740d81769a9ac04 100644
+--- a/tweak/Sources/Redesigned/Player/PlayerPreview.x
++++ b/tweak/Sources/Redesigned/Player/PlayerPreview.x
+@@ -4,6 +4,7 @@
+ #import "Shared/Lyrics/Lyrics.h"
+ #import "Shared/LyricsSources/LyricsSources.h"
+ #import "Shared/LyricsSources/LyricsDiagnostics.h"
++#import "Shared/Player/PlayerState.h"
+ #import "Redesigned/Kit/SGRKit.h"
+ #import "Player.h"
+ #import "Redesigned/Lyrics/SGRKaraokeView.h"
+@@ -67,6 +68,7 @@ static BOOL sgrShowing(UIView *view, UIView *host) {
+ @property (nonatomic) NSInteger lineIndex;
+ @property (nonatomic) NSInteger position;
+ @property (nonatomic) CGSize measured;
++@property (nonatomic) BOOL showing;
+ - (void)refresh;
+ @end
+ 
+@@ -82,14 +84,24 @@ static BOOL sgrShowing(UIView *view, UIView *host) {
+     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(refresh) name:SGKaraokeLinesDidChangeNotification object:nil];
+     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(refresh) name:SGLyricsTranslationUpdatedNotification object:nil];
+     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(refresh) name:SGKaraokeNativeLyricsDidChangeNotification object:nil];
++    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(scheduleRefresh) name:UIApplicationDidBecomeActiveNotification object:nil];
++    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(scheduleRefresh) name:UIApplicationWillResignActiveNotification object:nil];
+     return self;
+ }
+ - (void)dealloc { [NSNotificationCenter.defaultCenter removeObserver:self]; }
+ - (void)didMoveToWindow {
+     [super didMoveToWindow];
++    [self scheduleRefresh];
++}
++- (void)scheduleRefresh {
+     [self.timer invalidate]; self.timer = nil;
+     [self.link invalidate]; self.link = nil;
+-    if (!self.window) { SGRPlayerSetPreviewLift(nil, 0); return; }
++    if (!self.window || UIApplication.sharedApplication.applicationState != UIApplicationStateActive) {
++        self.showing = NO;
++        self.alpha = 0;
++        SGRPlayerSetPreviewLift(nil, 0);
++        return;
++    }
+     __weak SGRPlayerPreview *weakSelf = self;
+     self.timer = [NSTimer timerWithTimeInterval:0.25 repeats:YES block:^(NSTimer *timer) { [weakSelf refresh]; }];
+     [NSRunLoop.mainRunLoop addTimer:self.timer forMode:NSRunLoopCommonModes];
+@@ -129,7 +141,13 @@ static BOOL sgrShowing(UIView *view, UIView *host) {
+     cover = SGRPlayerCoverFrameIn(host);
+     CGRect frame = CGRectIsNull(cover) ? CGRectNull : sgrPreviewFrame(cover, information, host.bounds);
+     BOOL visible = ready && !CGRectIsNull(frame);
+-    self.alpha = visible ? 1 : 0;
++    if (visible != self.showing) {
++        self.showing = visible;
++        // Only the surface fades. Sequential lyric lines keep their upward movement.
++        [UIView animateWithDuration:visible ? 0.20 : 0.14 delay:0
++            options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction | UIViewAnimationOptionCurveEaseOut
++            animations:^{ self.alpha = visible ? 1 : 0; } completion:nil];
++    }
+     if (!visible) {
+         [self.link invalidate]; self.link = nil;
+         [self.retiring removeFromSuperview]; self.retiring = nil;
+@@ -155,7 +173,7 @@ static BOOL sgrShowing(UIView *view, UIView *host) {
+         self.scroll.contentOffset = CGPointZero;
+         if (rolls && outgoing) {
+             UIView *incoming = self.lineView;
+-            CGFloat travel = MAX(self.bounds.size.height, MAX(outgoing.bounds.size.height, incoming.bounds.size.height)) + 8;
++            CGFloat travel = MAX(outgoing.bounds.size.height, incoming.bounds.size.height) + 8;
+             incoming.transform = CGAffineTransformMakeTranslation(0, travel);
+             self.retiring = outgoing;
+             __weak SGRPlayerPreview *weakSelf = self;
+@@ -171,7 +189,10 @@ static BOOL sgrShowing(UIView *view, UIView *host) {
+     }
+     self.track = track; self.lineIndex = index; self.position = ms;
+     [self animateText];
+-    if (!self.link) {
++    SPTPlayerState *state = SGPlayerState();
++    BOOL advancing = state.isPlaying && !state.isPaused;
++    if (!advancing) { [self.link invalidate]; self.link = nil; }
++    if (advancing && !self.link) {
+         self.link = [CADisplayLink displayLinkWithTarget:self selector:@selector(animateText)];
+         CGFloat hz = self.window.screen.maximumFramesPerSecond;
+         self.link.preferredFrameRateRange = CAFrameRateRangeMake(MIN(30, hz), hz, hz);
+-- 
+2.34.1
+

@@ -1,0 +1,6 @@
+tree c5a86ebf9b3695729bb3bdcbafa5b9d9e2b0f5eb
+parent 77b41834fe82dcc359c35548392222402062953d
+author Codex <codex@users.noreply.github.com> 1790751407 +0800
+committer Codex <codex@users.noreply.github.com> 1790751407 +0800
+
+fix: validate translated lyric matches and add diagnostics

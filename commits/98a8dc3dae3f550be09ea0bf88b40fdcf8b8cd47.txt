@@ -1,0 +1,6 @@
+tree 2ffe565c58f9520af149e4fa64b173fb2b884f1d
+parent 24c30e015099020fadabb154ec5a94ff6a710fbe
+author ddyec <89333385+ddyec@users.noreply.github.com> 1792554804 +0000
+committer ddyec <89333385+ddyec@users.noreply.github.com> 1792554804 +0000
+
+fix: sequence preview lyrics and follow visible artwork motion; reuse companion builds

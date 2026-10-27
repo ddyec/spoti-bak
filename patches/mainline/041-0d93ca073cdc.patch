@@ -1,0 +1,142 @@
+From 0d93ca073cdc489eb6b5be205bd969e90554463d Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 23 Oct 2026 09:59:27 +0000
+Subject: [PATCH] fix: time artwork centering and advance return from lyric
+ gaps
+
+---
+ docs/player-preview-anchor-2026-10-23.md      | 12 ++++----
+ scripts/test-preview-anchor.py                | 17 ++++++++---
+ .../Sources/Redesigned/Player/PlayerPreview.x | 30 ++++++++++++-------
+ 3 files changed, 39 insertions(+), 20 deletions(-)
+
+diff --git a/docs/player-preview-anchor-2026-10-23.md b/docs/player-preview-anchor-2026-10-23.md
+index eeb8ea81c72f38ba6eed81da54409be3a3b64937..2f66a27fe0c95a914e8ea8a6f5819affc6a88452 100644
+--- a/docs/player-preview-anchor-2026-10-23.md
++++ b/docs/player-preview-anchor-2026-10-23.md
+@@ -19,10 +19,12 @@ The existing cover layout hook and player layout hook enforce the anchor; no
+ unverified Spotify selector or native availability network probe is added.
+ 
+ The lyric target and the centred target are cached per track. When a current
+-nonempty lyric line is visible, the artwork uses the lyric target. A one-second
+-buffer covers temporary cache/clock gaps; sustained lyric-free playback uses the
+-centre of the header-to-information artwork band. The next visible line restores
+-the same saved lyric target. Translation arrival does not change its 88-point
++nonempty lyric line is visible, the artwork uses the lyric target. Known timeline gaps of at least seven seconds (matching the full lyric page)
++centre the artwork after the preceding sung line ends. The artwork starts returning
++750 ms before the next line, allowing for the 250 ms timer and the cover spring.
++Intro gaps use the first line's timestamp; the outro centres after the existing
++four-second lyric hold. Seeks use the new playback position directly. Temporary
++cache/clock gaps preserve the previous position rather than declaring a break. Translation arrival does not change its 88-point
+ budget. Track changes and host resizing invalidate the targets. Disabling preview
+ selects the centred target. Actual movement of the information row recalculates
+ them; changing only that row's height does not. Full lyrics, player transitions,
+@@ -35,7 +37,7 @@ Exceptionally tall lyric groups retain the existing scroll fallback.
+ `python3 scripts/test-preview-anchor.py` compiles the actual production geometry
+ and state predicates using CoreGraphics value-type shims. It simulates 500 late
+ native parent-layout changes, signed compensation, playing/paused bounds,
+-header-limited layouts, cache gaps, one-second hysteresis, centred geometry, setting changes and track reset. It passes on
++header-limited layouts, cache gaps, LRC break boundaries and advance return, centred geometry, setting changes and track reset. It passes on
+ Linux. Layer checks, performance arithmetic regressions and diff checks pass.
+ The existing Foundation identity/layout suite has been updated to remove the
+ obsolete native-status gate assertions. The macOS IPA workflow runs both suites
+diff --git a/scripts/test-preview-anchor.py b/scripts/test-preview-anchor.py
+index efddebe3d8c710c26c720d7fdaa27733f4483c71..876236c7994b14abe4d7657dd3057de42489ff4b 100644
+--- a/scripts/test-preview-anchor.py
++++ b/scripts/test-preview-anchor.py
+@@ -60,10 +60,19 @@ int main(void) {
+     CGFloat anchor = CGRectGetMidY(cover) - lift;
+     CGFloat centered = sgrPreviewCenteredY(info,host,area);
+     assert(centered == 343 && centered > anchor);
+-    assert(sgrPreviewKeepRecentText(NO,YES,0.5));
+-    assert(!sgrPreviewKeepRecentText(NO,YES,1.0));
+-    assert(!sgrPreviewKeepRecentText(NO,NO,0.1));
+-    assert(sgrPreviewKeepRecentText(YES,NO,10));
++    // Known LRC gaps, intro/outro and seeking are driven only by song time.
++    assert(!sgrPreviewInTimelineBreak(9999,10000,30000));
++    assert(sgrPreviewInTimelineBreak(10000,10000,30000));
++    assert(sgrPreviewInTimelineBreak(29249,10000,30000));
++    assert(!sgrPreviewInTimelineBreak(29250,10000,30000));
++    assert(!sgrPreviewInTimelineBreak(12000,10000,16000));
++    assert(sgrPreviewInTimelineBreak(0,0,30000));
++    assert(!sgrPreviewInTimelineBreak(3999,0,-1));
++    assert(sgrPreviewInTimelineBreak(4000,0,-1));
++    assert(!sgrPreviewInTimelineBreak(-1,0,30000));
++    // A cache miss preserves either state, including an already-centred break.
++    assert(sgrPreviewReservesSpace(YES,NO,YES,YES));
++    assert(!sgrPreviewReservesSpace(YES,NO,YES,NO));
+     // A native response can arrive before or after any number of layout passes.
+     // Test upward/downward parent moves, and both playing/paused cover scales.
+     for (int pass=0; pass<500; pass++) {
+diff --git a/tweak/Sources/Redesigned/Player/PlayerPreview.x b/tweak/Sources/Redesigned/Player/PlayerPreview.x
+index f7fe2a4b24f950c27695784e3487e0a1809cda55..1350467ede22119bcb19af1a6f54bbf03b74a8ff 100644
+--- a/tweak/Sources/Redesigned/Player/PlayerPreview.x
++++ b/tweak/Sources/Redesigned/Player/PlayerPreview.x
+@@ -43,13 +43,17 @@ static CGFloat sgrPreviewNeededLift(CGRect cover, CGRect info, CGRect host, CGRe
+     return MIN(limit, ceil(MAX(0, neededHeight - gap)));
+ }
+ 
+-// Retain the lyric position briefly across loading gaps; sustained silence centres the cover.
++// Unknown data retains the last position; only a known timeline gap centres artwork.
+ static BOOL sgrPreviewReservesSpace(BOOL enabled, BOOL timed, BOOL sameTrack, BOOL reserved) {
+     return enabled && (timed || (sameTrack && reserved));
+ }
+ 
+-static BOOL sgrPreviewKeepRecentText(BOOL content, BOOL reserved, CGFloat missingFor) {
+-    return content || (reserved && missingFor >= 0 && missingFor < 1.0);
++static BOOL sgrPreviewInTimelineBreak(NSInteger ms, NSInteger sungTo, NSInteger nextStart) {
++    if (ms < 0) return NO;
++    if (nextStart < 0) return ms >= sungTo + 4000;
++    // Match the full lyric page's seven-second break threshold. Begin the return
++    // 750 ms early, allowing for the 250 ms clock and the artwork spring.
++    return nextStart - sungTo >= 7000 && ms >= sungTo && ms < nextStart - 750;
+ }
+ 
+ static CGFloat sgrPreviewCenteredY(CGRect info, CGRect host, CGRect area) {
+@@ -122,7 +126,6 @@ static BOOL sgrShowing(UIView *view, UIView *host) {
+ @property (nonatomic) CGRect layoutInformation;
+ @property (nonatomic) CGFloat anchorY;
+ @property (nonatomic) CGFloat centeredY;
+-@property (nonatomic) CFTimeInterval lastContentAt;
+ @property (nonatomic) CFTimeInterval artworkUntil;
+ @property (nonatomic) NSUInteger transitionID;
+ - (void)refresh;
+@@ -222,7 +225,7 @@ static BOOL sgrShowing(UIView *view, UIView *host) {
+     NSString *track = SGKaraokePlayingTrack();
+     BOOL sameLayoutTrack = [self.layoutTrack isEqualToString:track];
+     if (!sameLayoutTrack || !CGRectEqualToRect(self.layoutHostBounds, host.bounds)) self.anchored = NO;
+-    if (!sameLayoutTrack) { self.reserved = NO; self.lastContentAt = 0; }
++    if (!sameLayoutTrack) self.reserved = NO;
+     self.layoutTrack = track;
+     self.layoutHostBounds = host.bounds;
+     NSInteger ms = SGKaraokePositionMs();
+@@ -231,15 +234,20 @@ static BOOL sgrShowing(UIView *view, UIView *host) {
+     SGKaraokeLine *line = index >= 0 ? lines[index] : nil;
+     BOOL content = timed && line && ms >= line.start && ms <= SGKaraokeSungEnd(line) + 4000 &&
+         [SGKaraokeLineText(line) stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet].length > 0;
+-    CFTimeInterval now = CACurrentMediaTime();
+-    if (content) self.lastContentAt = now;
+-    BOOL keepText = sgrPreviewKeepRecentText(content, self.reserved, now - self.lastContentAt);
+-    self.reserved = sgrPreviewReservesSpace(SGEnabled(SGRKeyPlayerLyricsPreview), keepText,
+-        sameLayoutTrack, self.reserved && keepText);
++    BOOL timelineKnown = timed && ms >= 0;
++    NSInteger sungTo = 0, nextStart = -1;
++    if (timelineKnown) for (SGKaraokeLine *candidate in lines) {
++        if (![SGKaraokeLineText(candidate) stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet].length) continue;
++        if (candidate.start > ms) { nextStart = candidate.start; break; }
++        sungTo = MAX(sungTo, SGKaraokeSungEnd(candidate));
++    }
++    BOOL inBreak = timelineKnown && sgrPreviewInTimelineBreak(ms, sungTo, nextStart);
++    self.reserved = sgrPreviewReservesSpace(SGEnabled(SGRKeyPlayerLyricsPreview), timelineKnown && !inBreak,
++        sameLayoutTrack, self.reserved && !timelineKnown);
+     CGFloat clip = 0; SGRPlayerAnimatedShowing(&clip, NULL);
+     BOOL ownsArtwork = track.length && !SGRPlayerLyricsOpen() && !SGRPlayerIsTransitioning() &&
+         clip < 0.01 && UIApplication.sharedApplication.applicationState == UIApplicationStateActive;
+-    BOOL ready = SGEnabled(SGRKeyPlayerLyricsPreview) && content && ownsArtwork;
++    BOOL ready = SGEnabled(SGRKeyPlayerLyricsPreview) && content && !inBreak && ownsArtwork;
+     CGRect information = sgrShowing(info, host) ? [host convertRect:info.bounds fromView:info] : CGRectZero;
+     // Reserve translation space from the start, including when translation arrives late.
+     CGFloat needed = 88;
+-- 
+2.34.1
+

@@ -1,0 +1,559 @@
+From 98a8dc3dae3f550be09ea0bf88b40fdcf8b8cd47 Mon Sep 17 00:00:00 2001
+From: ddyec <89333385+ddyec@users.noreply.github.com>
+Date: Wed, 21 Oct 2026 03:53:24 +0000
+Subject: [PATCH] fix: sequence preview lyrics and follow visible artwork
+ motion; reuse companion builds
+
+---
+ .github/workflows/build-ipa.yml               |  53 +++++++--
+ scripts/app-icon-cache.py                     |  54 +++++++++
+ scripts/app-icons.sh                          |   7 ++
+ scripts/pipeline.sh                           |  24 +++-
+ scripts/reuse-companion.py                    |  39 +++++++
+ scripts/test-lyrics-identity.py               |   6 +
+ tweak/Sources/Redesigned/Player/Player.h      |   2 +
+ .../Sources/Redesigned/Player/PlayerArtwork.x |   7 +-
+ .../Sources/Redesigned/Player/PlayerPreview.x | 109 ++++++++++++++----
+ 9 files changed, 263 insertions(+), 38 deletions(-)
+ create mode 100644 scripts/app-icon-cache.py
+ create mode 100644 scripts/reuse-companion.py
+
+diff --git a/.github/workflows/build-ipa.yml b/.github/workflows/build-ipa.yml
+index 6ce3b7aac83fc784dc1ad971b0270c8885698877..9d88ade6d6ef8474dd08d5238b8581887e7c5e35 100644
+--- a/.github/workflows/build-ipa.yml
++++ b/.github/workflows/build-ipa.yml
+@@ -11,6 +11,7 @@ on:
+ 
+ permissions:
+   contents: read
++  actions: read
+ 
+ env:
+   THEOS: ${{ github.workspace }}/theos
+@@ -25,12 +26,6 @@ jobs:
+       - uses: maxim-lobanov/setup-xcode@v1
+         with:
+           xcode-version: latest-stable
+-      - uses: actions/checkout@v5
+-        with:
+-          repository: ddyec/EeveeSpotifyReincarnated
+-          ref: ${{ env.COMPANION_SHA }}
+-          path: companion
+-          submodules: recursive
+       - uses: actions/checkout@v5
+         with:
+           repository: theos/theos
+@@ -47,20 +42,62 @@ jobs:
+           mkdir -p ipa
+           curl -fL --retry 3 "$IPA_URL" -o ipa/spotify.ipa
+           echo 'dc1706972885217081b3a9debcf07e3a5762a5d59ef5873aa2533ebd8bd719b5  ipa/spotify.ipa' | shasum -a 256 -c -
+-      - name: Compile EV1 from pinned source
+-        working-directory: companion
++      - name: Restore EV1 components
++        id: ev1-cache
++        uses: actions/cache@v4
++        with:
++          path: ${{ runner.temp }}/ev1
++          key: ev1-ios-arm64-v1-${{ env.COMPANION_SHA }}
++      - name: Reuse the verified companion build
++        id: reuse-ev1
++        if: steps.ev1-cache.outputs.cache-hit != 'true'
++        env:
++          GH_TOKEN: ${{ github.token }}
++        run: |
++          if gh run download 39535067735 -R ddyec/spoti.pw -n Spotify-9.1.78-Performance-EV1 -D "$RUNNER_TEMP/previous"; then
++            python3 scripts/reuse-companion.py "$RUNNER_TEMP/previous" "$RUNNER_TEMP/ev1" "$COMPANION_SHA"
++            echo "ready=true" >> "$GITHUB_OUTPUT"
++          fi
++      - uses: actions/checkout@v5
++        if: steps.ev1-cache.outputs.cache-hit != 'true' && steps.reuse-ev1.outputs.ready != 'true'
++        with:
++          repository: ddyec/EeveeSpotifyReincarnated
++          ref: ${{ env.COMPANION_SHA }}
++          path: companion
++          submodules: recursive
++      - name: Compile EV1 only when no verified components are available
+         env:
+           SWIFTPROTOBUF_VERSION: '1.29.0'
+         run: |
++          if [ -f "$RUNNER_TEMP/ev1/.source-commit" ]; then
++            test "$(cat "$RUNNER_TEMP/ev1/.source-commit")" = "$COMPANION_SHA"
++            exit 0
++          fi
++          cd companion
+           make build-eeveeswiftprotobuf
+           THEOS_PACKAGE_SCHEME=rootless make -j3 package FINALPACKAGE=1
+           mkdir -p "$RUNNER_TEMP/ev1"
+           DEB="$(find packages -name '*.deb' -type f | head -1)"
+           test -n "$DEB"
+           dpkg-deb -x "$DEB" "$RUNNER_TEMP/ev1"
++          echo "$COMPANION_SHA" > "$RUNNER_TEMP/ev1/.source-commit"
++      - name: Restore generated flags and icons
++        uses: actions/cache@v4
++        with:
++          path: |
++            tweak/Sources/Shared/Flags/SGFlagList.m
++            .build-cache/app-icons
++          key: generated-9.1.78-v1-${{ runner.os }}-${{ hashFiles('scripts/extract-flags.py', 'scripts/app-icons.sh', 'scripts/app-icon-cache.py', 'scripts/car-tool.m', 'icons/**') }}
++      - name: Check layers, timing and lyric layout
++        run: |
++          scripts/check-layers.sh
++          bash scripts/test-performance.sh
++          python3 scripts/test-lyrics-identity.py
+       - name: Build the combined IPA
+         run: |
++          started=$SECONDS
+           scripts/pipeline.sh ipa/spotify.ipa --no-flex --companion-dir "$RUNNER_TEMP/ev1" -o out/Spotify-9.1.78-Performance-EV1.ipa
++          echo "Combined IPA build: $((SECONDS - started)) seconds" >> "$GITHUB_STEP_SUMMARY"
+           python3 - <<'PY'
+           import hashlib, json, os, subprocess
+           from pathlib import Path
+diff --git a/scripts/app-icon-cache.py b/scripts/app-icon-cache.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..d274765798a7b40dd2b080f14ab4012d2cce5b0e
+--- /dev/null
++++ b/scripts/app-icon-cache.py
+@@ -0,0 +1,54 @@
++#!/usr/bin/env python3
++"""Cache expensive Icon Composer output; merge only icon metadata into the current plist."""
++import hashlib
++import json
++from pathlib import Path
++import plistlib
++import shutil
++import subprocess
++import sys
++
++mode, work, app = sys.argv[1], Path(sys.argv[2]), sys.argv[3]
++root = Path(__file__).resolve().parents[1]
++folder = work / app
++car, info = folder / 'Assets.car', folder / 'Info.plist'
++key_file = work / '.icon-cache-key'
++if mode == 'restore':
++    digest = hashlib.sha256(b'app-icons-cache-v1')
++    digest.update(car.read_bytes())
++    for path in sorted((root / 'icons').rglob('*')) + [root / 'scripts/car-tool.m', root / 'scripts/app-icons.sh']:
++        if path.is_file():
++            digest.update(str(path.relative_to(root)).encode())
++            digest.update(path.read_bytes())
++    digest.update(subprocess.check_output(['xcodebuild', '-version']))
++    key_file.write_text(digest.hexdigest())
++cache = root / '.build-cache/app-icons' / key_file.read_text()
++
++def hashes(directory):
++    return {str(p.relative_to(directory)): hashlib.sha256(p.read_bytes()).hexdigest()
++            for p in directory.rglob('*') if p.is_file() and p.name != 'checksums.json'}
++
++if mode == 'restore':
++    if not (cache / 'checksums.json').is_file():
++        sys.exit(1)
++    if hashes(cache) != json.loads((cache / 'checksums.json').read_text()):
++        raise ValueError('Icon cache checksum mismatch')
++    subprocess.run(['xcrun', 'assetutil', '-Z', str(cache / 'Assets.car')], check=True, stdout=subprocess.DEVNULL)
++    current = plistlib.loads(info.read_bytes())
++    alternates = plistlib.loads((cache / 'alternates.plist').read_bytes())
++    for key, value in alternates.items():
++        current.setdefault(key, {})['CFBundleAlternateIcons'] = value
++    info.write_bytes(plistlib.dumps(current, fmt=plistlib.FMT_BINARY))
++    shutil.copyfile(cache / 'Assets.car', car)
++    shutil.copytree(cache / 'SGAppIconPreviews', folder / 'SGAppIconPreviews', dirs_exist_ok=True)
++    print('Reused alternate icons for the same source assets, artwork and Xcode')
++elif mode == 'save':
++    cache.mkdir(parents=True, exist_ok=True)
++    shutil.copyfile(car, cache / 'Assets.car')
++    shutil.copytree(folder / 'SGAppIconPreviews', cache / 'SGAppIconPreviews', dirs_exist_ok=True)
++    current = plistlib.loads(info.read_bytes())
++    alternates = {key: current[key]['CFBundleAlternateIcons'] for key in ('CFBundleIcons', 'CFBundleIcons~ipad')}
++    (cache / 'alternates.plist').write_bytes(plistlib.dumps(alternates))
++    (cache / 'checksums.json').write_text(json.dumps(hashes(cache), sort_keys=True))
++else:
++    raise ValueError('Unknown cache mode')
+diff --git a/scripts/app-icons.sh b/scripts/app-icons.sh
+index a65341ac6fb4fd2d796ba597a7a53c8eaff51745..dc73664a1b044ad1f94056e9aea9d5bd8218d729 100755
+--- a/scripts/app-icons.sh
++++ b/scripts/app-icons.sh
+@@ -29,6 +29,12 @@ unzip -q "$OUT" "${APP_DIR}Assets.car" "${APP_DIR}Info.plist" -d "$WORK"
+ CAR="$WORK/${APP_DIR}Assets.car"
+ PLIST="$WORK/${APP_DIR}Info.plist"
+ 
++if python3 "$ROOT/scripts/app-icon-cache.py" restore "$WORK" "$APP_DIR"; then
++  (cd "$WORK" && zip -q "$OUT_ABS" "${APP_DIR}Assets.car" "${APP_DIR}Info.plist" "${APP_DIR}SGAppIconPreviews/"*.png)
++  exit 0
++fi
++
++
+ xcrun clang -fobjc-arc -framework Foundation -F/System/Library/PrivateFrameworks -framework CoreUI -lcompression \
+   "$ROOT/scripts/car-tool.m" -o "$WORK/car-tool" 2>/dev/null || skip "car-tool did not build"
+ "$WORK/car-tool" svg "$CAR" AppIcon_Assets/Logo "$WORK/Logo.svg" || skip "no logo in Spotify's icon"
+@@ -86,4 +92,5 @@ with open(path, "wb") as f:
+ EOF
+ 
+ (cd "$WORK" && zip -q "$OUT_ABS" "${APP_DIR}Assets.car" "${APP_DIR}Info.plist" "${APP_DIR}SGAppIconPreviews/"*.png)
++python3 "$ROOT/scripts/app-icon-cache.py" save "$WORK" "$APP_DIR"
+ echo "    ${NAMES[*]}${SUFFIX:+ (compiled as SGAppIcon<Name>$SUFFIX)}"
+diff --git a/scripts/pipeline.sh b/scripts/pipeline.sh
+index 3dd45f3faed11858a03a953be3991d891db3b943..2ad4c95ce36ba0d305dc472d31747ceaf5158300 100755
+--- a/scripts/pipeline.sh
++++ b/scripts/pipeline.sh
+@@ -10,6 +10,16 @@
+ # Needs: Theos in $THEOS (default ~/theos), an iPhoneOS 26+ SDK from the selected Xcode or in $THEOS/sdks,
+ # gmake, ldid, dpkg-deb (brew) and cyan (uv tool install "cyan @ git+https://github.com/asdfzxcvbn/pyzule-rw").
+ set -euo pipefail
++BUILD_STARTED=$SECONDS
++BUILD_STAGE_STARTED=$SECONDS
++BUILD_STAGE="setup"
++trap 'status=$?; echo "==> total build: $((SECONDS - BUILD_STARTED))s (exit $status)"' EXIT
++stage() {
++  echo "    $BUILD_STAGE: $((SECONDS - BUILD_STAGE_STARTED))s"
++  BUILD_STAGE="$*"
++  BUILD_STAGE_STARTED=$SECONDS
++  echo "==> $BUILD_STAGE"
++}
+ 
+ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ THEOS="${THEOS:-$HOME/theos}"
+@@ -77,7 +87,7 @@ if [ ! -f "$ROOT/tweak/Sources/Shared/Flags/SGFlagList.m" ]; then
+   "$ROOT/scripts/extract-flags.py" "$IN"
+ fi
+ 
+-echo "==> building tweak"
++stage "building tweak"
+ export THEOS
+ # Theos resolves its toolchain through `xcrun -sdk iphoneos`, which needs full Xcode. With only the
+ # Command Line Tools installed, name the tools directly instead.
+@@ -103,6 +113,7 @@ fi
+ 
+ # The Live Activity (Shared/LiveActivity) draws in a widget extension of its own.
+ if xcrun --sdk iphoneos --find swiftc >/dev/null 2>&1; then
++  stage "building Live Activity extension"
+   EXT_DIR="$ROOT/out/extension"
+   unzip -p "$IN" "${APP_DIR}Info.plist" > "$ROOT/out/.info.plist"
+   "$ROOT/scripts/build-extension.sh" "$ROOT/out/.info.plist" "$EXT_DIR"
+@@ -114,13 +125,13 @@ fi
+ 
+ # Spotify's widget reads what the app writes through App Group suites the re-signed IPA is not entitled
+ # to; this dylib, loaded by the app and by the widget, puts both on a group the signature does have.
+-echo "==> building the App Group shim"
++stage "building the App Group shim"
+ GROUPS_DYLIB="$ROOT/out/SpotifyGlassAppGroups.dylib"
+ xcrun --sdk iphoneos clang -target arm64-apple-ios16.0 -dynamiclib -fobjc-arc -Os -framework Foundation -framework Security \
+   -install_name @rpath/SpotifyGlassAppGroups.dylib -o "$GROUPS_DYLIB" "$ROOT/extension/AppGroups/AppGroups.m"
+ FILES+=("$GROUPS_DYLIB")
+ 
+-echo "==> injecting"
++stage "injecting"
+ # -w drops the Watch app: its companion-app key would still name com.spotify.client and block the install.
+ unzip -p "$IN" "${APP_DIR}Info.plist" > "$ROOT/out/.info.plist"
+ python3 "$ROOT/scripts/merge-local-network-plist.py" "$ROOT/out/.info.plist" \
+@@ -129,7 +140,7 @@ rm -f "$ROOT/out/.info.plist"
+ cyan -i "$IN" -o "$OUT" -f "${FILES[@]}" -l "$ROOT/out/.injection.plist" ${BUNDLE_ID:+-b "$BUNDLE_ID"} ${NAME:+-n "$NAME"} ${ICON:+-k "$ICON"} -w -s --overwrite
+ rm -f "$ROOT/out/.injection.plist"
+ 
+-echo "==> loading the App Group shim in the home screen widget"
++stage "loading the App Group shim in the home screen widget"
+ WIDGET_BIN="${APP_DIR}PlugIns/WidgetExtension.appex/WidgetExtension"
+ if unzip -l "$OUT" "$WIDGET_BIN" >/dev/null 2>&1; then
+   PATCH="$(mktemp -d)"
+@@ -145,16 +156,17 @@ else
+   echo "    no WidgetExtension.appex in this IPA"
+ fi
+ 
+-echo "==> adding the alternate app icons"
++stage "adding the alternate app icons"
+ # A failure leaves the IPA as it was, without them; Mod > App icon then does not show.
+ "$ROOT/scripts/app-icons.sh" "$OUT" || echo "    the app icons failed: building without them"
+ 
+ if [ -n "${EXT_DIR:-}" ]; then
+-  echo "==> adding the Live Activity intents to Spotify's App Intents metadata"
++  stage "adding the Live Activity intents to Spotify's App Intents metadata"
+   "$ROOT/scripts/merge-appintents.py" "$OUT" "$APP_DIR" "$EXT_DIR/app/Metadata.appintents"
+ fi
+ 
+ if [ -n "$COMPANION_DIR" ]; then
++  stage "verifying and finalizing the combined IPA"
+   python3 "$ROOT/scripts/finalize-companion.py" "$OUT"
+ fi
+ echo "==> done: $OUT"
+diff --git a/scripts/reuse-companion.py b/scripts/reuse-companion.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..6eab7a903da8058b866a52eed703c6a21bbcdeba
+--- /dev/null
++++ b/scripts/reuse-companion.py
+@@ -0,0 +1,39 @@
++#!/usr/bin/env python3
++"""Reuse only EV1 components from a hash-verified build of the pinned source."""
++import hashlib
++import json
++from pathlib import Path, PurePosixPath
++import sys
++import zipfile
++
++artifact, destination, expected = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]
++manifest = json.loads((artifact / 'build-manifest.json').read_text())
++ipa = artifact / 'Spotify-9.1.78-Performance-EV1.ipa'
++if manifest['eevee_commit'] != expected or manifest['spotify'] != '9.1.78' or manifest['flex']:
++    raise ValueError('Cached build does not match pinned companion')
++with ipa.open('rb') as stream:
++    digest = hashlib.file_digest(stream, 'sha256').hexdigest()
++if digest != manifest['sha256']:
++    raise ValueError('Cached IPA checksum mismatch')
++with zipfile.ZipFile(ipa) as archive:
++    names = archive.namelist()
++    for component in ('EeveeSpotify.dylib', 'EeveeSwiftProtobuf.framework', 'EeveeSpotify.bundle'):
++        roots = {str(PurePosixPath(*PurePosixPath(n).parts[:PurePosixPath(n).parts.index(component) + 1]))
++                 for n in names if component in PurePosixPath(n).parts}
++        if len(roots) != 1:
++            raise ValueError('Expected one ' + component)
++        root = roots.pop()
++        files = [n for n in names if n == root or n.startswith(root + '/')]
++        for name in files:
++            relative = PurePosixPath(component) / PurePosixPath(name).relative_to(root)
++            if '..' in relative.parts:
++                raise ValueError('Unsafe archive path')
++            target = destination.joinpath(*relative.parts)
++            if name.endswith('/'):
++                target.mkdir(parents=True, exist_ok=True)
++            else:
++                target.parent.mkdir(parents=True, exist_ok=True)
++                target.write_bytes(archive.read(name))
++                target.chmod((archive.getinfo(name).external_attr >> 16) & 0o777 or 0o644)
++(destination / '.source-commit').write_text(expected + '\n')
++print('Reused verified EV1 components at ' + expected)
+diff --git a/scripts/test-lyrics-identity.py b/scripts/test-lyrics-identity.py
+index b7ed8f876a69a002d710f85e5ba17406cadcf4c5..d46f52a7278482121a274d5086e1f5c9d75d15d0 100644
+--- a/scripts/test-lyrics-identity.py
++++ b/scripts/test-lyrics-identity.py
+@@ -75,6 +75,12 @@ int main(void) {
+             check(SGNativeLyricsVerdict(status.integerValue, NO, YES, NO) == -1, @"auth/rate/server errors stay unknown");
+         check(SGNativeLyricsVerdict(200, NO, NO, NO) == -1 && SGNativeLyricsVerdict(404, YES, NO, NO) == -1,
+             @"malformed JSON and transport failure never mean no lyrics");
++        for (CGFloat groupHeight = 24; groupHeight <= 160; groupHeight += 8) {
++            CGRect viewport = sgrPreviewViewport(bilingualRect, groupHeight);
++            check(CGRectContainsRect(bilingualRect, viewport), @"transition viewport never intersects artwork or controls");
++            check(fabs(CGRectGetMidY(viewport) - CGRectGetMidY(bilingualRect)) < 0.001, @"short and bilingual lines keep the same anchor");
++            check(viewport.size.height <= groupHeight, @"empty artwork gap cannot expose an extra lyric group");
++        }
+         check(sgrPreviewShouldRoll(YES, 2, 3, 250, NO), @"sequential lyric change rolls upward");
+         check(!sgrPreviewShouldRoll(YES, 3, 2, 250, NO) && !sgrPreviewShouldRoll(YES, 2, 5, 250, NO), @"seeks do not replay intermediate lines");
+         check(!sgrPreviewShouldRoll(NO, 2, 3, 250, NO) && !sgrPreviewShouldRoll(YES, 2, 3, 250, YES), @"track change and reduced motion do not animate");
+diff --git a/tweak/Sources/Redesigned/Player/Player.h b/tweak/Sources/Redesigned/Player/Player.h
+index b21cd4329eb30b8eedebc670999441d7ee73be76..d32ffb7cc562bf6f35614d4b7134ddf7f5dbdf36 100644
+--- a/tweak/Sources/Redesigned/Player/Player.h
++++ b/tweak/Sources/Redesigned/Player/Player.h
+@@ -97,6 +97,8 @@ UIView *SGRPlayerCoverList(void);
+ CGRect SGRPlayerCoverFrameIn(UIView *host);
+ // A preview-only vertical compensation; the upstream paused scale is unchanged.
+ CGFloat SGRPlayerPreviewLift(void);
++// A bounded presentation-layer follower for artwork springs, including pause/resume reversal.
++void SGRPlayerPreviewArtworkWillAnimate(void);
+ CGRect SGRPlayerCoverPresentationFrameIn(UIView *host);
+ void SGRPlayerSetPreviewLift(NSString *trackID, CGFloat lift);
+ // The band that cover sits in -- the room the player gives its artwork, between the header row and the
+diff --git a/tweak/Sources/Redesigned/Player/PlayerArtwork.x b/tweak/Sources/Redesigned/Player/PlayerArtwork.x
+index f52b9546e12536752bf24ae917507f103cf19602..31962abee0486abc658129f95d69049580ccc26f 100644
+--- a/tweak/Sources/Redesigned/Player/PlayerArtwork.x
++++ b/tweak/Sources/Redesigned/Player/PlayerArtwork.x
+@@ -195,7 +195,10 @@ static void scaleEveryCover(BOOL animated) {
+     void (^apply)(void) = ^{
+         for (UIView *tilt in tilts) scaleCover(tilt, scale);
+     };
+-    if (animated) SGRAnimate(SGRMotionLayout, apply, nil);
++    if (animated) {
++        SGRAnimate(SGRMotionLayout, apply, nil);
++        SGRPlayerPreviewArtworkWillAnimate();
++    }
+     else apply();
+ }
+ 
+@@ -203,7 +206,7 @@ void SGRPlayerSetPreviewLift(NSString *trackID, CGFloat lift) {
+     lift = MAX(0, lift);
+     if ((sg_previewLiftTrack == trackID || [sg_previewLiftTrack isEqualToString:trackID]) && fabs(sg_previewLift - lift) < 0.5) return;
+     sg_previewLiftTrack = [trackID copy]; sg_previewLift = lift;
+-    scaleEveryCover(NO);
++    scaleEveryCover(YES);
+ }
+ 
+ %hook _TtC35CreativeWorkCommons_CoverArtTiltKit16CoverArtTiltView
+diff --git a/tweak/Sources/Redesigned/Player/PlayerPreview.x b/tweak/Sources/Redesigned/Player/PlayerPreview.x
+index 78aa8ee895b6aae37929317b7740d81769a9ac04..08626351ae573ba43f330f843abd13b3d872a2dc 100644
+--- a/tweak/Sources/Redesigned/Player/PlayerPreview.x
++++ b/tweak/Sources/Redesigned/Player/PlayerPreview.x
+@@ -42,6 +42,12 @@ static CGFloat sgrPreviewNeededLift(CGRect cover, CGRect info, CGRect host, CGRe
+     return MIN(limit, ceil(MAX(0, neededHeight - gap)));
+ }
+ 
++// Clip the transition to the text band, rather than exposing both lines in the entire gap.
++static CGRect sgrPreviewViewport(CGRect gap, CGFloat textHeight) {
++    CGFloat height = MIN(gap.size.height, MAX(1, textHeight));
++    return CGRectMake(gap.origin.x, gap.origin.y + (gap.size.height - height) / 2, gap.size.width, height);
++}
++
+ static BOOL sgrPreviewShouldRoll(BOOL sameTrack, NSInteger oldIndex, NSInteger newIndex,
+                                  NSInteger elapsed, BOOL reducedMotion) {
+     return sameTrack && oldIndex >= 0 && newIndex == oldIndex + 1 &&
+@@ -69,7 +75,10 @@ static BOOL sgrShowing(UIView *view, UIView *host) {
+ @property (nonatomic) NSInteger position;
+ @property (nonatomic) CGSize measured;
+ @property (nonatomic) BOOL showing;
++@property (nonatomic) CFTimeInterval artworkUntil;
++@property (nonatomic) NSUInteger transitionID;
+ - (void)refresh;
++- (void)followArtwork;
+ @end
+ 
+ @implementation SGRPlayerPreview
+@@ -80,6 +89,7 @@ static BOOL sgrShowing(UIView *view, UIView *host) {
+     _scroll = [[UIScrollView alloc] initWithFrame:self.bounds];
+     _scroll.showsVerticalScrollIndicator = NO;
+     _scroll.alwaysBounceVertical = NO;
++    _scroll.clipsToBounds = YES;
+     [self addSubview:_scroll];
+     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(refresh) name:SGKaraokeLinesDidChangeNotification object:nil];
+     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(refresh) name:SGLyricsTranslationUpdatedNotification object:nil];
+@@ -107,8 +117,49 @@ static BOOL sgrShowing(UIView *view, UIView *host) {
+     [NSRunLoop.mainRunLoop addTimer:self.timer forMode:NSRunLoopCommonModes];
+     [self refresh];
+ }
++- (void)updateGeometry {
++    UIView *host = self.superview, *info = sgr_previewInfo;
++    if (!host || !sgrShowing(info, host)) return;
++    CGRect cover = SGRPlayerCoverPresentationFrameIn(host);
++    CGRect gap = CGRectIsNull(cover) ? CGRectNull : sgrPreviewFrame(cover, [host convertRect:info.bounds fromView:info], host.bounds);
++    if (CGRectIsNull(gap)) { self.frame = CGRectZero; return; }
++    CGFloat height = MAX(self.lineView.bounds.size.height, self.retiring.bounds.size.height);
++    self.frame = sgrPreviewViewport(gap, height);
++    self.scroll.frame = self.bounds;
++    for (NSUInteger i = 0; i < 2; i++) {
++        UIView *text = i == 0 ? self.lineView : self.retiring;
++        if (!text) continue;
++        // Changing frame while a roll transform is active produces undefined UIKit geometry.
++        text.center = CGPointMake(text.bounds.size.width / 2, MAX(self.bounds.size.height, text.bounds.size.height) / 2);
++    }
++    self.scroll.contentSize = CGSizeMake(self.bounds.size.width, MAX(self.bounds.size.height, height));
++}
++- (void)updateLink {
++    SPTPlayerState *state = SGPlayerState();
++    BOOL needed = self.showing && ((state.isPlaying && !state.isPaused) || CACurrentMediaTime() < self.artworkUntil);
++    if (!needed) { [self.link invalidate]; self.link = nil; }
++    if (needed && !self.link) {
++        self.link = [CADisplayLink displayLinkWithTarget:self selector:@selector(animateText)];
++        CGFloat hz = self.window.screen.maximumFramesPerSecond;
++        self.link.preferredFrameRateRange = CAFrameRateRangeMake(MIN(30, hz), hz, hz);
++        [self.link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
++    }
++}
++- (void)followArtwork {
++    // Follow the visible spring, including rapid reversal; no 250 ms polling steps on pause.
++    self.artworkUntil = CACurrentMediaTime() + 0.8;
++    [self updateLink];
++}
+ - (void)animateText {
+     if (UIApplication.sharedApplication.applicationState != UIApplicationStateActive || SGRPlayerIsTransitioning()) return;
++    if (self.artworkUntil > 0) {
++        [self updateGeometry];
++        if (CACurrentMediaTime() >= self.artworkUntil) {
++            self.artworkUntil = 0;
++            [self refresh]; // Reflow once, after the cover settles, instead of each animation frame.
++            [self updateLink];
++        }
++    }
+     SGRKaraokePreviewShowTime(self.lineView, SGKaraokePositionMs());
+ }
+ - (void)refresh {
+@@ -150,57 +201,71 @@ static BOOL sgrShowing(UIView *view, UIView *host) {
+     }
+     if (!visible) {
+         [self.link invalidate]; self.link = nil;
++        self.transitionID++;
++        self.artworkUntil = 0;
+         [self.retiring removeFromSuperview]; self.retiring = nil;
+         self.track = nil; self.lineIndex = -1; self.position = -1;
+         return;
+     }
+-    self.frame = frame;
+-    self.scroll.frame = self.bounds;
++    BOOL followingArtwork = CACurrentMediaTime() < self.artworkUntil;
+     BOOL sameTrack = [self.track isEqualToString:track];
+-    if (!sameTrack || line != self.line || !CGSizeEqualToSize(self.measured, self.bounds.size) ||
++    if (!sameTrack || line != self.line || (!followingArtwork && !CGSizeEqualToSize(self.measured, frame.size)) ||
+         ![(line.translation ?: @"") isEqualToString:(self.translation ?: @"")]) {
+         BOOL rolls = sgrPreviewShouldRoll(sameTrack, self.lineIndex, index, ms - self.position,
+             UIAccessibilityIsReduceMotionEnabled());
++        NSUInteger transition = ++self.transitionID;
+         [self.retiring removeFromSuperview]; self.retiring = nil;
+         UIView *outgoing = self.lineView;
+-        [outgoing.layer removeAllAnimations]; outgoing.transform = CGAffineTransformIdentity;
+-        self.line = line; self.translation = line.translation; self.measured = self.bounds.size;
+-        self.lineView = SGRKaraokePreviewLine(line, self.bounds.size.width, self.bounds.size.height);
+-        self.lineView.frame = CGRectMake(0, MAX(0, (self.bounds.size.height - self.lineView.bounds.size.height) / 2),
+-            self.bounds.size.width, self.lineView.bounds.size.height);
++        [outgoing.layer removeAllAnimations]; outgoing.transform = CGAffineTransformIdentity; outgoing.alpha = 1;
++        self.line = line; self.translation = line.translation; self.measured = frame.size;
++        self.lineView = SGRKaraokePreviewLine(line, frame.size.width, frame.size.height);
++        self.lineView.frame = (CGRect){CGPointZero, self.lineView.bounds.size};
+         [self.scroll addSubview:self.lineView];
+         self.scroll.contentSize = CGSizeMake(self.bounds.size.width, MAX(self.bounds.size.height, self.lineView.bounds.size.height));
+         self.scroll.contentOffset = CGPointZero;
++        [self updateGeometry];
+         if (rolls && outgoing) {
+             UIView *incoming = self.lineView;
+-            CGFloat travel = MAX(outgoing.bounds.size.height, incoming.bounds.size.height) + 8;
++            // Exit, then enter: two full multi-line groups never pass through each other.
++            CGFloat travel = MIN(16, self.bounds.size.height / 3);
++            incoming.alpha = 0;
+             incoming.transform = CGAffineTransformMakeTranslation(0, travel);
+             self.retiring = outgoing;
++            [self updateGeometry];
+             __weak SGRPlayerPreview *weakSelf = self;
+-            [UIView animateWithDuration:0.28 delay:0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionAllowUserInteraction
++            [UIView animateWithDuration:0.12 delay:0 options:UIViewAnimationOptionCurveEaseIn | UIViewAnimationOptionAllowUserInteraction
+                 animations:^{
++                    outgoing.alpha = 0;
+                     outgoing.transform = CGAffineTransformMakeTranslation(0, -travel);
+-                    incoming.transform = CGAffineTransformIdentity;
+                 } completion:^(BOOL finished) {
+                     [outgoing removeFromSuperview];
+-                    if (weakSelf.retiring == outgoing) weakSelf.retiring = nil;
++                    SGRPlayerPreview *preview = weakSelf;
++                    if (!preview || preview.transitionID != transition) return;
++                    preview.retiring = nil;
++                    [preview updateGeometry];
++                    [UIView animateWithDuration:0.16 delay:0 options:UIViewAnimationOptionCurveEaseOut | UIViewAnimationOptionAllowUserInteraction
++                        animations:^{ incoming.alpha = 1; incoming.transform = CGAffineTransformIdentity; } completion:nil];
+                 }];
+-        } else [outgoing removeFromSuperview];
++        } else {
++            [outgoing removeFromSuperview];
++            if (sameTrack && !UIAccessibilityIsReduceMotionEnabled()) {
++                self.lineView.alpha = 0;
++                [UIView animateWithDuration:0.16 animations:^{ self.lineView.alpha = 1; }];
++            }
++        }
+     }
+     self.track = track; self.lineIndex = index; self.position = ms;
+     [self animateText];
+-    SPTPlayerState *state = SGPlayerState();
+-    BOOL advancing = state.isPlaying && !state.isPaused;
+-    if (!advancing) { [self.link invalidate]; self.link = nil; }
+-    if (advancing && !self.link) {
+-        self.link = [CADisplayLink displayLinkWithTarget:self selector:@selector(animateText)];
+-        CGFloat hz = self.window.screen.maximumFramesPerSecond;
+-        self.link.preferredFrameRateRange = CAFrameRateRangeMake(MIN(30, hz), hz, hz);
+-        [self.link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
+-    }
++    [self updateGeometry];
++    [self updateLink];
+ }
+ @end
+ 
++void SGRPlayerPreviewArtworkWillAnimate(void) {
++    SGRPlayerPreview *preview = objc_getAssociatedObject(sgr_previewHost, &kSGRPreviewKey);
++    [preview followArtwork];
++}
++
+ static void updatePreview(UIView *host) {
+     SGRPlayerPreview *preview = objc_getAssociatedObject(host, &kSGRPreviewKey);
+     if (!preview) {
+-- 
+2.34.1
+

@@ -1,0 +1,388 @@
+From 702daf6c95617be1a834984a3b0abdb9d46e1b3c Mon Sep 17 00:00:00 2001
+From: Codex <codex@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 19:16:43 +0800
+Subject: [PATCH] feat: fetch Chinese lyric translations and diagnose KuGou
+ fallback
+
+---
+ tweak/Sources/Shared/LyricsSources/KuGou.m    | 41 +++++++--
+ .../Sources/Shared/LyricsSources/LyricsHook.x |  5 +-
+ .../Shared/LyricsSources/LyricsSources.h      |  6 ++
+ .../Shared/LyricsSources/LyricsSources.m      | 85 +++++++++++++++++++
+ .../Sources/Shared/LyricsSources/Musixmatch.m | 10 ++-
+ tweak/Sources/Shared/LyricsSources/NetEase.m  | 48 ++++++++---
+ tweak/Sources/Shared/LyricsSources/QQMusic.m  | 44 ++++++++--
+ 7 files changed, 212 insertions(+), 27 deletions(-)
+
+diff --git a/tweak/Sources/Shared/LyricsSources/KuGou.m b/tweak/Sources/Shared/LyricsSources/KuGou.m
+index 5376cf56e30c55a638bfb5046689d982c7fe85cb..2f698219b2c96d3816d4d6cc03167669a498a6bf 100644
+--- a/tweak/Sources/Shared/LyricsSources/KuGou.m
++++ b/tweak/Sources/Shared/LyricsSources/KuGou.m
+@@ -16,8 +16,8 @@ static NSString *normalized(NSString *text) {
+ }
+ 
+ static BOOL matches(NSDictionary *candidate, SGLyricsQuery *query) {
+-    if (![candidate[@"id"] isKindOfClass:NSString.class] || ![candidate[@"accesskey"] isKindOfClass:NSString.class] ||
+-        [candidate[@"product_from"] isEqual:@"ugc"] ||
++    if (!([candidate[@"id"] isKindOfClass:NSString.class] || [candidate[@"id"] isKindOfClass:NSNumber.class]) ||
++        ![candidate[@"accesskey"] isKindOfClass:NSString.class] ||
+         ![normalized(candidate[@"song"]) isEqualToString:normalized(query.title)]) return NO;
+     NSString *artist = normalized([query.artist componentsSeparatedByString:@" feat"].firstObject);
+     NSString *singer = normalized(candidate[@"singer"]);
+@@ -98,14 +98,43 @@ static NSArray<SGKaraokeLine *> *linesFromKRC(NSString *krc) {
+ static void tryCandidates(NSArray<NSDictionary *> *songs, NSUInteger index, void (^done)(SGLyricsResult *)) {
+     if (index >= MIN(songs.count, 3)) { done(nil); return; }
+     NSDictionary *song = songs[index];
++    NSString *songID = [song[@"id"] description];
+     NSURL *url = SGLyricsURL(@"https://lyrics.kugou.com/download", @{
+-        @"ver": @"1", @"client": @"pc", @"id": song[@"id"], @"accesskey": song[@"accesskey"],
++        @"ver": @"1", @"client": @"pc", @"id": songID, @"accesskey": song[@"accesskey"],
+         @"fmt": @"krc", @"charset": @"utf8"});
+     SGLyricsGetJSON(url, @{@"User-Agent": @"Mozilla/5.0"}, ^(id root) {
+         NSDictionary *reply = [root isKindOfClass:NSDictionary.class] ? root : nil;
+         NSString *krc = [reply[@"status"] integerValue] == 200 ? decodeKRC(reply[@"content"]) : nil;
+         NSArray<SGKaraokeLine *> *lines = krc ? linesFromKRC(krc) : nil;
+-        if (!lines.count) { tryCandidates(songs, index + 1, done); return; }
++        if (!lines.count) {
++            SGLog(@"kugou: KRC %@ status %ld, decoded %@; trying LRC", songID,
++                  (long)[reply[@"status"] integerValue], krc ? @"yes" : @"no");
++            NSURL *lrcURL = SGLyricsURL(@"https://lyrics.kugou.com/download", @{
++                @"ver": @"1", @"client": @"pc", @"id": songID, @"accesskey": song[@"accesskey"],
++                @"fmt": @"lrc", @"charset": @"utf8"});
++            SGLyricsGetJSON(lrcURL, @{@"User-Agent": @"Mozilla/5.0"}, ^(id lrcRoot) {
++                NSDictionary *lrcReply = [lrcRoot isKindOfClass:NSDictionary.class] ? lrcRoot : nil;
++                NSString *encoded = [lrcReply[@"content"] isKindOfClass:NSString.class] ? lrcReply[@"content"] : nil;
++                NSData *bytes = encoded.length ? [[NSData alloc] initWithBase64EncodedString:encoded options:0] : nil;
++                NSString *lrc = bytes ? [[NSString alloc] initWithData:bytes encoding:NSUTF8StringEncoding] : nil;
++                NSArray<SGKaraokeLine *> *fallback = [lrcReply[@"status"] integerValue] == 200 && lrc.length
++                    ? SGLyricsLinesFromLRC(lrc) : nil;
++                SGLog(@"kugou: LRC %@ status %ld, %lu lines", songID,
++                      (long)[lrcReply[@"status"] integerValue], (unsigned long)fallback.count);
++                if (!fallback.count) { tryCandidates(songs, index + 1, done); return; }
++                SGLyricsResult *result = [SGLyricsResult new];
++                result.synced = YES;
++                result.karaokeLines = fallback;
++                NSArray<NSNumber *> *starts;
++                NSArray<NSString *> *texts;
++                SGLyricsPageLines(fallback, &starts, &texts);
++                result.starts = starts;
++                result.texts = texts;
++                done(result);
++            });
++            return;
++        }
++        SGLog(@"kugou: KRC %@ decoded %lu word timed lines", songID, (unsigned long)lines.count);
+         SGLyricsResult *result = [SGLyricsResult new];
+         result.synced = result.wordTimed = YES;
+         result.karaokeLines = lines;
+@@ -135,7 +164,9 @@ SGLyricsAsk SGKuGouAsk = ^(SGLyricsQuery *query, void (^done)(SGLyricsResult *))
+             NSInteger y = labs([b[@"duration"] integerValue] / 1000 - query.seconds);
+             return x < y ? NSOrderedAscending : x > y ? NSOrderedDescending : NSOrderedSame;
+         }];
+-        SGLog(@"kugou: %@ by %@ has %lu matching recordings", query.title, query.artist, (unsigned long)fitting.count);
++        SGLog(@"kugou: %@ by %@ search status %ld, %lu candidates, %lu matching recordings",
++              query.title, query.artist, (long)[reply[@"status"] integerValue],
++              (unsigned long)candidates.count, (unsigned long)fitting.count);
+         tryCandidates(fitting, 0, done);
+     });
+ };
+diff --git a/tweak/Sources/Shared/LyricsSources/LyricsHook.x b/tweak/Sources/Shared/LyricsSources/LyricsHook.x
+index ce3f86bac2c878147a47b170dc32e5130de4873e..b465edc23cc8c1625cfca783d6ae98501bdfca59 100644
+--- a/tweak/Sources/Shared/LyricsSources/LyricsHook.x
++++ b/tweak/Sources/Shared/LyricsSources/LyricsHook.x
+@@ -166,7 +166,10 @@ static NSData *decide(NSString *track, SGLyricsResult *chain, NSData *spotifyBod
+         viewLines = spotifyLines;
+         credit = @"Spotify";
+     }
+-    if (viewLines) SGKaraokeKeepLines(track, viewLines);
++    if (viewLines) {
++        SGKaraokeKeepLines(track, viewLines);
++        SGLyricsFetchChineseTranslations(track, viewLines);
++    }
+     SGLyricsSetCredit(track, credit);
+     // Spotify's JSON may have the song timed where its page does not.
+     if (!donor && spotifyBody.length && SGKaraokeLinesTiming(viewLines) == SGKaraokeTimingNone) SGKaraokeAskSpotifyForTiming(track);
+diff --git a/tweak/Sources/Shared/LyricsSources/LyricsSources.h b/tweak/Sources/Shared/LyricsSources/LyricsSources.h
+index 12e0dccef3da2b3b95a7e74b1a6ae4f485a494aa..8f146c752bd96b1ff837be00033cfbacf2a3c7f0 100644
+--- a/tweak/Sources/Shared/LyricsSources/LyricsSources.h
++++ b/tweak/Sources/Shared/LyricsSources/LyricsSources.h
+@@ -123,6 +123,12 @@ NSArray<NSString *> *SGLyricsTranslationLanguageNames(void);
+ NSString *SGLyricsTranslationLanguage(void);
+ // Posted on the main queue with the Spotify track id as object when a late translation arrives.
+ extern NSNotificationName const SGLyricsTranslationUpdatedNotification;
++// Adds Chinese translations to the lines actually shown in the lyrics view. The original lines
++// are returned immediately; QQ Music and NetEase are queried only after the page has its lyrics.
++void SGLyricsFetchChineseTranslations(NSString *trackID, NSArray<SGKaraokeLine *> *lines);
++typedef void (^SGLyricsTranslationReply)(NSString *originalLRC, NSString *translatedLRC);
++void SGQQMusicTranslationAsk(SGLyricsQuery *query, SGLyricsTranslationReply done);
++void SGNetEaseTranslationAsk(SGLyricsQuery *query, SGLyricsTranslationReply done);
+ 
+ 
+ // The sources themselves, each in its own file.
+diff --git a/tweak/Sources/Shared/LyricsSources/LyricsSources.m b/tweak/Sources/Shared/LyricsSources/LyricsSources.m
+index baae074985a6048d48979b4798cc5714cf2da74f..3fa8569ebd861f13d7ea4f04a0bc52f3d4f8bfea 100644
+--- a/tweak/Sources/Shared/LyricsSources/LyricsSources.m
++++ b/tweak/Sources/Shared/LyricsSources/LyricsSources.m
+@@ -220,6 +220,91 @@ static SGLyricsQuery *queryFor(NSString *trackID) {
+     if ([length respondsToSelector:@selector(integerValue)]) query.seconds = [length integerValue] / 1000;
+     return query;
+ }
++static BOOL named(SGLyricsQuery *query);
++
++// Translation is a separate lookup from the source walk. The walk can return as soon as it has
++// timed lyrics; waiting for QQ or NetEase here would delay Spotify's lyrics card.
++static NSMutableDictionary<NSString *, NSArray<SGKaraokeLine *> *> *sg_translationAsked;
++
++static NSString *translationComparable(NSString *text) {
++    NSString *value = [text isKindOfClass:NSString.class] ? text.lowercaseString : @"";
++    NSMutableString *out = [NSMutableString string];
++    NSCharacterSet *letters = NSCharacterSet.alphanumericCharacterSet;
++    for (NSUInteger i = 0; i < value.length; i++) {
++        unichar c = [value characterAtIndex:i];
++        if ([letters characterIsMember:c]) [out appendFormat:@"%C", c];
++    }
++    return out;
++}
++
++static BOOL containsHan(NSString *text) {
++    for (NSUInteger i = 0; i < text.length; i++) {
++        unichar c = [text characterAtIndex:i];
++        if (c >= 0x3400 && c <= 0x9fff) return YES;
++    }
++    return NO;
++}
++
++static NSUInteger applyChineseTranslations(NSArray<SGKaraokeLine *> *target, NSString *originalLRC, NSString *translatedLRC) {
++    NSArray<SGKaraokeLine *> *original = SGLyricsLinesFromLRC(originalLRC);
++    NSArray<SGKaraokeLine *> *translated = SGLyricsLinesFromLRC(translatedLRC);
++    if (!original.count || !translated.count) return 0;
++    NSUInteger matched = 0;
++    for (SGKaraokeLine *source in original) {
++        NSString *sourceText = translationComparable(SGKaraokeLineText(source));
++        if (!sourceText.length) continue;
++        SGKaraokeLine *targetLine = nil, *translationLine = nil;
++        NSInteger targetDistance = 1501, translationDistance = 501;
++        for (SGKaraokeLine *line in target) {
++            NSInteger distance = labs(line.start - source.start);
++            if (distance < targetDistance && [translationComparable(SGKaraokeLineText(line)) isEqualToString:sourceText]) {
++                targetDistance = distance;
++                targetLine = line;
++            }
++        }
++        if (!targetLine || containsHan(targetLine.translation)) continue;
++        for (SGKaraokeLine *line in translated) {
++            NSInteger distance = labs(line.start - source.start);
++            if (distance < translationDistance && containsHan(SGKaraokeLineText(line))) {
++                translationDistance = distance;
++                translationLine = line;
++            }
++        }
++        if (!translationLine) continue;
++        NSString *text = SGKaraokeLineText(translationLine);
++        if ([translationComparable(text) isEqualToString:sourceText]) continue;
++        targetLine.translation = text;
++        matched++;
++    }
++    return matched;
++}
++
++void SGLyricsFetchChineseTranslations(NSString *trackID, NSArray<SGKaraokeLine *> *lines) {
++    if (!trackID.length || !lines.count) return;
++    NSString *language = SGLyricsTranslationLanguage() ?: NSLocale.preferredLanguages.firstObject;
++    if (![language.lowercaseString hasPrefix:@"zh"]) return;
++    dispatch_async(dispatch_get_main_queue(), ^{
++        if (!sg_translationAsked) sg_translationAsked = [NSMutableDictionary dictionary];
++        if (sg_translationAsked[trackID] == lines) return;
++        SGLyricsQuery *query = queryFor(trackID);
++        if (!named(query) || query.seconds <= 0) return;
++        if (sg_translationAsked.count >= kKeptTracks) [sg_translationAsked removeAllObjects];
++        sg_translationAsked[trackID] = lines;
++        SGQQMusicTranslationAsk(query, ^(NSString *original, NSString *translated) {
++            if (sg_translationAsked[trackID] != lines) return;
++            NSUInteger count = applyChineseTranslations(lines, original, translated);
++            SGLog(@"lyrics: QQ Chinese translation matched %lu lines for %@", (unsigned long)count, trackID);
++            if (count) [NSNotificationCenter.defaultCenter postNotificationName:SGLyricsTranslationUpdatedNotification object:trackID];
++            if (count >= MAX(3, lines.count / 2)) return;
++            SGNetEaseTranslationAsk(query, ^(NSString *netOriginal, NSString *netTranslated) {
++                if (sg_translationAsked[trackID] != lines) return;
++                NSUInteger netCount = applyChineseTranslations(lines, netOriginal, netTranslated);
++                SGLog(@"lyrics: NetEase Chinese translation matched %lu lines for %@", (unsigned long)netCount, trackID);
++                if (netCount) [NSNotificationCenter.defaultCenter postNotificationName:SGLyricsTranslationUpdatedNotification object:trackID];
++            });
++        });
++    });
++}
+ 
+ static void learnFrom(SGLyricsQuery *query, SGLyricsResult *result) {
+     if (!query.title.length && result.title.length) query.title = result.title;
+diff --git a/tweak/Sources/Shared/LyricsSources/Musixmatch.m b/tweak/Sources/Shared/LyricsSources/Musixmatch.m
+index 493f14b2b6feadcf1d1d016aef8d3eecadccbf18..3d2530769f252a02d72f1feb6c0b472bb5c7050f 100644
+--- a/tweak/Sources/Shared/LyricsSources/Musixmatch.m
++++ b/tweak/Sources/Shared/LyricsSources/Musixmatch.m
+@@ -283,7 +283,15 @@ static NSUInteger applyTranslations(SGLyricsResult *lyrics, id list) {
+     for (SGKaraokeLine *line in lyrics.karaokeLines) {
+         NSString *original = SGKaraokeLineText(line);
+         NSString *rendered = byLine[comparable(original)] ?: byLine[comparable(originalAt[@(line.start)])];
+-        if (rendered.length && ![comparable(rendered) isEqualToString:comparable(original)]) {
++        NSString *chosen = SGLyricsTranslationLanguage() ?: NSLocale.preferredLanguages.firstObject;
++        BOOL chinese = [chosen.lowercaseString hasPrefix:@"zh"];
++        BOOL hasHan = NO;
++        for (NSUInteger i = 0; i < rendered.length; i++) {
++            unichar c = [rendered characterAtIndex:i];
++            if (c >= 0x3400 && c <= 0x9fff) { hasHan = YES; break; }
++        }
++        if (rendered.length && (!chinese || hasHan) && ![comparable(rendered) isEqualToString:comparable(original)] &&
++            (!chinese || !line.translation.length)) {
+             line.translation = rendered;
+             matched++;
+         }
+diff --git a/tweak/Sources/Shared/LyricsSources/NetEase.m b/tweak/Sources/Shared/LyricsSources/NetEase.m
+index 107da9240817739e505b4e76ed344960e427262f..8b6f5f852cd4017f3b86a101da8ae3fd46ae3df0 100644
+--- a/tweak/Sources/Shared/LyricsSources/NetEase.m
++++ b/tweak/Sources/Shared/LyricsSources/NetEase.m
+@@ -102,22 +102,12 @@ static void tryLyrics(NSArray<NSNumber *> *songs, NSUInteger index, void (^done)
+ 
+ // A recording is only taken when its length is this close to the track's, so the words fall on the
+ // same beat as the recording Spotify is playing.
+-SGLyricsAsk SGNetEaseAsk = ^(SGLyricsQuery *query, void (^done)(SGLyricsResult *result)) {
+-    void (^answer)(NSArray<SGKaraokeLine *> *) = ^(NSArray<SGKaraokeLine *> *lines) {
+-        if (!lines.count) {
+-            done(nil);
+-            return;
+-        }
+-        SGLyricsResult *result = [SGLyricsResult new];
+-        result.wordTimed = result.synced = YES;
+-        result.karaokeLines = lines;
+-        done(result);
+-    };
++static void findSongs(SGLyricsQuery *query, void (^done)(NSArray<NSNumber *> *ids)) {
+     NSString *lead = [query.artist componentsSeparatedByString:@" feat"].firstObject.lowercaseString;
+     NSString *title = query.title;
+     NSInteger seconds = query.seconds;
+     if (!title.length || !lead.length || seconds <= 0) {
+-        answer(nil);
++        done(@[]);
+         return;
+     }
+     get(@"search/get", @{@"s": [NSString stringWithFormat:@"%@ %@", title, lead], @"type": @"1", @"limit": @"10"}, ^(NSDictionary *root) {
+@@ -139,6 +129,38 @@ SGLyricsAsk SGNetEaseAsk = ^(SGLyricsQuery *query, void (^done)(SGLyricsResult *
+         }];
+         NSArray *ids = [[fitting valueForKey:@"id"] subarrayWithRange:NSMakeRange(0, MIN(fitting.count, kTriedSongs))];
+         if (!ids.count) SGLog(@"netease: no recording of %@ by %@ within %lds of %lds", title, lead, (long)kLengthSlack, (long)seconds);
+-        tryLyrics(ids, 0, answer);
++        done(ids);
++    });
++}
++
++SGLyricsAsk SGNetEaseAsk = ^(SGLyricsQuery *query, void (^done)(SGLyricsResult *result)) {
++    findSongs(query, ^(NSArray<NSNumber *> *ids) {
++        tryLyrics(ids, 0, ^(NSArray<SGKaraokeLine *> *lines) {
++            if (!lines.count) { done(nil); return; }
++            SGLyricsResult *result = [SGLyricsResult new];
++            result.wordTimed = result.synced = YES;
++            result.karaokeLines = lines;
++            done(result);
++        });
+     });
+ };
++
++static void tryTranslations(NSArray<NSNumber *> *ids, NSUInteger index, SGLyricsTranslationReply done) {
++    if (index >= ids.count) { done(nil, nil); return; }
++    get(@"song/lyric/v1", @{@"id": ids[index].stringValue, @"lv": @"-1", @"tv": @"-1"}, ^(NSDictionary *root) {
++        NSDictionary *original = [root[@"lrc"] isKindOfClass:NSDictionary.class] ? root[@"lrc"] : nil;
++        NSDictionary *translated = [root[@"tlyric"] isKindOfClass:NSDictionary.class] ? root[@"tlyric"] : nil;
++        NSString *lrc = [original[@"lyric"] isKindOfClass:NSString.class] ? original[@"lyric"] : nil;
++        NSString *tlyric = [translated[@"lyric"] isKindOfClass:NSString.class] ? translated[@"lyric"] : nil;
++        if (lrc.length && tlyric.length) {
++            SGLog(@"netease: song %@ has %lu translated bytes", ids[index], (unsigned long)tlyric.length);
++            done(lrc, tlyric);
++        } else {
++            tryTranslations(ids, index + 1, done);
++        }
++    });
++}
++
++void SGNetEaseTranslationAsk(SGLyricsQuery *query, SGLyricsTranslationReply done) {
++    findSongs(query, ^(NSArray<NSNumber *> *ids) { tryTranslations(ids, 0, done); });
++}
+diff --git a/tweak/Sources/Shared/LyricsSources/QQMusic.m b/tweak/Sources/Shared/LyricsSources/QQMusic.m
+index e1c73fcd9304cd304da87d6a40d021353aa1517d..1bf4c5fa6f0cd05bf2e4a278ffc7bc08e8c38b21 100644
+--- a/tweak/Sources/Shared/LyricsSources/QQMusic.m
++++ b/tweak/Sources/Shared/LyricsSources/QQMusic.m
+@@ -33,18 +33,28 @@ static BOOL matches(NSDictionary *song, SGLyricsQuery *query) {
+     return NO;
+ }
+ 
+-static void lyricsForSong(NSNumber *songID, void (^done)(SGLyricsResult *)) {
++static void lyricReply(NSNumber *songID, BOOL translation, void (^done)(NSDictionary *data)) {
+     NSDictionary *request = @{@"music.musichallSong.PlayLyricInfo.GetPlayLyricInfo": @{
+         @"method": @"GetPlayLyricInfo", @"module": @"music.musichallSong.PlayLyricInfo",
+-        @"param": @{@"crypt": @0, @"qrc": @0, @"songID": songID}}};
++        @"param": @{@"crypt": @0, @"qrc": @0, @"trans": translation ? @1 : @0, @"songID": songID}}};
+     SGLyricsPostJSON([NSURL URLWithString:kMusicu], headers(), request, ^(id root) {
+         id value = [root isKindOfClass:NSDictionary.class]
+             ? root[@"music.musichallSong.PlayLyricInfo.GetPlayLyricInfo"] : nil;
+         NSDictionary *reply = [value isKindOfClass:NSDictionary.class] ? value : nil;
+         NSDictionary *data = [reply[@"data"] isKindOfClass:NSDictionary.class] ? reply[@"data"] : nil;
+-        NSString *encoded = [data[@"lyric"] isKindOfClass:NSString.class] ? data[@"lyric"] : nil;
+-        NSData *bytes = encoded.length ? [[NSData alloc] initWithBase64EncodedString:encoded options:0] : nil;
+-        NSString *lrc = bytes ? [[NSString alloc] initWithData:bytes encoding:NSUTF8StringEncoding] : nil;
++        done(data);
++    });
++}
++
++static NSString *decoded(NSDictionary *data, NSString *key) {
++    NSString *encoded = [data[key] isKindOfClass:NSString.class] ? data[key] : nil;
++    NSData *bytes = encoded.length ? [[NSData alloc] initWithBase64EncodedString:encoded options:0] : nil;
++    return bytes ? [[NSString alloc] initWithData:bytes encoding:NSUTF8StringEncoding] : nil;
++}
++
++static void lyricsForSong(NSNumber *songID, void (^done)(SGLyricsResult *)) {
++    lyricReply(songID, NO, ^(NSDictionary *data) {
++        NSString *lrc = decoded(data, @"lyric");
+         NSArray<SGKaraokeLine *> *lines = lrc ? SGLyricsLinesFromLRC(lrc) : nil;
+         if (!lines.count) { done(nil); return; }
+         SGLyricsResult *result = [SGLyricsResult new];
+@@ -59,7 +69,7 @@ static void lyricsForSong(NSNumber *songID, void (^done)(SGLyricsResult *)) {
+     });
+ }
+ 
+-SGLyricsAsk SGQQMusicAsk = ^(SGLyricsQuery *query, void (^done)(SGLyricsResult *)) {
++static void findSong(SGLyricsQuery *query, void (^done)(NSNumber *songID)) {
+     if (!query.title.length || !query.artist.length) { done(nil); return; }
+     NSDictionary *request = @{
+         @"comm": @{@"ct": @"19", @"cv": @"1859", @"uin": @"0"},
+@@ -77,9 +87,29 @@ SGLyricsAsk SGQQMusicAsk = ^(SGLyricsQuery *query, void (^done)(SGLyricsResult *
+         for (NSDictionary *candidate in list) {
+             if (![candidate isKindOfClass:NSDictionary.class] || !matches(candidate, query)) continue;
+             NSNumber *songID = [candidate[@"id"] isKindOfClass:NSNumber.class] ? candidate[@"id"] : nil;
+-            if (songID) { lyricsForSong(songID, done); return; }
++            if (songID) { done(songID); return; }
+         }
+         SGLog(@"qqmusic: no matching recording for %@ by %@", query.title, query.artist);
+         done(nil);
+     });
++}
++
++SGLyricsAsk SGQQMusicAsk = ^(SGLyricsQuery *query, void (^done)(SGLyricsResult *)) {
++    findSong(query, ^(NSNumber *songID) {
++        if (!songID) { done(nil); return; }
++        lyricsForSong(songID, done);
++    });
+ };
++
++void SGQQMusicTranslationAsk(SGLyricsQuery *query, SGLyricsTranslationReply done) {
++    findSong(query, ^(NSNumber *songID) {
++        if (!songID) { done(nil, nil); return; }
++        lyricReply(songID, YES, ^(NSDictionary *data) {
++            NSString *original = decoded(data, @"lyric");
++            NSString *translated = decoded(data, @"trans");
++            SGLog(@"qqmusic: translation for %@ has %lu original and %lu translated bytes",
++                  songID, (unsigned long)original.length, (unsigned long)translated.length);
++            done(original, translated);
++        });
++    });
++}
+-- 
+2.34.1
+

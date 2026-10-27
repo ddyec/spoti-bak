@@ -1,0 +1,58 @@
+From db9c0cb87b8afc43442681107dbb1faf2520c4dd Mon Sep 17 00:00:00 2001
+From: ddyec <89333385+ddyec@users.noreply.github.com>
+Date: Wed, 21 Oct 2026 04:02:48 +0000
+Subject: [PATCH] fix: isolate playback CPU intervals and bound stall capture
+ cost
+
+---
+ tweak/Sources/App/Performance/PerformancePage.m | 5 +++++
+ tweak/Sources/Diagnostics/SGHangSampler.m       | 2 +-
+ tweak/Sources/Diagnostics/SGPerformance.m       | 3 +++
+ 3 files changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/tweak/Sources/App/Performance/PerformancePage.m b/tweak/Sources/App/Performance/PerformancePage.m
+index f0d56bbcea674b648641716c812e4f6a10e08253..40fa0dd5d1e3e99bdba7e44a22ffd671c9a1a2bc 100644
+--- a/tweak/Sources/App/Performance/PerformancePage.m
++++ b/tweak/Sources/App/Performance/PerformancePage.m
+@@ -40,6 +40,11 @@ UIViewController *SGPerformancePage(void) {
+         SGNotedSection(@"Current one-minute window", @[
+             SGStatRow(@"Status", ^NSString *{ return SGPerformanceSnapshot()[@"status"]; }),
+             metric(@"Process CPU", @"cpu", @"% of one core"),
++            SGStatRow(@"Playback state", ^NSString *{
++                NSDictionary *state = SGPerformanceSnapshot()[@"latest"][@"playback"];
++                return ![state[@"known"] boolValue] ? @"Waiting for player" : [state[@"loading"] boolValue] ? @"Loading" :
++                    [state[@"paused"] boolValue] ? @"Paused" : [state[@"playing"] boolValue] ? @"Playing" : @"Idle";
++            }),
+             metric(@"Memory footprint", @"memory", @"MiB"),
+             metric(@"Main queue delay p95", @"p95", @"ms"),
+             SGStatRow(@"Retained samples", ^NSString *{ return [SGPerformanceSnapshot()[@"retained"] stringValue]; }),
+diff --git a/tweak/Sources/Diagnostics/SGHangSampler.m b/tweak/Sources/Diagnostics/SGHangSampler.m
+index e5f104cfa1dd3dfdde58dc5fe8e30f23309bf918..f13e238f04e4f96ccce3a8254cfd2be0fa77c8a6 100644
+--- a/tweak/Sources/Diagnostics/SGHangSampler.m
++++ b/tweak/Sources/Diagnostics/SGHangSampler.m
+@@ -123,7 +123,7 @@ static void *watch(void *unused) {
+                     samples = 0;
+                     lastSample = 0;
+                 }
+-                if (samples < kMaxSamplesPerStall && stalled - lastSample >= kInterval) {
++                if (samples < (atomic_load(&sg_performance) ? 3 : kMaxSamplesPerStall) && stalled - lastSample >= kInterval) {
+                     uintptr_t frames[kMaxFrames];
+                     int count = walk(frames);
+                     samples++;
+diff --git a/tweak/Sources/Diagnostics/SGPerformance.m b/tweak/Sources/Diagnostics/SGPerformance.m
+index ca7b7c3f4e3cefbe0d56b717fa4ee209182243fb..7b05ee79e06b0e0131ee53ca28e0bb13273cab58 100644
+--- a/tweak/Sources/Diagnostics/SGPerformance.m
++++ b/tweak/Sources/Diagnostics/SGPerformance.m
+@@ -166,6 +166,9 @@ static SGPerfSummary readSummary(NSDictionary *s) {
+         self.context = context;
+         self.windowCount = self.streak = 0;
+         self.regressed = NO;
++        // The preceding CPU interval may straddle pause/loading/scenario changes.
++        // Begin comparison with the next complete interval in the new context.
++        return;
+     }
+     SGPerfPoint point = {(cpu - previousCPU) / elapsed * 100, vm.phys_footprint / 1048576.0, delay};
+     NSUInteger slot = self.windowCount % 30;
+-- 
+2.34.1
+

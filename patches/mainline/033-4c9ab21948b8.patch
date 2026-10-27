@@ -1,0 +1,538 @@
+From 4c9ab21948b8e809d6aa6debe4f31af7b049380f Mon Sep 17 00:00:00 2001
+From: ddyec <89333385+ddyec@users.noreply.github.com>
+Date: Wed, 21 Oct 2026 03:59:34 +0000
+Subject: [PATCH] fix: park idle lyric clocks and expose loading stalls without
+ holding request locks
+
+---
+ docs/performance-followup-20261021.md         | 46 ++++++++++++++++
+ .../Sources/App/Performance/PerformancePage.m |  2 +-
+ tweak/Sources/Diagnostics/SGHangSampler.h     |  5 ++
+ tweak/Sources/Diagnostics/SGHangSampler.m     | 54 ++++++++++++++++---
+ tweak/Sources/Diagnostics/SGPerformance.h     |  5 +-
+ tweak/Sources/Diagnostics/SGPerformance.m     | 23 ++++++--
+ .../Redesigned/Lyrics/SGRKaraokeView.m        | 44 +++++++++++++--
+ .../Sources/Redesigned/Player/PlayerPreview.x |  2 +
+ .../Shared/LyricsSources/LyricsSources.m      | 16 +++---
+ tweak/Sources/Shared/Player/PlayerState.x     |  2 +
+ 10 files changed, 175 insertions(+), 24 deletions(-)
+ create mode 100644 docs/performance-followup-20261021.md
+
+diff --git a/docs/performance-followup-20261021.md b/docs/performance-followup-20261021.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..ae6d7c39ba874fcb5b72b9ebce598bb96407519a
+--- /dev/null
++++ b/docs/performance-followup-20261021.md
+@@ -0,0 +1,46 @@
++# Lyric transitions, loading stalls and persistent CPU — 2026-10-21
++
++## Evidence from the supplied device reports
++
++The second report contains 59 foreground samples over 127.43 seconds on Spotify 9.1.78,
++Redesigned UI, iOS 27.2, build 24c30e015099, EEVEE loaded. Across these sample points,
++mean CPU is 32.06%, median 29.82%, maximum 116.08% (100% is one core, not the whole device).
++46 of 59 points exceed 20%. Sampled main-queue delays include 31.99, 45.47 and 58.24 ms;
++the median is 0.24 ms. The existing baseline status does not rule out individual stalls.
++The thermal-state field remains nominal; it does not measure surface temperature.
++
++The old reports contain neither playback state nor stacks, and cannot attribute these costs
++to Spotify, EEVEE, lyrics, rendering or audio. The two-second heartbeat can miss short stalls
++and the measurements do not cover constructors before the monitor starts. Layout request
++counts represent layout calls, not network requests. No claim of measured CPU improvement
++or visually verified motion is made without the owner's next device run.
++
++## Changes
++
++- Preserve anchoring under the scaled artwork. Follow its presentation geometry during a
++  bounded spring interval, without repeatedly reflowing text mid-animation.
++- Clip lyric groups to the text band; let the outgoing group finish its brief upward fade
++  before admitting the incoming group. Superseded completions cannot restart old transitions.
++- Full lyrics use a four-per-second metadata/position check while paused, static or awaiting
++  data. High-frequency rendering resumes for timed playback and transient interactions;
++  app inactivity and removal from the window stop both clocks.
++- Decode bounded cache-eligibility JSON outside the lyrics request lock. Main-thread cache
++  lookups no longer wait for that decoding; request coalescing and failure handling remain.
++- Diagnostic schema 2 exports playback flags and lyric callback counters. Opt-in, foreground
++  recording includes a bounded stack sampler (25 ms probe, 50 ms threshold, 24 records retained).
++  It stops with recording/backgrounding. Sampling affects measurements, so the diagnostic
++  context changes to prevent automatic comparison against old sampler-free baselines.
++  Stack capture is best effort; it is not an exhaustive trace of every frame or early startup.
++- Reuse hash-verified EV1 components for the pinned companion commit, with source compilation
++  as fallback. Cache flags and Icon Composer output. Verify archive/component integrity and
++  report stage durations. No simulator or screen recording is required.
++
++## Device verification
++
++On the owner's iOS 27.2 device, select Redesigned UI and check the player while normal lyrics
++advance, with multi-line/translated lyrics, and during rapid pause/resume. Check that groups
++never overlap and the anchor follows the artwork smoothly. With diagnostics enabled, collect
++at least one minute each of timed playback, pause after animations settle, and browsing Home;
++export before leaving the session. Playback-state fields and callback-count differences show
++which clock was active; stack records identify any captured loading stalls. Save a fresh
++baseline only in a stable matching scenario. Actual heat and CPU reduction need those runs.
+diff --git a/tweak/Sources/App/Performance/PerformancePage.m b/tweak/Sources/App/Performance/PerformancePage.m
+index cdaa8ba4225f2618bceddfb890a87071946cc8e8..f0d56bbcea674b648641716c812e4f6a10e08253 100644
+--- a/tweak/Sources/App/Performance/PerformancePage.m
++++ b/tweak/Sources/App/Performance/PerformancePage.m
+@@ -43,7 +43,7 @@ UIViewController *SGPerformancePage(void) {
+             metric(@"Memory footprint", @"memory", @"MiB"),
+             metric(@"Main queue delay p95", @"p95", @"ms"),
+             SGStatRow(@"Retained samples", ^NSString *{ return [SGPerformanceSnapshot()[@"retained"] stringValue]; }),
+-        ], @"CPU includes Spotify and all injected modules and can exceed 100%. Heartbeats sample responsiveness, not FPS or every short stall. Thermal state and Low Power Mode are recorded; a change starts a fresh window."),
++        ], @"CPU includes Spotify and all injected modules and can exceed 100%. Heartbeats sample responsiveness, not FPS or every short stall. While recording, a 25 ms background probe captures up to 24 main-thread stack samples for delays above 50 ms; export includes these stacks for loading investigations. Thermal state and Low Power Mode are recorded; a change starts a fresh window."),
+         SGNotedSection(@"Repeated operations", @[
+             SGStatRow(@"Bar passes / requests", ^NSString *{
+                 NSDictionary *counts = SGPerformanceSnapshot()[@"operations"];
+diff --git a/tweak/Sources/Diagnostics/SGHangSampler.h b/tweak/Sources/Diagnostics/SGHangSampler.h
+index 22a26f732b7e34d0a1292a9a80bb10fe1b9a1df0..db5b144c152a2893536857cf0700e50c4def6ac4 100644
+--- a/tweak/Sources/Diagnostics/SGHangSampler.h
++++ b/tweak/Sources/Diagnostics/SGHangSampler.h
+@@ -11,3 +11,8 @@
+ // Runs the sampler until the matching stop, or for `seconds` when that is above 0 (no stop then).
+ void SGHangSamplerStart(NSString *reason, NSTimeInterval seconds);
+ void SGHangSamplerStop(void);
++
++// Opt-in performance diagnostics, foreground only. At most 24 stack records per process.
++void SGHangSamplerSetPerformanceEnabled(BOOL enabled);
++NSArray<NSDictionary *> *SGHangSamplerSnapshot(void);
++void SGHangSamplerClear(void);
+diff --git a/tweak/Sources/Diagnostics/SGHangSampler.m b/tweak/Sources/Diagnostics/SGHangSampler.m
+index 18d8111bc51f2e30b8190644469b337a09ffdc72..e5f104cfa1dd3dfdde58dc5fe8e30f23309bf918 100644
+--- a/tweak/Sources/Diagnostics/SGHangSampler.m
++++ b/tweak/Sources/Diagnostics/SGHangSampler.m
+@@ -19,6 +19,28 @@ static atomic_int sg_watches;
+ static atomic_uint_fast64_t sg_pending;   // mach time of the ping not answered yet, 0 when none
+ static atomic_bool sg_running;
+ static NSString *sg_reason;
++static atomic_bool sg_performance;
++static NSObject *sg_recordsLock;
++static NSMutableArray<NSDictionary *> *sg_records;
++static NSString *sg_stallSession;
++
++static void prepareRecords(void) {
++    static dispatch_once_t once;
++    dispatch_once(&once, ^{
++        sg_recordsLock = [NSObject new];
++        sg_records = [NSMutableArray array];
++        sg_stallSession = NSUUID.UUID.UUIDString;
++    });
++}
++
++NSArray<NSDictionary *> *SGHangSamplerSnapshot(void) {
++    prepareRecords();
++    @synchronized (sg_recordsLock) { return [sg_records copy]; }
++}
++void SGHangSamplerClear(void) {
++    prepareRecords();
++    @synchronized (sg_recordsLock) { [sg_records removeAllObjects]; }
++}
+ 
+ static double seconds(uint64_t mach) {
+     static mach_timebase_info_data_t base;
+@@ -66,13 +88,20 @@ static NSString *describe(uintptr_t address) {
+     if (info.dli_sname && strcmp(info.dli_sname, "<redacted>") != 0) {
+         return [NSString stringWithFormat:@"%@ %s+%lu", image, info.dli_sname, (unsigned long)(address - (uintptr_t)info.dli_saddr)];
+     }
+-    return [NSString stringWithFormat:@"%@ +0x%lx", image, (unsigned long)(address - (uintptr_t)info.dli_saddr)];
++    return [NSString stringWithFormat:@"%@ +0x%lx", image, (unsigned long)(address - (uintptr_t)info.dli_fbase)];
+ }
+ 
+ static void logSample(uintptr_t frames[kMaxFrames], int count, double stalled, int index, NSString *reason) {
+     NSMutableString *text = [NSMutableString stringWithFormat:@"stalled %.0f ms, sample %d\n", stalled * 1000, index];
+     for (int i = 0; i < count; i++) [text appendFormat:@"%@\n", describe(frames[i])];
+-    SGLogLong([NSString stringWithFormat:@"hang %@", reason], text);
++    if (atomic_load(&sg_performance)) {
++        NSDictionary *record = @{@"time": @(NSDate.date.timeIntervalSince1970), @"duration_ms": @(stalled * 1000),
++            @"sample": @(index), @"reason": reason ?: @"performance", @"session": sg_stallSession, @"stack": text};
++        @synchronized (sg_recordsLock) {
++            if (sg_records.count >= 24) [sg_records removeObjectAtIndex:0];
++            [sg_records addObject:record];
++        }
++    } else SGLogLong([NSString stringWithFormat:@"hang %@", reason], text);
+ }
+ 
+ static void *watch(void *unused) {
+@@ -88,7 +117,7 @@ static void *watch(void *unused) {
+             dispatch_async(dispatch_get_main_queue(), ^{ atomic_store(&sg_pending, 0); });
+         } else {
+             double stalled = seconds(now - pending);
+-            if (stalled >= kThreshold) {
++            if (stalled >= (atomic_load(&sg_performance) ? 0.05 : kThreshold)) {
+                 if (sampledStall != pending) {
+                     sampledStall = pending;
+                     samples = 0;
+@@ -99,12 +128,17 @@ static void *watch(void *unused) {
+                     int count = walk(frames);
+                     samples++;
+                     lastSample = stalled;
+-                    if (count) logSample(frames, count, stalled, samples, sg_reason);
++                    if (count) {
++                        NSString *reason;
++                        @synchronized (sg_recordsLock) { reason = sg_reason; }
++                        @autoreleasepool { logSample(frames, count, stalled, samples, reason); }
++                    }
+                 }
+             }
+         }
+-        usleep(kTick);
++        usleep(atomic_load(&sg_performance) ? 25000 : kTick);
+     }
++    atomic_store(&sg_pending, 0);
+     atomic_store(&sg_running, false);
+     // A watch opened while this thread was on its way out finds it still marked running and starts none.
+     if (atomic_load(&sg_watches) > 0 && !atomic_exchange(&sg_running, true)) continue;
+@@ -121,7 +155,8 @@ void SGHangSamplerStart(NSString *reason, NSTimeInterval duration) {
+         sg_stackHigh = (uintptr_t)pthread_get_stackaddr_np(main);
+         sg_stackLow = sg_stackHigh - pthread_get_stacksize_np(main);
+     }
+-    sg_reason = [reason copy];
++    prepareRecords();
++    @synchronized (sg_recordsLock) { sg_reason = [reason copy]; }
+     atomic_fetch_add(&sg_watches, 1);
+     if (!atomic_exchange(&sg_running, true)) {
+         pthread_t thread;
+@@ -137,3 +172,10 @@ void SGHangSamplerStart(NSString *reason, NSTimeInterval duration) {
+ void SGHangSamplerStop(void) {
+     if (atomic_load(&sg_watches) > 0) atomic_fetch_sub(&sg_watches, 1);
+ }
++
++void SGHangSamplerSetPerformanceEnabled(BOOL enabled) {
++    if (!NSThread.isMainThread) return;
++    BOOL was = atomic_exchange(&sg_performance, enabled);
++    if (enabled && !was) SGHangSamplerStart(@"foreground loading", 0);
++    else if (!enabled && was) SGHangSamplerStop();
++}
+diff --git a/tweak/Sources/Diagnostics/SGPerformance.h b/tweak/Sources/Diagnostics/SGPerformance.h
+index 66e827841d29fb956381ac82cdf2cf0d616dadf0..3628f81f8f61daae39c378fdc611396b8975388e 100644
+--- a/tweak/Sources/Diagnostics/SGPerformance.h
++++ b/tweak/Sources/Diagnostics/SGPerformance.h
+@@ -6,7 +6,7 @@
+ typedef NS_ENUM(NSUInteger, SGPerformanceEvent) {
+     SGPerformanceBarRequested, SGPerformanceBarApplied,
+     SGPerformanceLyricsRequested, SGPerformanceLyricsApplied,
+-    SGPerformanceStaleLyricsWait, SGPerformanceEventCount
++    SGPerformanceStaleLyricsWait, SGPerformanceLyricsTick, SGPerformancePreviewTick, SGPerformanceEventCount
+ };
+ // Constant-time, allocation-free counters; call on main. No work while collection is off.
+ void SGPerformanceCount(SGPerformanceEvent event);
+@@ -18,3 +18,6 @@ NSDictionary *SGPerformanceSnapshot(void);
+ BOOL SGPerformanceSaveBaseline(void);
+ void SGPerformanceClear(void);
+ void SGPerformanceExport(void (^done)(NSURL *file));
++
++// Player publishes only state flags; diagnostics never imports the player layer. Main thread.
++void SGPerformanceSetPlaybackState(BOOL playing, BOOL paused, BOOL loading);
+diff --git a/tweak/Sources/Diagnostics/SGPerformance.m b/tweak/Sources/Diagnostics/SGPerformance.m
+index ab6603cdaf3ce1ae7240b64d8984d5f3ae4ab820..ca7b7c3f4e3cefbe0d56b717fa4ee209182243fb 100644
+--- a/tweak/Sources/Diagnostics/SGPerformance.m
++++ b/tweak/Sources/Diagnostics/SGPerformance.m
+@@ -1,4 +1,5 @@
+ #import "SGPerformance.h"
++#import "SGHangSampler.h"
+ #import "SGPerformanceMath.h"
+ #import "Core/SGCore.h"
+ #import <mach-o/dyld.h>
+@@ -16,6 +17,10 @@ static NSString *const kBaseline = @"spotifyglass.performance.baseline";
+ static const NSUInteger kHistoryLimit = 600;
+ static atomic_bool sg_pending;
+ static BOOL sg_collecting;
++static BOOL sg_playing, sg_paused, sg_loading, sg_stateKnown;
++void SGPerformanceSetPlaybackState(BOOL playing, BOOL paused, BOOL loading) {
++    sg_playing = playing; sg_paused = paused; sg_loading = loading; sg_stateKnown = YES;
++}
+ static uint64_t sg_events[SGPerformanceEventCount];
+ 
+ void SGPerformanceCount(SGPerformanceEvent event) {
+@@ -27,6 +32,8 @@ static NSDictionary *eventCounts(void) {
+         @"bar_applied": @(sg_events[SGPerformanceBarApplied]),
+         @"lyrics_requests": @(sg_events[SGPerformanceLyricsRequested]),
+         @"lyrics_applied": @(sg_events[SGPerformanceLyricsApplied]),
++        @"lyrics_ticks": @(sg_events[SGPerformanceLyricsTick]),
++        @"preview_ticks": @(sg_events[SGPerformancePreviewTick]),
+         @"stale_lyrics_waits_skipped": @(sg_events[SGPerformanceStaleLyricsWait])};
+ }
+ 
+@@ -108,6 +115,7 @@ static SGPerfSummary readSummary(NSDictionary *s) {
+ }
+ - (void)refresh {
+     sg_collecting = NO;
++    SGHangSamplerSetPerformanceEnabled(NO);
+     self.generation++;
+     if (self.timer) dispatch_source_cancel(self.timer);
+     self.timer = nil;
+@@ -118,6 +126,7 @@ static SGPerfSummary readSummary(NSDictionary *s) {
+     [self persist];
+     if (!SGFlag(SGKeyPerformance, NO) || UIApplication.sharedApplication.applicationState != UIApplicationStateActive) return;
+     sg_collecting = YES;
++    SGHangSamplerSetPerformanceEnabled(YES);
+     NSUInteger generation = self.generation;
+     dispatch_source_t timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_global_queue(QOS_CLASS_UTILITY, 0));
+     self.timer = timer;
+@@ -148,11 +157,11 @@ static SGPerfSummary readSummary(NSDictionary *s) {
+     NSString *profile = eeveeProfile();
+     struct utsname device;
+     uname(&device);
+-    NSString *context = [NSString stringWithFormat:@"%s|%@|%@|%@|%d|%ld|%ld|%@", device.machine,
++    NSString *context = [NSString stringWithFormat:@"%s|%@|%@|%@|%d|%ld|%ld|%@|stack50-v2|%d%d%d%d", device.machine,
+         UIDevice.currentDevice.systemVersion,
+         [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"?",
+         SGRedesignedUI() ? @"redesigned" : @"native", process.lowPowerModeEnabled,
+-        (long)process.thermalState, (long)[NSUserDefaults.standardUserDefaults integerForKey:SGKeyPerformanceScenario], profile];
++        (long)process.thermalState, (long)[NSUserDefaults.standardUserDefaults integerForKey:SGKeyPerformanceScenario], profile, sg_stateKnown, sg_playing, sg_paused, sg_loading];
+     if (![context isEqualToString:self.context]) {
+         self.context = context;
+         self.windowCount = self.streak = 0;
+@@ -173,14 +182,15 @@ static SGPerfSummary readSummary(NSDictionary *s) {
+     self.latest = @{@"time": @(NSDate.date.timeIntervalSince1970), @"session": self.session,
+         @"build": @(SG_BUILD_SHA), @"mod": @(SG_VERSION), @"context": context,
+         @"cpu": @(point.cpu), @"memory": @(point.memory), @"delay": @(point.delay),
+-        @"regressed": @(self.regressed), @"operations": eventCounts()};
++        @"regressed": @(self.regressed), @"operations": eventCounts(),
++        @"playback": @{@"known": @(sg_stateKnown), @"playing": @(sg_playing), @"paused": @(sg_paused), @"loading": @(sg_loading)}};
+     [self.history addObject:self.latest];
+     if (self.history.count > kHistoryLimit) [self.history removeObjectAtIndex:0];
+     if (++self.sinceSave >= 15) { self.sinceSave = 0; [self persist]; }
+ }
+ - (void)persist {
+     if (!self.loaded) return;
+-    NSDictionary *report = @{@"schema": @1, @"samples": [self.history copy]};
++    NSDictionary *report = @{@"schema": @2, @"samples": [self.history copy], @"main_thread_stalls": SGHangSamplerSnapshot()};
+     dispatch_async(self.files, ^{
+         NSData *data = [NSJSONSerialization dataWithJSONObject:report options:0 error:nil];
+         NSString *path = historyPath();
+@@ -223,6 +233,7 @@ BOOL SGPerformanceSaveBaseline(void) {
+ void SGPerformanceClear(void) {
+     SGPerformanceMonitor *m = monitor();
+     m.historyEpoch++;
++    SGHangSamplerClear();
+     memset(sg_events, 0, sizeof(sg_events));
+     [m.history removeAllObjects];
+     m.latest = nil;
+@@ -234,7 +245,9 @@ void SGPerformanceClear(void) {
+ }
+ void SGPerformanceExport(void (^done)(NSURL *file)) {
+     SGPerformanceMonitor *m = monitor();
+-    NSDictionary *report = @{@"schema": @1, @"snapshot": SGPerformanceSnapshot(), @"samples": [m.history copy]};
++    NSDictionary *report = @{@"schema": @2, @"snapshot": SGPerformanceSnapshot(), @"samples": [m.history copy],
++        @"main_thread_stalls": SGHangSamplerSnapshot(),
++        @"stall_capture": @{@"threshold_ms": @50, @"poll_ms": @25, @"limit": @24, @"scope": @"current process, foreground while recording"}};
+     dispatch_async(m.files, ^{
+         NSData *data = [NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil];
+         NSURL *file = [NSURL fileURLWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:@"spoti-performance.json"]];
+diff --git a/tweak/Sources/Redesigned/Lyrics/SGRKaraokeView.m b/tweak/Sources/Redesigned/Lyrics/SGRKaraokeView.m
+index af0cf75a59699fabd1fa9f8893295fb2e94694c1..9237998876120bc4409b3bb875cc23737d17ca6f 100644
+--- a/tweak/Sources/Redesigned/Lyrics/SGRKaraokeView.m
++++ b/tweak/Sources/Redesigned/Lyrics/SGRKaraokeView.m
+@@ -13,6 +13,8 @@
+ #import "MeaningSheet.h"
+ #import "Shared/LyricsSources/LyricsSources.h"
+ #import "Shared/Player/PlayerEvents.h"
++#import "Shared/Player/PlayerState.h"
++#import "Diagnostics/SGPerformance.h"
+ #import "Shared/Haptics/Haptics.h"
+ #import "Redesigned/Kit/SGRTokens.h"
+ 
+@@ -1051,13 +1053,15 @@ typedef struct {
+     NSInteger start, end, line;
+ } SGRKaraokeBreak;
+ 
+-@interface SGRKaraokeView () <UIScrollViewDelegate>
++@interface SGRKaraokeView () <UIScrollViewDelegate, SGPlayerStateObserver>
+ @end
+ 
+ @implementation SGRKaraokeView {
+     UIScrollView *_scroll;
+     BOOL _browsing;
+     CADisplayLink *_link;
++    NSTimer *_idleTimer;
++    CFTimeInterval _smoothUntil;
+     NSString *_track;
+     NSArray<SGKaraokeLine *> *_lines;
+     // The song is placed from its lines' heights alone; views exist for the lines in and near sight.
+@@ -1149,11 +1153,13 @@ typedef struct {
+     // away rather than by the view going: see scheduleLink.
+     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(scheduleLink) name:UIApplicationDidBecomeActiveNotification object:nil];
+     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(scheduleLink) name:UIApplicationWillResignActiveNotification object:nil];
++    SGAddPlayerStateObserver(self);
+     return self;
+ }
+ 
+ - (void)dealloc {
+     [NSNotificationCenter.defaultCenter removeObserver:self];
++    [_idleTimer invalidate];
+     free(_spans);
+     free(_breaks);
+ }
+@@ -1219,12 +1225,15 @@ typedef struct {
+ // Lines are placed for a content offset of 0, so following the song means scrolling back to 0.
+ // While the user browses, placement stands still and every line is sharp.
+ - (void)scrollViewWillBeginDragging:(UIScrollView *)scrollView {
++    _smoothUntil = CACurrentMediaTime() + 1.2;
++    [self scheduleLink];
+     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(followSong) object:nil];
+     _browsing = YES;
+     for (SGRKaraokeLineView *view in _shown.allValues) view.blur = 0;
+ }
+ 
+ - (void)scrollViewDidScroll:(UIScrollView *)scrollView {
++    [self alignFade];
+     [self showLinesInSight];
+ }
+ 
+@@ -1241,6 +1250,8 @@ typedef struct {
+     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(followSong) object:nil];
+     if (!_browsing) return;
+     _browsing = NO;
++    _smoothUntil = CACurrentMediaTime() + 1.2;
++    [self scheduleLink];
+     [UIView animateWithDuration:0.7 delay:0 usingSpringWithDamping:0.9 initialSpringVelocity:0
+                         options:UIViewAnimationOptionAllowUserInteraction
+                      animations:^{ self->_scroll.contentOffset = CGPointZero; } completion:nil];
+@@ -1271,15 +1282,34 @@ typedef struct {
+     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(startLink) object:nil];
+     [_link invalidate];
+     _link = nil;
++    [_idleTimer invalidate]; _idleTimer = nil;
+     if (!self.window) return;
+     NSTimeInterval wait = SGPlayerTransitionEnds() - CACurrentMediaTime();
+     if (wait <= 0) [self startLink];
+     else [self performSelector:@selector(startLink) withObject:nil afterDelay:wait + kTransitionSlack inModes:@[NSRunLoopCommonModes]];
+ }
+ 
++- (BOOL)needsSmoothTicks {
++    SPTPlayerState *state = SGPlayerState();
++    return (_tops && !_plain && state.isPlaying && !state.isPaused) ||
++        _scroll.isDragging || _scroll.isDecelerating || CACurrentMediaTime() < _smoothUntil;
++}
++
++- (void)playerStateDidChange:(SPTPlayerState *)state {
++    // Let an in-flight line/cover movement finish before parking the high-frequency clock.
++    _smoothUntil = CACurrentMediaTime() + 1.2;
++    [self scheduleLink];
++}
++
+ - (void)startLink {
+-    if (!self.window || _link) return;
++    if (!self.window || _link || _idleTimer) return;
+     if (UIApplication.sharedApplication.applicationState != UIApplicationStateActive) return;
++    if (![self needsSmoothTicks]) {
++        __weak SGRKaraokeView *weakSelf = self;
++        _idleTimer = [NSTimer timerWithTimeInterval:0.25 repeats:YES block:^(NSTimer *timer) { [weakSelf tick]; }];
++        [NSRunLoop.mainRunLoop addTimer:_idleTimer forMode:NSRunLoopCommonModes];
++        return;
++    }
+     _link = [CADisplayLink displayLinkWithTarget:self selector:@selector(tick)];
+     _link.preferredFrameRateRange = CAFrameRateRangeMake(80, 120, 120);
+     [_link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
+@@ -1337,6 +1367,10 @@ typedef struct {
+ - (void)setLineInsets:(UIEdgeInsets)insets duration:(NSTimeInterval)duration {
+     if (UIEdgeInsetsEqualToEdgeInsets(insets, _band)) return;
+     BOOL animated = duration > 0 && self.window && !SGRReduceMotion();
++    if (animated) {
++        _smoothUntil = CACurrentMediaTime() + duration + 0.2;
++        [self scheduleLink];
++    }
+     _bandFrom = animated ? [self shownBand] : insets;
+     _bandSince = CACurrentMediaTime();
+     _bandFor = animated ? duration : 0;
+@@ -1726,7 +1760,7 @@ typedef struct {
+ // corrections. A seek or a new track is too far off to ease and is taken at once.
+ - (double)clockMs {
+     NSInteger raw = SGKaraokePositionMs();
+-    CFTimeInterval shown = _link.targetTimestamp;
++    CFTimeInterval shown = _link ? _link.targetTimestamp : CACurrentMediaTime();
+     BOOL running = raw != _reported;   // a paused player reports the same position every frame
+     if (running) _stillSince = 0;
+     else if (!_stillSince) _stillSince = shown;
+@@ -1740,6 +1774,8 @@ typedef struct {
+ }
+ 
+ - (void)tick {
++    SGPerformanceCount(SGPerformanceLyricsTick);
++    if ((_link != nil) != [self needsSmoothTicks]) [self scheduleLink];
+     NSString *track = SGKaraokePlayingTrack();
+     if (!(track == _track || [track isEqualToString:_track])) {
+         SGLog(@"karaoke: page shows track %@, lyrics %@", track, SGKaraokeLinesForTrack(track) ? @"captured" : @"not captured yet");
+@@ -1800,7 +1836,7 @@ typedef struct {
+         [self showLinesInSight];   // the page may be scrolling by hand, or springing back
+     }
+     for (NSUInteger i = 0; i < _sungCount; i++) [_shown[@(_sung[i])] showTime:now];
+-    if (_dots.superview) [_dots showTime:now running:!_stillSince || _link.targetTimestamp - _stillSince < kStillFor at:_link.targetTimestamp];
++    if (_dots.superview) [_dots showTime:now running:!_stillSince || _clockTime - _stillSince < kStillFor at:_clockTime];
+ }
+ 
+ // What is sung at `now`: each line from its start until it is sung out, so two voices over each
+diff --git a/tweak/Sources/Redesigned/Player/PlayerPreview.x b/tweak/Sources/Redesigned/Player/PlayerPreview.x
+index 08626351ae573ba43f330f843abd13b3d872a2dc..4b79d06851d2d07d6e89cce90102f95bf3f68c6c 100644
+--- a/tweak/Sources/Redesigned/Player/PlayerPreview.x
++++ b/tweak/Sources/Redesigned/Player/PlayerPreview.x
+@@ -1,6 +1,7 @@
+ // Redesigned player: current line below the cover, independent of Spotify preview flags.
+ // Uses this look's artwork geometry and disappears while its full lyrics overlay is open.
+ #import "Core/SGCore.h"
++#import "Diagnostics/SGPerformance.h"
+ #import "Shared/Lyrics/Lyrics.h"
+ #import "Shared/LyricsSources/LyricsSources.h"
+ #import "Shared/LyricsSources/LyricsDiagnostics.h"
+@@ -151,6 +152,7 @@ static BOOL sgrShowing(UIView *view, UIView *host) {
+     [self updateLink];
+ }
+ - (void)animateText {
++    SGPerformanceCount(SGPerformancePreviewTick);
+     if (UIApplication.sharedApplication.applicationState != UIApplicationStateActive || SGRPlayerIsTransitioning()) return;
+     if (self.artworkUntil > 0) {
+         [self updateGeometry];
+diff --git a/tweak/Sources/Shared/LyricsSources/LyricsSources.m b/tweak/Sources/Shared/LyricsSources/LyricsSources.m
+index 6077edfd20c2e83990b94d72dd8df5dfe43fed2e..78c17c49faac1507ddcbac10e71eeca505b05741 100644
+--- a/tweak/Sources/Shared/LyricsSources/LyricsSources.m
++++ b/tweak/Sources/Shared/LyricsSources/LyricsSources.m
+@@ -115,17 +115,19 @@ static void send(NSURLRequest *request, void (^done)(NSData *body)) {
+         pending[key] = [NSMutableArray arrayWithObject:[done copy]];
+     }
+     sendUncached(request, ^(NSData *body) {
++        // This callback runs off-main. Parsing while holding pending can block a main-thread
++        // cache lookup behind an arbitrarily large response; keep the shared lock bookkeeping-only.
++        BOOL cacheable = body.length > 0 && body.length <= 256 * 1024;
++        id json = cacheable ? [NSJSONSerialization JSONObjectWithData:body options:0 error:nil] : nil;
++        NSDictionary *object = [json isKindOfClass:NSDictionary.class] ? json : nil;
++        NSInteger code = [object[@"code"] respondsToSelector:@selector(integerValue)] ? [object[@"code"] integerValue] : 0;
++        NSDictionary *req = [object[@"req"] isKindOfClass:NSDictionary.class] ? object[@"req"] : nil;
++        BOOL appFailed = (code != 0 && code != 200) || [req[@"code"] integerValue] != 0;
+         NSArray *callbacks;
+         @synchronized (pending) {
+             callbacks = [pending[key] copy];
+             [pending removeObjectForKey:key];
+-            // Bound both count and bytes; do not retain unexpectedly large responses.
+-            id json = body.length ? [NSJSONSerialization JSONObjectWithData:body options:0 error:nil] : nil;
+-            NSDictionary *object = [json isKindOfClass:NSDictionary.class] ? json : nil;
+-            NSInteger code = [object[@"code"] respondsToSelector:@selector(integerValue)] ? [object[@"code"] integerValue] : 0;
+-            NSDictionary *req = [object[@"req"] isKindOfClass:NSDictionary.class] ? object[@"req"] : nil;
+-            BOOL appFailed = (code != 0 && code != 200) || [req[@"code"] integerValue] != 0;
+-            if (body.length && body.length <= 256 * 1024 && !appFailed) {
++            if (cacheable && !appFailed) {
+                 if (kept.count >= 32) [kept removeAllObjects];
+                 kept[key] = @{@"time": @(NSDate.timeIntervalSinceReferenceDate), @"body": body};
+             }
+diff --git a/tweak/Sources/Shared/Player/PlayerState.x b/tweak/Sources/Shared/Player/PlayerState.x
+index a9e8ad7154c876891763fa239507d7226abd7b8f..b65742e6842d11e31da8f39078ab64cd918d4d3d 100644
+--- a/tweak/Sources/Shared/Player/PlayerState.x
++++ b/tweak/Sources/Shared/Player/PlayerState.x
+@@ -1,6 +1,7 @@
+ // PlayerState.h names the hooks and why they are the ones.
+ #import "Core/SGCore.h"
+ #import "PlayerState.h"
++#import "Diagnostics/SGPerformance.h"
+ 
+ NSString *SGURIString(id uri) {
+     if ([uri isKindOfClass:NSString.class]) return uri;
+@@ -37,6 +38,7 @@ static void publish(SPTPlayerState *state) {
+     NSString *key = keyOf(state);
+     if ([key isEqualToString:sg_stateKey]) return;
+     sg_stateKey = key;
++    SGPerformanceSetPlaybackState(state.isPlaying, state.isPaused, [state respondsToSelector:@selector(isLoading)] && state.isLoading);
+     for (id<SGPlayerStateObserver> observer in sg_stateObservers.allObjects) [observer playerStateDidChange:state];
+ }
+ 
+-- 
+2.34.1
+

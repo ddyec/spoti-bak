@@ -1,0 +1,6 @@
+tree 1222db7606c4406620c466fe676a6b7083f7d149
+parent 4e656891f50ed361f19549dec63323477baa06db
+author Codex <codex@openai.com> 1792746073 +0000
+committer Codex <codex@openai.com> 1792746113 +0000
+
+fix: anchor lyric preview artwork independently of native lyric loading

@@ -1,0 +1,6 @@
+tree 00dc28250f4a085906c1c2dc62c8919df8c903bb
+parent 2108411030971bf696c5e1198c1f0e771e09599b
+author ddyec <89333385+ddyec@users.noreply.github.com> 1792503648 +0800
+committer ddyec <89333385+ddyec@users.noreply.github.com> 1792503648 +0800
+
+fix: declare lyric preview playback properties separately

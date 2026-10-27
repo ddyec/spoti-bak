@@ -1,0 +1,6 @@
+tree f9db9d15de3ff0194feb9c8230b8746e59ec7fe3
+parent 5b4fb0f6579721d2dcff0b7bbc421baea9eb4366
+author Codex <codex@users.noreply.github.com> 1790765754 +0800
+committer Codex <codex@users.noreply.github.com> 1790765754 +0800
+
+fix: publish prefetched provider lyrics directly to display cache

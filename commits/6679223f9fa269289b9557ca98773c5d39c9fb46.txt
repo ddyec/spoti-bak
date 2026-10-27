@@ -1,0 +1,6 @@
+tree ce8013b05d427b08249fb30eae8e6f2069156e11
+parent 9add78b28c63621ed504bdf8fe3d6b8dade87e27
+author Codex <codex@users.noreply.github.com> 1792332964 +0800
+committer Codex <codex@users.noreply.github.com> 1792332964 +0800
+
+fix: validate fresh multilingual lyrics corpus before IPA build

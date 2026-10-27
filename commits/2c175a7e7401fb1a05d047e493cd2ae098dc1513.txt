@@ -1,0 +1,6 @@
+tree 8cf814eb4b5fb82a5a41832fdd6f931ce5fcff0e
+parent 0d93ca073cdc489eb6b5be205bd969e90554463d
+author Codex <codex@openai.com> 1792757034 +0000
+committer Codex <codex@openai.com> 1792757034 +0000
+
+feat: localize mod settings and prompts into Chinese

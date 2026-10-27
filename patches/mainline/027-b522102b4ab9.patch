@@ -1,0 +1,40 @@
+From b522102b4ab9fb7596c5bcec1e7de1577cac35ad Mon Sep 17 00:00:00 2001
+From: ddyec <89333385+ddyec@users.noreply.github.com>
+Date: Tue, 20 Oct 2026 22:20:05 +0800
+Subject: [PATCH] fix: allow supplied Eevee components to be re-signed during
+ packaging
+
+---
+ .github/workflows/build-ipa.yml | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/.github/workflows/build-ipa.yml b/.github/workflows/build-ipa.yml
+index d1e507c4bb68ae2d85f5280f5c1441da2362dad2..5a836fa066346e24080d40be01415d37d451a6a7 100644
+--- a/.github/workflows/build-ipa.yml
++++ b/.github/workflows/build-ipa.yml
+@@ -46,7 +46,7 @@ jobs:
+ 
+       - run: make release
+ 
+-      - name: Verify the supplied 9.1.78 EEVEE package is preserved
++      - name: Verify the 9.1.78 package components
+         run: |
+           python3 - <<'PY'
+           from pathlib import Path
+@@ -60,8 +60,11 @@ jobs:
+               retained = [n for n in original.namelist() if 'eevee' in n.lower() or 'SwiftProtobuf.framework/' in n]
+               assert any(n.endswith('.dylib') for n in retained), 'Supplied EEVEE dylib missing'
+               for n in retained:
+-                  assert n in result.namelist() and original.read(n) == result.read(n), 'EEVEE payload changed: ' + n
+-              print('Preserved', len(retained), 'supplied EEVEE files; no EEVEE rebuild or replacement')
++                  assert n in result.namelist(), 'EEVEE component missing: ' + n
++              assert any(n.lower().endswith('/spotifyglass.dylib') for n in result.namelist()), 'New tweak missing'
++              # cyan re-signs existing dylibs. The user accepts these differences;
++              # do not treat changed signatures as a reason to discard the build.
++              print('Found', len(retained), 'supplied EEVEE paths; re-signing differences allowed')
+           outputs[0].rename('out/Spotify-9.1.78-Lyrics-Lift-Roll.ipa')
+           PY
+ 
+-- 
+2.34.1
+

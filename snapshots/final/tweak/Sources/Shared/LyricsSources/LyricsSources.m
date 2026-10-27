@@ -1,0 +1,991 @@
+// The chain: every source in the order the Lyrics page puts them in, asked one after another, the
+// first with timed lyrics answering for the track.
+//
+// Stopping at the first answer is what makes the lyrics card under the player appear at all. For a
+// track Spotify has no lyrics of its own for, the card is only offered when the answer to Spotify's
+// lyrics request arrives within about a second of the player building its list of cards; a walk that
+// went on through every source for word timing took three seconds and more, and the card never came.
+// So the order is the priority, as it reads on the Lyrics page: a source further down is only asked
+// when those above it had nothing timed, and then only for what they lacked.
+#import "Core/SGCore.h"
+#import "LyricsSources.h"
+#import "Shared/Lyrics/Lyrics.h"
+#import "Headers/SPTPlayer.h"
+#import "Settings/SGPageStyle.h"
+#import <mach-o/dyld.h>
+#import <objc/runtime.h>
+#import <stdatomic.h>
+
+static const NSTimeInterval kTimeout = 6;
+static const NSUInteger kKeptTracks = 40;
+static void sourceOrderChanged(void);
+
+// What the switches were called while Musixmatch was the only source; read once, to carry an
+// existing install's settings over to the order.
+static NSString *const kLegacyMusixmatch = @"spotifyglass.musixmatchLyrics";
+static NSString *const kLegacyAllTracks = @"spotifyglass.musixmatchAllTracks";
+static NSString *const kLegacyNetEase = @"spotifyglass.neteaseWordTiming";
+
+@implementation SGLyricsCredit
+@end
+
+@implementation SGLyricsResult
+@end
+
+@implementation SGLyricsQuery
+@end
+
+@implementation SGLyricsProvider
+@end
+
+#pragma mark - the requests the sources share
+
+// Every request any source has lost to the network or to a server too busy to answer, counted so a
+// walk can tell "no source has lyrics" from "a source could not say". Only the first is kept.
+static _Atomic NSUInteger sg_failures;
+
+BOOL SGLyricsReplyFailed(NSURLResponse *response, NSError *error) {
+    NSInteger status = [response isKindOfClass:NSHTTPURLResponse.class] ? ((NSHTTPURLResponse *)response).statusCode : 0;
+    return error || status == 429 || status >= 500;
+}
+
+void SGLyricsNoteReply(NSURLResponse *response, NSError *error) {
+    if (SGLyricsReplyFailed(response, error)) atomic_fetch_add(&sg_failures, 1);
+    if (SGLyricsDiagnosticsEnabled()) {
+        NSInteger status = [response isKindOfClass:NSHTTPURLResponse.class] ? ((NSHTTPURLResponse *)response).statusCode : 0;
+        SGLyricsLog(@"network: %@ %@ status %ld, error %@/%ld", response.URL.host, response.URL.path,
+                    (long)status, error.domain ?: @"none", (long)error.code);
+    }
+}
+
+NSURL *SGLyricsURL(NSString *base, NSDictionary<NSString *, NSString *> *query) {
+    NSURLComponents *url = [NSURLComponents componentsWithString:base];
+    NSMutableArray<NSURLQueryItem *> *items = [NSMutableArray array];
+    for (NSString *name in [[query allKeys] sortedArrayUsingSelector:@selector(compare:)])
+        [items addObject:[NSURLQueryItem queryItemWithName:name value:query[name]]];
+    url.queryItems = items;
+    return url.URL;
+}
+
+static NSMutableURLRequest *requestFor(NSURL *url, NSDictionary<NSString *, NSString *> *headers) {
+    if (!url) return nil;
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url cachePolicy:NSURLRequestReloadIgnoringLocalCacheData timeoutInterval:kTimeout];
+    [headers enumerateKeysAndObjectsUsingBlock:^(NSString *name, NSString *value, BOOL *stop) {
+        [request setValue:value forHTTPHeaderField:name];
+    }];
+    return request;
+}
+
+static void sendUncached(NSURLRequest *request, void (^done)(NSData *body)) {
+    if (!request) {
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{ done(nil); });
+        return;
+    }
+    NSURL *url = request.URL;
+    NSTimeInterval began = NSDate.timeIntervalSinceReferenceDate;
+    [[NSURLSession.sharedSession dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        NSInteger status = [response isKindOfClass:NSHTTPURLResponse.class] ? ((NSHTTPURLResponse *)response).statusCode : 0;
+        SGLyricsNoteReply(response, error);
+        if (SGLyricsDiagnosticsEnabled()) SGLyricsLog(@"network: %@ %@ %@ completed in %.3fs, %lu bytes",
+            request.HTTPMethod, url.host, url.path, NSDate.timeIntervalSinceReferenceDate - began, (unsigned long)data.length);
+        if (error || status >= 400) SGLyricsLog(@"lyrics: %@ answered %ld, error %@/%ld", url.host, (long)status, error.domain ?: @"none", (long)error.code);
+        done(status >= 400 || error ? nil : data);
+    }] resume];
+}
+
+// Lyrics, translation and preview can ask for the same catalogue response together.
+// Share the in-flight request and its successful bytes briefly; decode into fresh line objects.
+// Never retain a network failure. Keys include headers and POST data (including language).
+static void send(NSURLRequest *request, void (^done)(NSData *body)) {
+    if (!request) { sendUncached(request, done); return; }
+    static NSMutableDictionary *pending, *kept;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ pending = [NSMutableDictionary dictionary]; kept = [NSMutableDictionary dictionary]; });
+    NSArray *key = @[request.HTTPMethod ?: @"GET", request.URL.absoluteString ?: @"",
+                     request.allHTTPHeaderFields ?: @{}, request.HTTPBody ?: NSData.data];
+    NSTimeInterval now = NSDate.timeIntervalSinceReferenceDate;
+    @synchronized (pending) {
+        NSDictionary *cached = kept[key];
+        if (cached && now - [cached[@"time"] doubleValue] < 120) {
+            NSData *body = cached[@"body"];
+            dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{ done(body); });
+            return;
+        }
+        if (pending[key]) { [pending[key] addObject:[done copy]]; return; }
+        pending[key] = [NSMutableArray arrayWithObject:[done copy]];
+    }
+    sendUncached(request, ^(NSData *body) {
+        // This callback runs off-main. Parsing while holding pending can block a main-thread
+        // cache lookup behind an arbitrarily large response; keep the shared lock bookkeeping-only.
+        BOOL cacheable = body.length > 0 && body.length <= 256 * 1024;
+        id json = cacheable ? [NSJSONSerialization JSONObjectWithData:body options:0 error:nil] : nil;
+        NSDictionary *object = [json isKindOfClass:NSDictionary.class] ? json : nil;
+        NSInteger code = [object[@"code"] respondsToSelector:@selector(integerValue)] ? [object[@"code"] integerValue] : 0;
+        NSDictionary *req = [object[@"req"] isKindOfClass:NSDictionary.class] ? object[@"req"] : nil;
+        BOOL appFailed = (code != 0 && code != 200) || [req[@"code"] integerValue] != 0;
+        NSArray *callbacks;
+        @synchronized (pending) {
+            callbacks = [pending[key] copy];
+            [pending removeObjectForKey:key];
+            if (cacheable && !appFailed) {
+                if (kept.count >= 32) [kept removeAllObjects];
+                kept[key] = @{@"time": @(NSDate.timeIntervalSinceReferenceDate), @"body": body};
+            }
+        }
+        for (void (^callback)(NSData *) in callbacks) callback(body);
+    });
+}
+
+static id jsonIn(NSData *body) {
+    return body.length ? [NSJSONSerialization JSONObjectWithData:body options:0 error:nil] : nil;
+}
+
+void SGLyricsGetJSON(NSURL *url, NSDictionary<NSString *, NSString *> *headers, void (^done)(id root)) {
+    SGLyricsReadJSON(requestFor(url, headers), done);
+}
+
+void SGLyricsReadJSON(NSURLRequest *request, void (^done)(id root)) {
+    send(request, ^(NSData *body) {
+        id root = jsonIn(body);
+        dispatch_async(dispatch_get_main_queue(), ^{ done(root); });
+    });
+}
+
+void SGLyricsGetText(NSURL *url, void (^done)(NSString *text)) {
+    send(requestFor(url, nil), ^(NSData *body) {
+        NSString *text = body.length ? [[NSString alloc] initWithData:body encoding:NSUTF8StringEncoding] : nil;
+        dispatch_async(dispatch_get_main_queue(), ^{ done(text); });
+    });
+}
+
+void SGLyricsGetJSONReply(NSURL *url, NSDictionary<NSString *, NSString *> *headers,
+                          void (^done)(id root, NSHTTPURLResponse *response)) {
+    NSURLRequest *request = requestFor(url, headers);
+    if (!request) {
+        dispatch_async(dispatch_get_main_queue(), ^{ done(nil, nil); });
+        return;
+    }
+    [[NSURLSession.sharedSession dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        SGLyricsNoteReply(response, error);
+        if (error) SGLog(@"lyrics: %@ failed, error %@", url.host, error);
+        NSHTTPURLResponse *http = [response isKindOfClass:NSHTTPURLResponse.class] ? (NSHTTPURLResponse *)response : nil;
+        id root = jsonIn(data);
+        dispatch_async(dispatch_get_main_queue(), ^{ done(root, http); });
+    }] resume];
+}
+
+void SGLyricsPostJSON(NSURL *url, NSDictionary<NSString *, NSString *> *headers, id body, void (^done)(id root)) {
+    NSData *written = [NSJSONSerialization isValidJSONObject:body]
+        ? [NSJSONSerialization dataWithJSONObject:body options:NSJSONWritingSortedKeys error:nil] : nil;
+    NSMutableURLRequest *request = written ? requestFor(url, headers) : nil;
+    request.HTTPMethod = @"POST";
+    request.HTTPBody = written;
+    [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+    send(request, ^(NSData *answer) {
+        id root = jsonIn(answer);
+        dispatch_async(dispatch_get_main_queue(), ^{ done(root); });
+    });
+}
+
+// A pause this long between two lines gets a ♪, so Spotify's page does not hold the last one.
+static const NSInteger kBreakMs = 3000;
+
+void SGLyricsPageLines(NSArray<SGKaraokeLine *> *lines, NSArray<NSNumber *> **starts, NSArray<NSString *> **texts) {
+    NSMutableArray<NSNumber *> *at = [NSMutableArray array];
+    NSMutableArray<NSString *> *said = [NSMutableArray array];
+    SGKaraokeLine *last = nil;
+    for (SGKaraokeLine *line in lines) {
+        if (last && line.start - last.end >= kBreakMs) {
+            [at addObject:@(last.end)];
+            [said addObject:@"♪"];
+        }
+        NSString *text = SGKaraokeLineText(line);
+        // The backing vocals read on the same line on Spotify's own page, which has one row a line.
+        if (line.backing) text = [text stringByAppendingFormat:@" %@", SGKaraokeLineText(line.backing)];
+        [at addObject:@(line.start)];
+        [said addObject:text];
+        last = line;
+    }
+    if (last) {
+        [at addObject:@(last.end)];
+        [said addObject:@""];
+    }
+    *starts = at;
+    *texts = said;
+}
+
+#pragma mark - which sources there are, and in what order
+
+NSArray<SGLyricsProvider *> *SGLyricsAllProviders(void) {
+    static NSArray<SGLyricsProvider *> *all;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        SGLyricsProvider *(^make)(NSString *, NSString *, NSString *, SGLyricsAsk) =
+        ^(NSString *key, NSString *name, NSString *detail, SGLyricsAsk ask) {
+            SGLyricsProvider *provider = [SGLyricsProvider new];
+            provider.key = key;
+            provider.name = name;
+            provider.detail = detail;
+            // A source that matches by Spotify's own track id has everything it needs from the
+            // start; the rest wait for the player to name the track before they can search.
+            provider.needsName = ![@[@"musixmatch", @"spicylyrics"] containsObject:key];
+            provider.ask = ask;
+            return provider;
+        };
+        all = @[
+            make(@"spicylyrics", @"Spicy Lyrics", @"Community syncs, word timing", SGSpicyLyricsAsk),
+            make(@"binilyrics", @"BiniLyrics", @"Apple Music word timing", SGBiniLyricsAsk),
+            make(@"musixmatch", @"Musixmatch", @"Spotify's licensed catalogue", SGMusixmatchAsk),
+            make(@"unison", @"Unison", @"Hand-timed, few tracks", SGUnisonAsk),
+            make(@"netease", @"NetEase", @"Word timing with line fallback", SGNetEaseAsk),
+            make(@"lrclib", @"LRCLIB", @"Line timing, open fallback", SGLrcLibAsk),
+            make(@"qqmusic", @"QQ Music", @"Line-timed lyrics", SGQQMusicAsk),
+            make(@"kugou", @"KuGou", @"Word-timed KRC lyrics", SGKuGouAsk),
+        ];
+    });
+    return all;
+}
+
+SGLyricsProvider *SGLyricsProviderFor(NSString *key) {
+    for (SGLyricsProvider *provider in SGLyricsAllProviders()) {
+        if ([provider.key isEqualToString:key]) return provider;
+    }
+    return nil;
+}
+
+// An install from before the order existed keeps what it had: the sources it was using, in the only
+// order there was. Nothing is switched on for it that it had not already asked for.
+static NSArray<NSString *> *fromLegacyKeys(void) {
+    if (!SGFlag(kLegacyMusixmatch, NO)) return @[];
+    NSMutableArray<NSString *> *order = [NSMutableArray arrayWithObject:@"musixmatch"];
+    if (SGFlag(kLegacyNetEase, NO)) [order addObject:@"netease"];
+    return order;
+}
+
+NSArray<NSString *> *SGLyricsOrder(void) {
+    id stored = [NSUserDefaults.standardUserDefaults arrayForKey:SGKeyLyricsProviders];
+    NSArray *keys = [stored isKindOfClass:NSArray.class] ? stored : fromLegacyKeys();
+    NSMutableArray<NSString *> *order = [NSMutableArray array];
+    for (id key in keys) {
+        if ([key isKindOfClass:NSString.class] && SGLyricsProviderFor(key) && ![order containsObject:key]) [order addObject:key];
+    }
+    return order;
+}
+
+void SGLyricsSetOrder(NSArray<NSString *> *keys) {
+    BOOL changed = ![SGLyricsOrder() isEqualToArray:(keys ?: @[])];
+    [NSUserDefaults.standardUserDefaults setObject:keys ?: @[] forKey:SGKeyLyricsProviders];
+    if (changed) sourceOrderChanged();
+}
+
+BOOL SGLyricsEnabled(void) {
+    return SGLyricsOrder().count > 0;
+}
+
+// Every EeveeSpotify fork keeps its source here, 4 being Do Not Replace Lyrics; unset is its default,
+// which replaces.
+static NSString *const kEeveeLyricsSource = @"lyricsSource";
+static const NSInteger kEeveeNotReplaced = 4;
+
+BOOL SGEeveeLoaded(void) {
+    static BOOL loaded;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        loaded = objc_getClass("_TtC12EeveeSpotify27EeveeSettingsViewController") != nil;
+        for (uint32_t i = 0, count = _dyld_image_count(); i < count && !loaded; i++) {
+            const char *path = _dyld_get_image_name(i);
+            const char *name = path ? strrchr(path, '/') : NULL;
+            loaded = name && strcasestr(name, "eevee");
+        }
+    });
+    return loaded;
+}
+
+BOOL SGLyricsEeveeReplaces(void) {
+    if (!SGEeveeLoaded()) return NO;
+    id source = [NSUserDefaults.standardUserDefaults objectForKey:kEeveeLyricsSource];
+    return ![source respondsToSelector:@selector(integerValue)] || [source integerValue] != kEeveeNotReplaced;
+}
+
+BOOL SGLyricsActive(void) {
+    static BOOL active;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        active = SGLyricsEnabled();
+        if (active && SGLyricsEeveeReplaces()) {
+            active = NO;
+            SGLog(@"lyrics: EeveeSpotify replaces lyrics itself, the sources stay off");
+        }
+    });
+    return active;
+}
+
+#pragma mark - what is known about the track
+
+// The player knows every track it has played by name, which is what every source but Musixmatch
+// searches by. The track is looked up by id rather than compared with the one playing now: a lyrics
+// request often lands a beat before the player moves on to its track, and comparing then left the
+// query nameless. A track the player has not reported starts with nothing, and the first source
+// that matches by id fills the rest in.
+static NSMutableDictionary<NSString *, NSArray<SGKaraokeLine *> *> *referenceStore(void) {
+    static NSMutableDictionary *store;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ store = [NSMutableDictionary dictionary]; });
+    return store;
+}
+
+void SGLyricsNoteReference(NSString *trackID, NSArray<SGKaraokeLine *> *lines) {
+    if (!trackID.length || !lines.count) return;
+    NSMutableDictionary *store = referenceStore();
+    @synchronized (store) {
+        if (!store[trackID] && store.count >= kKeptTracks) [store removeAllObjects];
+        store[trackID] = lines;
+    }
+}
+
+static NSArray<SGKaraokeLine *> *referenceFor(NSString *trackID) {
+    NSMutableDictionary *store = referenceStore();
+    @synchronized (store) { return store[trackID]; }
+}
+
+static SGLyricsQuery *queryFor(NSString *trackID) {
+    SGLyricsQuery *query = [SGLyricsQuery new];
+    query.trackID = trackID;
+    query.referenceLines = referenceFor(trackID);
+    SPTPlayerTrack *track = SGKaraokeTrackFor(trackID);
+    if (!track) return query;
+    query.title = track.trackTitle;
+    query.artist = track.artistName;
+    NSDictionary<NSString *, NSString *> *metadata = track.metadata;
+    id album = metadata[@"album_title"];
+    id length = metadata[@"duration"];
+    if ([album isKindOfClass:NSString.class]) query.album = album;
+    if ([length respondsToSelector:@selector(integerValue)]) query.seconds = [length integerValue] / 1000;
+    return query;
+}
+static BOOL named(SGLyricsQuery *query);
+
+// Translation is a separate lookup from the source walk. The walk can return as soon as it has
+// timed lyrics; waiting for QQ or NetEase here would delay Spotify's lyrics card.
+static NSMutableDictionary<NSString *, NSArray<SGKaraokeLine *> *> *sg_translationAsked;
+
+// Han characters also occur in Japanese; they cannot establish that an original is Chinese.
+static BOOL needsChineseTranslations(NSArray<SGKaraokeLine *> *lines) {
+    for (SGKaraokeLine *line in lines) {
+        NSString *original = SGKaraokeLineText(line);
+        if ([original rangeOfCharacterFromSet:NSCharacterSet.alphanumericCharacterSet].location != NSNotFound &&
+            !SGLyricsContainsHan(line.translation)) return YES;
+    }
+    return NO;
+}
+
+// Calculate off main; only assigning the finished translations and notifying views runs on main.
+static void applyChineseTranslations(NSString *trackID, NSArray<SGKaraokeLine *> *lines,
+                                     NSString *original, NSString *translated, void (^done)(BOOL matched)) {
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        NSDictionary<NSNumber *, NSString *> *updates = SGLyricsChineseTranslationMap(lines, original, translated);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (sg_translationAsked[trackID] != lines) return;
+            NSUInteger count = 0;
+            for (NSNumber *index in updates) {
+                SGKaraokeLine *line = lines[index.unsignedIntegerValue];
+                if (SGLyricsContainsHan(line.translation)) continue;
+                line.translation = updates[index];
+                count++;
+            }
+            if (count) {
+                SGLyricsLog(@"lyrics: added %lu Chinese translations for %@", (unsigned long)count, trackID);
+                [NSNotificationCenter.defaultCenter postNotificationName:SGLyricsTranslationUpdatedNotification object:trackID];
+            }
+            done(updates.count > 0);
+        });
+    });
+}
+
+static NSArray<NSString *> *translationOrder(NSArray<NSString *> *order) {
+    NSMutableArray *keys = [NSMutableArray array];
+    for (NSString *key in order) if ([@[@"qqmusic", @"netease"] containsObject:key]) [keys addObject:key];
+    return keys;
+}
+
+static void translateAt(NSString *trackID, NSArray<SGKaraokeLine *> *lines, SGLyricsQuery *query,
+                        NSArray<NSString *> *order, NSUInteger index, NSUInteger failures) {
+    if (sg_translationAsked[trackID] != lines) return;
+    if (index >= order.count) {
+        if (query.providerRetryAfter > NSDate.timeIntervalSinceReferenceDate || atomic_load(&sg_failures) != failures) {
+            NSTimeInterval delay = MAX(10, query.providerRetryAfter - NSDate.timeIntervalSinceReferenceDate);
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                if (sg_translationAsked[trackID] == lines) [sg_translationAsked removeObjectForKey:trackID];
+            });
+        }
+        return;
+    }
+    SGLyricsTranslationReply receive = ^(NSString *original, NSString *translated) {
+        if (sg_translationAsked[trackID] != lines) return;
+        applyChineseTranslations(trackID, lines, original, translated, ^(BOOL matched) {
+            if (matched || !needsChineseTranslations(lines)) return;
+            translateAt(trackID, lines, query, order, index + 1, failures);
+        });
+    };
+    if ([order[index] isEqualToString:@"qqmusic"]) SGQQMusicTranslationAsk(query, lines, receive);
+    else SGNetEaseTranslationAsk(query, lines, receive);
+}
+
+void SGLyricsFetchChineseTranslations(NSString *trackID, NSArray<SGKaraokeLine *> *lines) {
+    if (!trackID.length || !lines.count) return;
+    NSString *language = SGLyricsTranslationLanguage() ?: NSLocale.preferredLanguages.firstObject;
+    if (![language.lowercaseString hasPrefix:@"zh"]) return;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (!sg_translationAsked) sg_translationAsked = [NSMutableDictionary dictionary];
+        if (sg_translationAsked[trackID] == lines) {
+            SGLyricsLog(@"translation: %@ skipped, this line set already queried", trackID);
+            return;
+        }
+        if (!needsChineseTranslations(lines)) {
+            SGLyricsLog(@"translation: %@ skipped, no untranslated text lines", trackID);
+            return;
+        }
+        SGLyricsQuery *query = queryFor(trackID);
+        if (!named(query) || query.seconds <= 0) return;
+        NSArray *order = translationOrder(SGLyricsOrder());
+        if (!order.count) return;
+        if (sg_translationAsked.count >= kKeptTracks) [sg_translationAsked removeAllObjects];
+        query.referenceLines = lines;
+        sg_translationAsked[trackID] = lines;
+        SGLyricsLog(@"translation: %@ querying Chinese translations for %lu lines", trackID, (unsigned long)lines.count);
+        translateAt(trackID, lines, query, order, 0, atomic_load(&sg_failures));
+    });
+}
+
+// A finer Spotify clock can stay visible while a verified provider supplies pronunciation.
+void SGLyricsEnrichPronunciations(NSString *trackID, NSArray<SGKaraokeLine *> *target, NSArray<SGKaraokeLine *> *source) {
+    if (!trackID.length || !target.count || !source.count || target == source) return;
+    NSMutableArray *spoken = [NSMutableArray array];
+    for (SGKaraokeLine *line in source) if (line.pronunciation) [spoken addObject:line.pronunciation];
+    if (!spoken.count) return;
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        NSDictionary<NSNumber *, SGKaraokeLine *> *updates = SGLyricsPronunciationMap(target, source, spoken);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (SGKaraokeLinesForTrack(trackID) != target) return;
+            NSUInteger added = 0;
+            for (NSNumber *index in updates) {
+                SGKaraokeLine *line = target[index.unsignedIntegerValue];
+                if (line.pronunciation) continue;
+                line.pronunciation = updates[index]; added++;
+            }
+            if (added) {
+                SGLyricsLog(@"lyrics: added %lu provider pronunciation lines for %@", (unsigned long)added, trackID);
+                [NSNotificationCenter.defaultCenter postNotificationName:SGLyricsTranslationUpdatedNotification object:trackID];
+            }
+        });
+    });
+}
+
+static void learnFrom(SGLyricsQuery *query, SGLyricsResult *result) {
+    if (!query.title.length && result.title.length) query.title = result.title;
+    if (!query.artist.length && result.artist.length) query.artist = result.artist;
+    if (!query.album.length && result.album.length) query.album = result.album;
+    if (query.seconds <= 0 && result.seconds > 0) query.seconds = result.seconds;
+}
+
+#pragma mark - the walk
+
+// Main queue only, except sg_missing and the credits.
+static NSMutableDictionary<NSString *, id> *sg_kept;
+static NSMutableDictionary<NSString *, NSMutableArray *> *sg_waiting;
+static NSMutableSet<NSString *> *sg_missing;
+static NSMutableDictionary<NSString *, NSNumber *> *sg_retryAfter;
+static NSMutableDictionary<NSString *, SGLyricsCredit *> *sg_credits, *sg_pageCredits;
+// Spotify's own has_lyrics per track, as its metadata said. The player's metadata is read many
+// times a second while a list scrolls, so a value already noted costs one lookup and no write.
+static NSMutableDictionary<NSString *, NSNumber *> *sg_spotifyHas;
+static const NSUInteger kNotedTracks = 200;
+
+static void setUp(void) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        sg_kept = [NSMutableDictionary dictionary];
+        sg_waiting = [NSMutableDictionary dictionary];
+        sg_missing = [NSMutableSet set];
+        sg_retryAfter = [NSMutableDictionary dictionary];
+        sg_credits = [NSMutableDictionary dictionary];
+        sg_pageCredits = [NSMutableDictionary dictionary];
+        sg_spotifyHas = [NSMutableDictionary dictionary];
+    });
+}
+
+static NSString *sourceCacheKey(NSString *trackID, NSArray<NSString *> *order) {
+    return [NSString stringWithFormat:@"%@|%@", trackID, [order componentsJoinedByString:@","]];
+}
+
+static id cachedForKey(NSString *key) {
+    @synchronized (sg_kept) {
+        NSNumber *retry = sg_retryAfter[key];
+        if (retry && retry.doubleValue <= NSDate.timeIntervalSinceReferenceDate) {
+            [sg_kept removeObjectForKey:key];
+            [sg_retryAfter removeObjectForKey:key];
+        }
+        return sg_kept[key];
+    }
+}
+
+static void sourceOrderChanged(void) {
+    setUp();
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [sg_translationAsked removeAllObjects];
+        NSString *track = SGKaraokePlayingTrack();
+        if (!track.length) return;
+        // Do not leave a disabled provider's old lines on screen while the new order loads.
+        SGKaraokeKeepLines(track, referenceFor(track));
+        SGLyricsSetCredit(track, SGLyricsCreditNamed(@"Spotify"));
+        SGLyricsLog(@"lyrics: source order changed; reloading %@", track);
+        if (SGLyricsEnabled()) SGLyricsPrefetch(track);
+    });
+}
+
+// Whether the source's lines are better than what the walk already has: any lines beat none, and
+// finer timing beats coarser — words timed beat a line's start, which beats plain text. Read off the
+// lines themselves, which say how they were really timed, rather than off what the source claimed.
+static BOOL betterLines(SGLyricsResult *merged, SGLyricsResult *fresh) {
+    if (!fresh.karaokeLines.count) return NO;
+    return !merged.karaokeLines.count || SGKaraokeLinesTiming(fresh.karaokeLines) < SGKaraokeLinesTiming(merged.karaokeLines);
+}
+
+static NSString *timingName(NSArray<SGKaraokeLine *> *lines) {
+    switch (SGKaraokeLinesTiming(lines)) {
+        case SGKaraokeTimingWords: return @"word timed";
+        case SGKaraokeTimingLine: return @"line timed";
+        default: return @"untimed";
+    }
+}
+
+// The same for the text Spotify's own page shows: any text beats none, timed beats untimed.
+static BOOL betterTexts(SGLyricsResult *merged, SGLyricsResult *fresh) {
+    if (!fresh.texts.count) return NO;
+    return !merged.texts.count || (fresh.synced && !merged.synced);
+}
+
+// How long a lyrics request waits for the player to name its track before the walk starts without a
+// name. The request routinely lands a few hundred milliseconds before the player reports the track
+// it belongs to, and a walk started in that gap passes over every source that searches by name.
+static const NSTimeInterval kNameWait = 1.5, kNamePoll = 0.1;
+
+static BOOL named(SGLyricsQuery *query) {
+    return query.title.length && query.artist.length;
+}
+
+// One walk down the order for one track.
+@interface SGLyricsWalk : NSObject
+@property (nonatomic, copy) NSString *cacheKey;
+@property (nonatomic, copy) NSArray<NSString *> *order;
+@property (nonatomic) NSUInteger index;
+@property (nonatomic, strong) SGLyricsQuery *query;
+@property (nonatomic, strong) SGLyricsResult *merged;
+// Sources that needed a name the query did not have when their turn came.
+@property (nonatomic, strong) NSMutableArray<NSString *> *passedOver;
+// sg_failures when the walk started. Another walk's failure counts too, which at worst asks again.
+@property (nonatomic) NSUInteger failuresAtStart;
+@property (nonatomic) BOOL unavailable;
+@property (nonatomic) NSTimeInterval retryAfter;
+@end
+
+@implementation SGLyricsWalk
+@end
+
+// A walk that ends with nothing is only an answer when every source got to search. One that passed a
+// source over for want of a name asked it nothing, and keeping that as "no lyrics" would stick to the
+// track: every later request would get the kept nil, and the lyrics card would be taken off the track
+// for the rest of the session. The same goes for a walk during which a request failed: a busy
+// server's 503 read as "no lyrics" hid a track's lyrics until Spotify was restarted.
+static void finish(SGLyricsWalk *walk) {
+    SGLyricsQuery *query = walk.query;
+    SGLyricsResult *merged = walk.merged;
+    NSString *trackID = query.trackID;
+    NSString *key = walk.cacheKey;
+    SGLyricsResult *lyrics = merged.karaokeLines.count || merged.texts.count ? merged : nil;
+    BOOL everyoneAsked = !walk.passedOver.count;
+    BOOL current = [key isEqualToString:sourceCacheKey(trackID, SGLyricsOrder())];
+    BOOL failed = walk.unavailable || atomic_load(&sg_failures) != walk.failuresAtStart;
+    if (!current) lyrics = nil;
+    if (current && (lyrics || (everyoneAsked && !failed) || merged.instrumental)) {
+        @synchronized (sg_kept) {
+            if (sg_kept.count >= kKeptTracks) { [sg_kept removeAllObjects]; [sg_retryAfter removeAllObjects]; }
+            sg_kept[key] = lyrics ?: NSNull.null;
+        }
+        if (!lyrics && !failed) {
+            @synchronized (sg_missing) { [sg_missing addObject:key]; }
+        }
+    }
+    if (current && failed) {
+        @synchronized (sg_kept) {
+            sg_retryAfter[key] = @(MAX(walk.retryAfter, NSDate.timeIntervalSinceReferenceDate + 10));
+        }
+    }
+    SGLyricsLog(@"lyrics: %@ ends with %@", trackID, lyrics
+          ? [NSString stringWithFormat:@"%lu %@ lines from %@, %lu page lines",
+             (unsigned long)lyrics.karaokeLines.count, timingName(lyrics.karaokeLines),
+             lyrics.provider, (unsigned long)lyrics.texts.count]
+          : !current ? @"discarded: source order changed while loading"
+          : everyoneAsked && failed ? @"temporarily unavailable; no negative catalogue entry cached"
+          : everyoneAsked ? @"nothing"
+          : [NSString stringWithFormat:@"nothing, %@ never knowing its name; not kept, so the next request asks again",
+             [walk.passedOver componentsJoinedByString:@", "]]);
+    NSArray *waiting = sg_waiting[key];
+    [sg_waiting removeObjectForKey:key];
+    for (void (^done)(SGLyricsResult *) in waiting) done(lyrics);
+}
+
+static void step(SGLyricsWalk *walk);
+
+static void acceptAnswer(SGLyricsWalk *walk, SGLyricsProvider *provider, SGLyricsResult *fresh) {
+    SGLyricsResult *merged = walk.merged;
+    SGLyricsCredit *credit = fresh.credit ?: SGLyricsCreditNamed(provider.name);
+    if (betterLines(merged, fresh)) {
+        merged.karaokeLines = fresh.karaokeLines;
+        merged.wordTimed = fresh.wordTimed;
+        merged.provider = provider.name;
+        merged.credit = credit;
+    }
+    if (betterTexts(merged, fresh)) {
+        merged.starts = fresh.starts;
+        merged.texts = fresh.texts;
+        merged.synced = fresh.synced;
+        merged.pageCredit = credit;
+        if (!merged.provider) merged.provider = provider.name;
+    }
+    step(walk);
+}
+
+// When Spotify has no original to compare, ask just one independent catalogue.
+// BiniLyrics/Unison both wrap Apple material, so they cannot corroborate each other.
+static SGLyricsProvider *verifierFor(NSArray<NSString *> *order, NSString *primary) {
+    for (NSString *key in order) {
+        if ([key isEqualToString:primary]) continue;
+        if ([@[@"qqmusic", @"netease", @"kugou", @"lrclib", @"musixmatch"] containsObject:key])
+            return SGLyricsProviderFor(key);
+    }
+    return nil;
+}
+
+static void step(SGLyricsWalk *walk) {
+    if (![walk.cacheKey isEqualToString:sourceCacheKey(walk.query.trackID, SGLyricsOrder())]) { finish(walk); return; }
+    SGLyricsQuery *query = walk.query;
+    SGLyricsResult *merged = walk.merged;
+    // A source higher in the order has answered with timed lyrics: that is the answer.
+    if (merged.synced && merged.texts.count && merged.karaokeLines.count) {
+        finish(walk);
+        return;
+    }
+    if (walk.index >= walk.order.count) {
+        // A source that matches by id named the track partway down: the ones passed over ask now,
+        // in the order they came in. Once, since they cannot be passed over again with a name.
+        if (walk.passedOver.count && named(query)) {
+            SGLyricsLog(@"lyrics: %@ named partway as \"%@\" by \"%@\", asking %@ after all", query.trackID,
+                  query.title, query.artist, [walk.passedOver componentsJoinedByString:@", "]);
+            walk.order = walk.passedOver;
+            walk.index = 0;
+            walk.passedOver = [NSMutableArray array];
+            step(walk);
+            return;
+        }
+        finish(walk);
+        return;
+    }
+    SGLyricsProvider *provider = SGLyricsProviderFor(walk.order[walk.index++]);
+    if (provider.needsName && !named(query)) {
+        [walk.passedOver addObject:provider.key];
+        step(walk);
+        return;
+    }
+    provider.ask(query, ^(SGLyricsResult *fresh) {
+        if (fresh.unavailable) {
+            walk.unavailable = YES;
+            walk.retryAfter = MAX(walk.retryAfter, fresh.retryAfter);
+            SGLyricsLog(@"lyrics: %@ source %@ unavailable; preserving retryability", query.trackID, provider.key);
+        }
+        NSArray *reference = referenceFor(query.trackID);
+        SGLyricsLog(@"lyrics: track %@ source %@ returned %lu karaoke lines, %lu page lines, synced %@, word timed %@",
+                    query.trackID, provider.key, (unsigned long)fresh.karaokeLines.count, (unsigned long)fresh.texts.count,
+                    fresh.synced ? @"yes" : @"no", fresh.wordTimed ? @"yes" : @"no");
+        learnFrom(query, fresh);
+        if (fresh.instrumental) {
+            SGLyricsLog(@"lyrics: %@ is instrumental, by %@", query.trackID, provider.key);
+            merged.instrumental = YES;
+            finish(walk);
+            return;
+        }
+        if (fresh.karaokeLines.count && !reference.count && !fresh.metadataVerified && provider.needsName) {
+            SGLyricsProvider *verifier = verifierFor(walk.order, provider.key);
+            if (!verifier) {
+                SGLyricsLog(@"lyrics: %@ using verified %@ alone; no secondary source enabled", query.trackID, provider.key);
+                acceptAnswer(walk, provider, fresh);
+                return;
+            }
+            SGLyricsQuery *check = queryFor(query.trackID);
+            // Reuse the selected recording's catalogue spelling for the one cross-check.
+            // It can differ in case or script from Spotify; the visible metadata stays intact.
+            if (fresh.title.length) check.title = fresh.title;
+            if (fresh.artist.length) check.artist = fresh.artist;
+            check.referenceLines = fresh.karaokeLines;
+            SGLyricsLog(@"lyrics: %@ checking %@ against %@", query.trackID, provider.key, verifier.key);
+            verifier.ask(check, ^(SGLyricsResult *other) {
+                NSArray *spotify = referenceFor(query.trackID);
+                NSArray *evidence = spotify.count ? spotify : other.karaokeLines;
+                if (other.unavailable) {
+                    walk.unavailable = YES;
+                    walk.retryAfter = MAX(walk.retryAfter, other.retryAfter);
+                }
+                dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+                    BOOL agrees = SGLyricsSourcesAgree(fresh.karaokeLines, evidence);
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        SGLyricsLog(@"lyrics: %@ cross-check %@", query.trackID,
+                            !evidence.count ? @"no independent answer; keeping provider-verified recording" : agrees ? @"accepted" : @"rejected");
+                        if (agrees || !evidence.count) acceptAnswer(walk, provider, fresh);
+                        else finish(walk); // no third source after disagreement or failure
+                    });
+                });
+            });
+            return;
+        }
+        acceptAnswer(walk, provider, fresh);
+    });
+}
+
+static void startWalk(NSString *trackID, SGLyricsQuery *query, NSArray<NSString *> *order, NSString *cacheKey) {
+    SGLyricsLog(@"lyrics: asking %@ for %@ as \"%@\" by \"%@\", album \"%@\", %lds",
+          [SGLyricsOrder() componentsJoinedByString:@", "], trackID, query.title, query.artist, query.album, (long)query.seconds);
+    SGLyricsWalk *walk = [SGLyricsWalk new];
+    walk.order = order;
+    walk.cacheKey = cacheKey;
+    walk.query = query;
+    walk.merged = [SGLyricsResult new];
+    walk.passedOver = [NSMutableArray array];
+    walk.failuresAtStart = atomic_load(&sg_failures);
+    step(walk);
+}
+
+// Starts the walk as soon as the player has named the track, or once it has waited long enough
+// that it is not going to: a track opened for something other than what is playing is never named.
+static void whenNamed(NSString *trackID, NSArray<NSString *> *order, NSString *cacheKey, NSTimeInterval waited) {
+    SGLyricsQuery *query = queryFor(trackID);
+    if (named(query) || waited >= kNameWait) {
+        if (!named(query)) SGLyricsLog(@"lyrics: the player never named %@ in %.1fs", trackID, waited);
+        startWalk(trackID, query, order, cacheKey);
+        return;
+    }
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kNamePoll * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        whenNamed(trackID, order, cacheKey, waited + kNamePoll);
+    });
+}
+
+void SGLyricsFetch(NSString *trackID, void (^done)(SGLyricsResult *result)) {
+    setUp();
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (!trackID.length) {
+            done(nil);
+            return;
+        }
+        NSArray *order = SGLyricsOrder();
+        NSString *key = sourceCacheKey(trackID, order);
+        id kept = cachedForKey(key);
+        static NSMutableSet *referenceRetried;
+        if (!referenceRetried) referenceRetried = [NSMutableSet set];
+        // Negative results gathered before the reference arrived cannot rule out
+        // a translated title. One new walk is allowed when that evidence becomes available.
+        if (kept == NSNull.null && referenceFor(trackID).count && ![referenceRetried containsObject:key]) {
+            if (referenceRetried.count >= kKeptTracks) [referenceRetried removeAllObjects];
+            [referenceRetried addObject:key];
+            @synchronized (sg_kept) { [sg_kept removeObjectForKey:key]; }
+            @synchronized (sg_missing) { [sg_missing removeObject:key]; }
+            kept = nil;
+        }
+        if (kept) {
+            SGLyricsLog(@"lyrics: track %@ using cached %@; restart to retry sources", trackID,
+                        kept == NSNull.null ? @"no result" : ((SGLyricsResult *)kept).provider ?: @"result");
+            done(kept == NSNull.null ? nil : kept);
+            return;
+        }
+        @synchronized (sg_kept) {
+            if ([sg_retryAfter[key] doubleValue] > NSDate.timeIntervalSinceReferenceDate) {
+                SGLyricsLog(@"lyrics: %@ source temporarily unavailable; retry remains eligible after cooldown", trackID);
+                done(nil);
+                return;
+            }
+        }
+        NSMutableArray *waiting = sg_waiting[key];
+        if (waiting) {
+            [waiting addObject:[done copy]];
+            return;
+        }
+        sg_waiting[key] = [NSMutableArray arrayWithObject:[done copy]];
+        whenNamed(trackID, order, key, 0);
+    });
+}
+
+SGLyricsResult *SGLyricsCachedResult(NSString *trackID) {
+    setUp();
+    id kept = trackID ? cachedForKey(sourceCacheKey(trackID, SGLyricsOrder())) : nil;
+    return kept == NSNull.null ? nil : kept;
+}
+
+BOOL SGLyricsMayHave(NSString *trackID) {
+    setUp();
+    NSString *key = sourceCacheKey(trackID, SGLyricsOrder());
+    @synchronized (sg_missing) { return ![sg_missing containsObject:key]; }
+}
+
+static BOOL shouldPublishPrefetchedLines(NSArray<SGKaraokeLine *> *shown, NSArray<SGKaraokeLine *> *fresh) {
+    return fresh.count > 0; // the selected provider wins over Spotify, regardless of timing granularity
+}
+
+void SGLyricsPrefetch(NSString *trackID) {
+    if (!trackID.length) return;
+    SGLyricsFetch(trackID, ^(SGLyricsResult *result) {
+        // A custom lyrics page reads the karaoke cache directly. It must not wait for
+        // Spotify's separate color-lyrics/card request to arrive (or ever be made).
+        NSArray<SGKaraokeLine *> *shown = SGKaraokeLinesForTrack(trackID);
+        NSArray<SGKaraokeLine *> *fresh = result.karaokeLines;
+        if (shouldPublishPrefetchedLines(shown, fresh)) {
+            SGKaraokeKeepLines(trackID, fresh);
+            SGLyricsSetCredit(trackID, result.credit ?: SGLyricsCreditNamed(result.provider));
+            SGLyricsFetchChineseTranslations(trackID, fresh);
+            SGLyricsLog(@"prefetch: %@ publishing %lu %@ lines to display cache from %@ without waiting for Spotify",
+                trackID, (unsigned long)fresh.count, timingName(fresh), result.provider);
+        } else if (fresh.count && shown.count) {
+            SGLyricsEnrichPronunciations(trackID, shown, fresh);
+            SGLyricsFetchChineseTranslations(trackID, shown);
+            SGLyricsLog(@"prefetch: %@ retaining finer display timing %@ over %@",
+                trackID, timingName(shown), timingName(fresh));
+        }
+    });
+}
+
+NSInteger SGLyricsSpotifyHas(NSString *trackID) {
+    setUp();
+    if (!trackID) return -1;
+    @synchronized (sg_spotifyHas) {
+        NSNumber *has = sg_spotifyHas[trackID];
+        return has ? has.integerValue : -1;
+    }
+}
+
+void SGLyricsNoteSpotifyHas(NSString *trackID, BOOL has) {
+    setUp();
+    if (!trackID.length) return;
+    @synchronized (sg_spotifyHas) {
+        NSNumber *noted = sg_spotifyHas[trackID];
+        if (noted && noted.boolValue == has) return;
+        if (sg_spotifyHas.count >= kNotedTracks) [sg_spotifyHas removeAllObjects];
+        sg_spotifyHas[trackID] = @(has);
+    }
+}
+
+NSString *const SGLyricsOwnRequestKey = @"spotifyglass.ownRequest";
+
+// Keep Spotify's normal card deadline. Extending it to five seconds holds the entire
+// player's card list open while an optional lyrics source is slow.
+id SGLyricsForcedFlag(NSString *key) {
+    return nil;
+}
+
+// After an override; no row shows the timeout, so nothing is locked.
+__attribute__((constructor)) static void registerForcer(void) {
+    SGRegisterFlagForcer(NO, ^id(NSString *key) { return SGLyricsForcedFlag(key); }, nil);
+}
+
+#pragma mark - the language of translations
+
+NSNotificationName const SGLyricsTranslationUpdatedNotification = @"spotifyglass.lyricsTranslationUpdated";
+
+NSArray<NSString *> *SGLyricsTranslationLanguages(void) {
+    return @[@"", @"ar", @"zh-Hans", @"zh-Hant", @"cs", @"da", @"nl", @"en", @"fi", @"fr", @"de", @"el", @"he",
+             @"hi", @"hu", @"id", @"it", @"ja", @"ko", @"nb", @"pl", @"pt", @"ro", @"ru", @"sk", @"es", @"sv",
+             @"th", @"tr", @"uk", @"vi"];
+}
+
+NSArray<NSString *> *SGLyricsTranslationLanguageNames(void) {
+    NSLocale *english = [NSLocale localeWithLocaleIdentifier:@"en"];
+    NSMutableArray<NSString *> *names = [NSMutableArray array];
+    for (NSString *tag in SGLyricsTranslationLanguages()) {
+        [names addObject:tag.length ? [english localizedStringForLocaleIdentifier:tag] ?: tag : @"Any"];
+    }
+    return names;
+}
+
+NSString *SGLyricsTranslationLanguage(void) {
+    NSArray<NSString *> *tags = SGLyricsTranslationLanguages();
+    NSInteger index = SGInt(SGKeyLyricsTranslationLanguage, 0);
+    return index > 0 && index < (NSInteger)tags.count ? tags[(NSUInteger)index] : nil;
+}
+
+SGLyricsCredit *SGLyricsCreditNamed(NSString *name) {
+    SGLyricsCredit *credit = [SGLyricsCredit new];
+    credit.text = name;
+    return credit;
+}
+
+void SGLyricsOpenCredit(SGLyricsCredit *credit) {
+    NSArray<NSURL *> *links = credit.links;
+    if (links.count == 1) {
+        SGOpenURL(links.firstObject.absoluteString);
+        return;
+    }
+    if (!links.count) return;
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:credit.text message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+    [links enumerateObjectsUsingBlock:^(NSURL *link, NSUInteger i, BOOL *stop) {
+        NSString *title = i < credit.linkTitles.count ? credit.linkTitles[i] : link.host;
+        [sheet addAction:[UIAlertAction actionWithTitle:title style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+            SGOpenURL(link.absoluteString);
+        }]];
+    }];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    sheet.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
+    UIViewController *top = SGTopController();
+    sheet.popoverPresentationController.sourceView = top.view;
+    sheet.popoverPresentationController.sourceRect = CGRectMake(CGRectGetMidX(top.view.bounds), CGRectGetMaxY(top.view.bounds), 0, 0);
+    [top presentViewController:sheet animated:YES completion:nil];
+}
+
+static SGLyricsCredit *creditIn(NSMutableDictionary<NSString *, SGLyricsCredit *> *credits, NSString *trackID) {
+    @synchronized (credits) { return trackID ? credits[trackID] : nil; }
+}
+
+static void keepCredit(NSMutableDictionary<NSString *, SGLyricsCredit *> *credits, NSString *trackID, SGLyricsCredit *credit) {
+    if (!trackID.length) return;
+    @synchronized (credits) {
+        if (credits.count >= kKeptTracks) [credits removeAllObjects];
+        credits[trackID] = credit;
+    }
+}
+
+SGLyricsCredit *SGLyricsCreditFor(NSString *trackID) {
+    setUp();
+    return creditIn(sg_credits, trackID);
+}
+
+void SGLyricsSetCredit(NSString *trackID, SGLyricsCredit *credit) {
+    setUp();
+    keepCredit(sg_credits, trackID, credit.text.length ? credit : SGLyricsCreditNamed(@"Spotify"));
+}
+
+SGLyricsCredit *SGLyricsPageCreditFor(NSString *trackID) {
+    setUp();
+    return creditIn(sg_pageCredits, trackID);
+}
+
+void SGLyricsSetPageCredit(NSString *trackID, SGLyricsCredit *credit) {
+    setUp();
+    keepCredit(sg_pageCredits, trackID, credit);
+}
+
+// Once, at launch: the keys Musixmatch owned alone become an order, so the Lyrics page opens on what
+// the install was already doing rather than on nothing.
+void SGLyricsMigrateLegacyKeys(void) {
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    if ([defaults objectForKey:SGKeyLyricsProviders]) return;
+    NSArray<NSString *> *order = fromLegacyKeys();
+    if (!order.count) return;
+    SGLyricsSetOrder(order);
+    SGSetEnabled(SGKeyLyricsAllTracks, SGFlag(kLegacyAllTracks, NO));
+    SGLyricsLog(@"lyrics: carried the Musixmatch switches over as %@", [order componentsJoinedByString:@", "]);
+}

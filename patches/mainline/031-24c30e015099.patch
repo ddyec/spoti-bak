@@ -1,0 +1,467 @@
+From 24c30e015099020fadabb154ec5a94ff6a710fbe Mon Sep 17 00:00:00 2001
+From: ddyec <89333385+ddyec@users.noreply.github.com>
+Date: Wed, 21 Oct 2026 02:48:25 +0000
+Subject: [PATCH] build: package the combined performance IPA for device
+ acceptance
+
+---
+ .github/workflows/build-ipa.yml          | 84 +++++++++++++-----------
+ .github/workflows/performance-checks.yml | 80 ----------------------
+ docs/performance-review-2026-10-21.md    |  6 +-
+ scripts/companion-macho.py               | 71 ++++++++++++++++++++
+ scripts/finalize-companion.py            | 71 ++++++++++++++++++++
+ scripts/pipeline.sh                      | 14 +++-
+ tweak/Sources/Redesigned/Kit/SGRWarp.m   |  6 ++
+ 7 files changed, 211 insertions(+), 121 deletions(-)
+ delete mode 100644 .github/workflows/performance-checks.yml
+ create mode 100644 scripts/companion-macho.py
+ create mode 100644 scripts/finalize-companion.py
+
+diff --git a/.github/workflows/build-ipa.yml b/.github/workflows/build-ipa.yml
+index 5a836fa066346e24080d40be01415d37d451a6a7..6ce3b7aac83fc784dc1ad971b0270c8885698877 100644
+--- a/.github/workflows/build-ipa.yml
++++ b/.github/workflows/build-ipa.yml
+@@ -1,75 +1,83 @@
+-name: Build IPA from your own Spotify IPA
++name: Build performance IPA with EV1
+ 
+ on:
+   workflow_dispatch:
+     inputs:
+       ipa_url:
+-        description: "Direct link to a decrypted Spotify IPA"
++        description: "Decrypted Spotify 9.1.78 IPA"
+         required: true
++        default: https://github.com/ddyec/python38/releases/download/22/com.spotify.client_9.1.78_und3fined.2.ipa
+         type: string
+ 
++permissions:
++  contents: read
++
+ env:
+   THEOS: ${{ github.workspace }}/theos
++  COMPANION_SHA: 41199217675a277d844ea8137c89b5debc0fa834
+ 
+ jobs:
+   build:
+-    # Avoid the ARM hosted-runner capacity failure; iOS arm64 remains the target.
+     runs-on: macos-15-intel
++    timeout-minutes: 60
+     steps:
+       - uses: actions/checkout@v5
+-
+-      - uses: levibostian/action-hide-sensitive-inputs@v1
+-
+       - uses: maxim-lobanov/setup-xcode@v1
+         with:
+           xcode-version: latest-stable
+-
+-      - name: Check lyrics recording identity
+-        run: python3 scripts/test-lyrics-identity.py
+-
++      - uses: actions/checkout@v5
++        with:
++          repository: ddyec/EeveeSpotifyReincarnated
++          ref: ${{ env.COMPANION_SHA }}
++          path: companion
++          submodules: recursive
+       - uses: actions/checkout@v5
+         with:
+           repository: theos/theos
+           path: theos
+           submodules: recursive
+-
+       - name: Install tools
+         run: |
+           brew install make dpkg ldid
+           python3 -m pip install --break-system-packages git+https://github.com/asdfzxcvbn/pyzule-rw.git
+-
+-      - name: Download IPA
++      - name: Download the supplied clean IPA
++        env:
++          IPA_URL: ${{ inputs.ipa_url }}
+         run: |
+           mkdir -p ipa
+-          curl -fsSL "${{ inputs.ipa_url }}" -o ipa/spotify.ipa
+-          case "$(file --mime-type -b ipa/spotify.ipa)" in application/zip|application/x-ios-app) ;; *) echo "::error::Not an IPA"; exit 1 ;; esac
+-
+-      - run: make release
+-
+-      - name: Verify the 9.1.78 package components
++          curl -fL --retry 3 "$IPA_URL" -o ipa/spotify.ipa
++          echo 'dc1706972885217081b3a9debcf07e3a5762a5d59ef5873aa2533ebd8bd719b5  ipa/spotify.ipa' | shasum -a 256 -c -
++      - name: Compile EV1 from pinned source
++        working-directory: companion
++        env:
++          SWIFTPROTOBUF_VERSION: '1.29.0'
++        run: |
++          make build-eeveeswiftprotobuf
++          THEOS_PACKAGE_SCHEME=rootless make -j3 package FINALPACKAGE=1
++          mkdir -p "$RUNNER_TEMP/ev1"
++          DEB="$(find packages -name '*.deb' -type f | head -1)"
++          test -n "$DEB"
++          dpkg-deb -x "$DEB" "$RUNNER_TEMP/ev1"
++      - name: Build the combined IPA
+         run: |
++          scripts/pipeline.sh ipa/spotify.ipa --no-flex --companion-dir "$RUNNER_TEMP/ev1" -o out/Spotify-9.1.78-Performance-EV1.ipa
+           python3 - <<'PY'
++          import hashlib, json, os, subprocess
+           from pathlib import Path
+-          import zipfile, plistlib
+-          outputs = list(Path('out').glob('*.ipa'))
+-          assert len(outputs) == 1
+-          with zipfile.ZipFile('ipa/spotify.ipa') as original, zipfile.ZipFile(outputs[0]) as result:
+-              info_path = next(n for n in original.namelist() if n.startswith('Payload/') and n.endswith('.app/Info.plist') and n.count('/') == 2)
+-              assert plistlib.loads(original.read(info_path))['CFBundleShortVersionString'] == '9.1.78'
+-              assert plistlib.loads(result.read(info_path))['CFBundleShortVersionString'] == '9.1.78'
+-              retained = [n for n in original.namelist() if 'eevee' in n.lower() or 'SwiftProtobuf.framework/' in n]
+-              assert any(n.endswith('.dylib') for n in retained), 'Supplied EEVEE dylib missing'
+-              for n in retained:
+-                  assert n in result.namelist(), 'EEVEE component missing: ' + n
+-              assert any(n.lower().endswith('/spotifyglass.dylib') for n in result.namelist()), 'New tweak missing'
+-              # cyan re-signs existing dylibs. The user accepts these differences;
+-              # do not treat changed signatures as a reason to discard the build.
+-              print('Found', len(retained), 'supplied EEVEE paths; re-signing differences allowed')
+-          outputs[0].rename('out/Spotify-9.1.78-Lyrics-Lift-Roll.ipa')
++          ipa = Path('out/Spotify-9.1.78-Performance-EV1.ipa')
++          manifest = {
++              'spoti_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
++              'eevee_commit': os.environ['COMPANION_SHA'],
++              'spotify': '9.1.78', 'flex': False, 'runtime_verified': False,
++              'sha256': hashlib.sha256(ipa.read_bytes()).hexdigest(),
++          }
++          Path('out/build-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
+           PY
+-
+       - uses: actions/upload-artifact@v5
+         with:
+-          name: spoti-9.1.78-lyrics-lift-roll-ipa
+-          path: out/*.ipa
++          name: Spotify-9.1.78-Performance-EV1
++          path: |
++            out/Spotify-9.1.78-Performance-EV1.ipa
++            out/build-manifest.json
+           if-no-files-found: error
++          retention-days: 14
+diff --git a/.github/workflows/performance-checks.yml b/.github/workflows/performance-checks.yml
+deleted file mode 100644
+index 4554ff8dfe50934ffa81b9bfafea7780e7dfe7c8..0000000000000000000000000000000000000000
+--- a/.github/workflows/performance-checks.yml
++++ /dev/null
+@@ -1,80 +0,0 @@
+-name: Performance and lyric motion checks
+-
+-on:
+-  push:
+-    branches: [feat/performance-diagnostics-20261021]
+-  workflow_dispatch:
+-
+-permissions:
+-  contents: read
+-
+-concurrency:
+-  group: performance-checks-${{ github.ref }}
+-  cancel-in-progress: true
+-
+-env:
+-  THEOS: ${{ github.workspace }}/theos
+-
+-jobs:
+-  check:
+-    runs-on: macos-15-intel
+-    timeout-minutes: 45
+-    steps:
+-      - uses: actions/checkout@v5
+-      - uses: maxim-lobanov/setup-xcode@v1
+-        with:
+-          xcode-version: latest-stable
+-      - name: Regression checks
+-        run: |
+-          bash scripts/test-performance.sh
+-          scripts/check-layers.sh
+-          python3 scripts/test-lyrics-identity.py
+-          python3 scripts/test-lyrics-order.py
+-          python3 scripts/test-lyrics-requests.py
+-      - uses: actions/checkout@v5
+-        with:
+-          repository: theos/theos
+-          path: theos
+-          submodules: recursive
+-      - name: Install compiler tools
+-        run: brew install make dpkg ldid
+-      - name: Read verified input flags without modifying the IPA
+-        run: |
+-          mkdir -p ipa
+-          curl -fL --retry 3 https://github.com/ddyec/python38/releases/download/22/com.spotify.client_9.1.78_und3fined.2.ipa -o ipa/spotify.ipa
+-          echo 'dc1706972885217081b3a9debcf07e3a5762a5d59ef5873aa2533ebd8bd719b5  ipa/spotify.ipa' | shasum -a 256 -c -
+-          python3 scripts/extract-flags.py ipa/spotify.ipa
+-      - name: Compile the full tweak
+-        run: gmake -C tweak -k package
+-      - name: Compile the player animation harness
+-        id: harness
+-        if: ${{ !cancelled() }}
+-        env:
+-          HARNESS_ARCH: x86_64
+-        run: sh harness/player/build.sh
+-      - name: Record and check rapid lyric reversals
+-        if: ${{ !cancelled() && steps.harness.outcome == 'success' }}
+-        run: |
+-          mkdir -p out/motion
+-          DEVICE="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x["udid"] for group in d["devices"].values() for x in group if x["name"].startswith("iPhone")))')"
+-          xcrun simctl boot "$DEVICE"
+-          xcrun simctl bootstatus "$DEVICE" -b
+-          xcrun simctl install "$DEVICE" harness/player/build/PlayerHarness.app
+-          xcrun simctl io "$DEVICE" recordVideo --codec=h264 out/motion/lyrics-interruptions.mp4 > out/motion/recording.log 2>&1 &
+-          RECORD_PID=$!
+-          SIMCTL_CHILD_HARNESS_SCENARIO=lyrics-interruptions SIMCTL_CHILD_HARNESS_BACKGROUND=0 \
+-            xcrun simctl launch --console "$DEVICE" com.vojta.playerharness > out/motion/player.log 2>&1 &
+-          sleep 11
+-          xcrun simctl io "$DEVICE" screenshot out/motion/lyrics-final.png
+-          kill -INT "$RECORD_PID"
+-          wait "$RECORD_PID"
+-          xcrun simctl terminate "$DEVICE" com.vojta.playerharness
+-          grep -F 'lyrics interruption checks: 4 of 4 right -- PASS' out/motion/player.log
+-      - uses: actions/upload-artifact@v5
+-        if: always()
+-        with:
+-          name: performance-source-build
+-          path: |
+-            tweak/packages/*.deb
+-            out/motion/
+-          if-no-files-found: warn
+diff --git a/docs/performance-review-2026-10-21.md b/docs/performance-review-2026-10-21.md
+index 22219eb3c8c2b4e4caf2ab22b5d5d87059c13642..a227a63898325c217e3fc7f1e6a51af321b26c49 100644
+--- a/docs/performance-review-2026-10-21.md
++++ b/docs/performance-review-2026-10-21.md
+@@ -83,8 +83,10 @@ claimed without before/after measurements.
+ - `scripts/check-layers.sh`: architecture boundaries.
+ - The macOS workflow runs existing lyric regressions, compiles the full tweak
+   using flags from the SHA-256 verified clean 9.1.78 IPA, and compiles the player
+-  harness, runs its interruption scenario in the simulator and uploads a recording
+-  and log. The downloaded IPA is not modified or redistributed.
++  harness. The user subsequently requested stopping simulator/recording work and
++  packaging the combined IPA for personal device acceptance. The source-only
++  recording workflow has been removed; `build-ipa.yml` now builds the pinned EV1
++  source together with this source into the supplied clean 9.1.78 package.
+ - On iOS 26+ in Redesigned UI, inspect preview lines, full lyric open/close,
+   rapid reversal, pause/resume, track changes and Reduced Motion. Check Native
+   UI diagnostics separately. Record before/after runs in matching scenarios.
+diff --git a/scripts/companion-macho.py b/scripts/companion-macho.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..b9d1e8483d18d6b2531e36ce116e8a0a8a950165
+--- /dev/null
++++ b/scripts/companion-macho.py
+@@ -0,0 +1,71 @@
++"""Thin arm64 Mach-O parsing and strong initializer dependency insertion."""
++import struct
++
++DYLIBS = {0xC, 0x80000018, 0x8000001F, 0x80000023}
++
++
++def macho(data):
++    if len(data) < 32 or struct.unpack_from('<I', data)[0] != 0xFEEDFACF:
++        raise ValueError('Expected a thin 64-bit Mach-O')
++    count, size = struct.unpack_from('<II', data, 16)
++    end = 32 + size
++    if end > len(data):
++        raise ValueError('Truncated load commands')
++    off, libs, sections = 32, [], []
++    for _ in range(count):
++        cmd, length = struct.unpack_from('<II', data, off)
++        if length < 8 or off + length > end:
++            raise ValueError('Invalid load command')
++        if cmd in DYLIBS:
++            nameoff = struct.unpack_from('<I', data, off + 8)[0]
++            if not 8 <= nameoff < length:
++                raise ValueError('Invalid dylib name offset')
++            name = data[off + nameoff:off + length].split(b'\0')[0].decode()
++            libs.append((cmd, name))
++        if cmd == 0x19:
++            nsects = struct.unpack_from('<I', data, off + 64)[0]
++            if 72 + 80 * nsects > length:
++                raise ValueError('Truncated segment sections')
++            for i in range(nsects):
++                pos = off + 72 + i * 80
++                name = data[pos:pos + 16].split(b'\0')[0].decode()
++                segment = data[pos + 16:pos + 32].split(b'\0')[0].decode()
++                nbytes, offset = struct.unpack_from('<QI', data, pos + 40)
++                flags = struct.unpack_from('<I', data, pos + 64)[0]
++                # Zero-fill sections have no on-disk contents.
++                if offset and (flags & 0xFF) not in (1, 0xC, 0x12):
++                    if offset + nbytes > len(data):
++                        raise ValueError('Truncated section contents')
++                    sections.append((offset, nbytes, segment, name))
++        off += length
++    if off != end:
++        raise ValueError('Load-command count/size mismatch')
++    return count, size, libs, sections
++
++
++def add_dependency(data, dependency):
++    count, size, libs, sections = macho(data)
++    if not any(segment == '__TEXT' and name == '__text' for _, _, segment, name in sections):
++        raise ValueError('No executable text section')
++    existing = [cmd for cmd, name in libs if name == dependency]
++    if existing:
++        if 0xC not in existing:
++            raise ValueError('EEVEE dependency must be a strong LC_LOAD_DYLIB')
++        return data
++    name = dependency.encode() + b'\0'
++    length = (24 + len(name) + 7) & ~7
++    start = 32 + size
++    first = min((offset for offset, _, _, _ in sections), default=len(data))
++    if start + length > first or any(data[start:start + length]):
++        raise ValueError('No header padding for explicit EEVEE initializer dependency')
++    command = struct.pack('<6I', 0xC, length, 24, 2, 0, 0) + name
++    command = command.ljust(length, b'\0')
++    result = bytearray(data)
++    result[start:start + length] = command
++    struct.pack_into('<II', result, 16, count + 1, size + length)
++    # Only Mach-O header padding changes; executable sections remain identical.
++    for offset, nbytes, _, _ in sections:
++        if result[offset:offset + nbytes] != data[offset:offset + nbytes]:
++            raise ValueError('Unexpected section modification')
++    return bytes(result)
++
+diff --git a/scripts/finalize-companion.py b/scripts/finalize-companion.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..df5faf8f984c5bdc18d7183f06e3c7c9a5204e5e
+--- /dev/null
++++ b/scripts/finalize-companion.py
+@@ -0,0 +1,71 @@
++#!/usr/bin/env python3
++"""Check the combined source build and establish EV1-before-spoti initialization."""
++import importlib.util
++import os
++from pathlib import Path
++import plistlib
++import shutil
++import subprocess
++import sys
++import tempfile
++import zipfile
++
++spec = importlib.util.spec_from_file_location('companion_macho', Path(__file__).with_name('companion-macho.py'))
++module = importlib.util.module_from_spec(spec)
++spec.loader.exec_module(module)
++
++path = Path(sys.argv[1]).resolve()
++with tempfile.TemporaryDirectory() as temporary, zipfile.ZipFile(path) as original:
++    names = original.namelist()
++    if len(names) != len(set(names)):
++        raise ValueError('Duplicate archive entries')
++    infos = [n for n in names if n.startswith('Payload/') and n.endswith('.app/Info.plist') and n.count('/') == 2]
++    if len(infos) != 1:
++        raise ValueError('Expected one host app')
++    app = infos[0][:-10]
++    info = plistlib.loads(original.read(infos[0]))
++    if info['CFBundleShortVersionString'] != '9.1.78':
++        raise ValueError('Expected Spotify 9.1.78')
++    loads = module.macho(original.read(app + info['CFBundleExecutable']))[2]
++    deps = [name for _, name in loads if name.lower().endswith('/eeveespotify.dylib')]
++    if len(deps) != 1:
++        raise ValueError('Host must load exactly one EEVEE')
++    def one(suffix):
++        found = [n for n in names if n.startswith(app) and n.lower().endswith(suffix.lower())]
++        if len(found) != 1:
++            raise ValueError('Expected exactly one ' + suffix)
++        return found[0]
++    eevee = one('/EeveeSpotify.dylib')
++    glass = one('/spotifyglass.dylib')
++    if not any(name.lower().endswith('/spotifyglass.dylib') for _, name in loads):
++        raise ValueError('Host does not load spoti.pw')
++    if not any('EeveeSwiftProtobuf.framework/' in n for n in names):
++        raise ValueError('Missing EEVEE protobuf framework')
++    if not any('EeveeSpotify.bundle/' in n for n in names):
++        raise ValueError('Missing EEVEE resources')
++    if any('flex' in n.lower() and n.endswith('.dylib') for n in names):
++        raise ValueError('Performance build must not include FLEX')
++    fixed = module.add_dependency(original.read(glass), deps[0])
++    binary = Path(temporary) / 'spotifyglass.dylib'
++    binary.write_bytes(fixed)
++    subprocess.run(['ldid', '-S', str(binary)], check=True)
++    fixed = binary.read_bytes()
++    if (0xC, deps[0]) not in module.macho(fixed)[2]:
++        raise ValueError('Initializer dependency missing after ad-hoc signing')
++    output = Path(temporary) / 'combined.ipa'
++    with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_DEFLATED) as destination:
++        for item in original.infolist():
++            destination.writestr(item, fixed if item.filename == glass else original.read(item))
++    with zipfile.ZipFile(output) as checked:
++        if checked.testzip():
++            raise ValueError('Output archive CRC failure')
++        for name in names:
++            if name != glass and original.getinfo(name).CRC != checked.getinfo(name).CRC:
++                raise ValueError('Unexpected component change: ' + name)
++    staging = path.with_suffix('.verified.ipa')
++    try:
++        shutil.copyfile(output, staging)
++        os.replace(staging, path)
++    finally:
++        staging.unlink(missing_ok=True)
++print('PASS: 9.1.78, one EEVEE + spoti.pw, resources, initializer order, no FLEX, valid archive')
+diff --git a/scripts/pipeline.sh b/scripts/pipeline.sh
+index 2436406f6e14303d406186ef5757975c73f5bc03..3dd45f3faed11858a03a953be3991d891db3b943 100755
+--- a/scripts/pipeline.sh
++++ b/scripts/pipeline.sh
+@@ -24,13 +24,14 @@ FLEX_DEB="$ROOT/vendor/com.hopeless.autoflex_0.0.1_iphoneos-arm.deb"
+ BUNDLE_ID="${BUNDLE_ID:-}"
+ mkdir -p "$ROOT/out"
+ 
+-IN="" OUT="" WITH_FLEX=1 INSTALL=0 NAME="" ICON=""
++IN="" OUT="" WITH_FLEX=1 INSTALL=0 NAME="" ICON="" COMPANION_DIR=""
+ while [ $# -gt 0 ]; do
+   case "$1" in
+     -o) OUT="$2"; shift 2 ;;
+     --name) NAME="$2"; shift 2 ;;
+     --icon) ICON="$2"; shift 2 ;;
+     --no-flex) WITH_FLEX=0; shift ;;
++    --companion-dir) COMPANION_DIR="$2"; shift 2 ;;
+     --install) INSTALL=1; shift ;;
+     -h|--help) sed -n '2,11p' "$0"; exit 0 ;;
+     *) IN="$1"; shift ;;
+@@ -90,6 +91,14 @@ TWEAK_DEB="$(ls -t "$ROOT"/tweak/packages/*.deb | head -1)"
+ echo "    $TWEAK_DEB"
+ 
+ FILES=("$TWEAK_DEB")
++if [ -n "$COMPANION_DIR" ]; then
++  EEVEE_DYLIB="$(find "$COMPANION_DIR" -name EeveeSpotify.dylib -type f | head -1)"
++  EEVEE_FRAMEWORK="$(find "$COMPANION_DIR" -name EeveeSwiftProtobuf.framework -type d | head -1)"
++  EEVEE_BUNDLE="$(find "$COMPANION_DIR" -name EeveeSpotify.bundle -type d | head -1)"
++  [ -n "$EEVEE_DYLIB" ] && [ -n "$EEVEE_FRAMEWORK" ] && [ -n "$EEVEE_BUNDLE" ] \
++    || { echo "companion dylib, protobuf framework or resource bundle missing" >&2; exit 1; }
++  FILES+=("$EEVEE_DYLIB" "$EEVEE_FRAMEWORK" "$EEVEE_BUNDLE")
++fi
+ [ "$WITH_FLEX" = 1 ] && FILES+=("$FLEX_DEB")
+ 
+ # The Live Activity (Shared/LiveActivity) draws in a widget extension of its own.
+@@ -145,6 +154,9 @@ if [ -n "${EXT_DIR:-}" ]; then
+   "$ROOT/scripts/merge-appintents.py" "$OUT" "$APP_DIR" "$EXT_DIR/app/Metadata.appintents"
+ fi
+ 
++if [ -n "$COMPANION_DIR" ]; then
++  python3 "$ROOT/scripts/finalize-companion.py" "$OUT"
++fi
+ echo "==> done: $OUT"
+ [ "$INSTALL" = 1 ] && exec "$ROOT/scripts/install.sh" "$OUT"
+ exit 0
+diff --git a/tweak/Sources/Redesigned/Kit/SGRWarp.m b/tweak/Sources/Redesigned/Kit/SGRWarp.m
+index 66e85bb8e2ce2dd8d7ba562174690ed16da7ed0c..9fa7a99f66166bbe1c351763e7187fc88f259f5e 100644
+--- a/tweak/Sources/Redesigned/Kit/SGRWarp.m
++++ b/tweak/Sources/Redesigned/Kit/SGRWarp.m
+@@ -683,6 +683,12 @@ static NSUInteger sg_costLogs;
+ }
+ 
+ - (void)updatePace {
++    // Process power/thermal notifications may arrive off-main; UIKit and layer state stay on main.
++    if (!NSThread.isMainThread) {
++        __weak SGRWarpView *weakSelf = self;
++        dispatch_async(dispatch_get_main_queue(), ^{ [weakSelf updatePace]; });
++        return;
++    }
+     UIApplicationState state = UIApplication.sharedApplication.applicationState;
+     SGRWarpPace pace = SGRWarpPaceMoving;
+     if (!self.window || state == UIApplicationStateBackground) pace = SGRWarpPaceHidden;
+-- 
+2.34.1
+

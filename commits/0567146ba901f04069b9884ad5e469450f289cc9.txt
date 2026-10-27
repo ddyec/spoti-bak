@@ -1,0 +1,6 @@
+tree 10d0231a7f8ab711c01260ba4d9a5aeb7e909629
+parent 8e22673dfd43366dcda8d94e35e063a4c7244176
+author Codex <codex@users.noreply.github.com> 1790758674 +0800
+committer Codex <codex@users.noreply.github.com> 1790758674 +0800
+
+fix: render native lyrics preview independently of Spotify container

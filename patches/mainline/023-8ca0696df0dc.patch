@@ -1,0 +1,733 @@
+From 8ca0696df0dc280dd1a623da3ef62f07d243ae86 Mon Sep 17 00:00:00 2001
+From: ddyec <89333385+ddyec@users.noreply.github.com>
+Date: Tue, 20 Oct 2026 21:31:54 +0800
+Subject: [PATCH] fix: reserve missing native lyric space and roll preview
+ lines upward
+
+---
+ .github/workflows/build-ipa.yml               | 21 ++++-
+ docs/native-missing-lyrics-roll-2026-10-20.md | 67 ++++++++++++++
+ docs/stay-release-label-audit-2026-10-20.json | 35 ++++++++
+ scripts/audit-english-release-labels.py       | 90 +++++++++++++++++++
+ scripts/probe-lyrics-catalogue.py             |  7 +-
+ scripts/test-lyrics-identity.py               | 36 +++++++-
+ tweak/Sources/Redesigned/Player/Player.h      |  3 +
+ .../Sources/Redesigned/Player/PlayerArtwork.x | 17 ++++
+ .../Sources/Redesigned/Player/PlayerPreview.x | 86 ++++++++++++++----
+ tweak/Sources/Shared/Lyrics/KaraokeSource.x   | 45 ++++++++++
+ tweak/Sources/Shared/Lyrics/Lyrics.h          |  4 +
+ .../Shared/Lyrics/NativeLyricsStatus.h        |  9 ++
+ .../Sources/Shared/LyricsSources/LyricsHook.x |  6 +-
+ .../Shared/LyricsSources/LyricsMatching.m     | 28 +++++-
+ 14 files changed, 430 insertions(+), 24 deletions(-)
+ create mode 100644 docs/native-missing-lyrics-roll-2026-10-20.md
+ create mode 100644 docs/stay-release-label-audit-2026-10-20.json
+ create mode 100644 scripts/audit-english-release-labels.py
+ create mode 100644 tweak/Sources/Shared/Lyrics/NativeLyricsStatus.h
+
+diff --git a/.github/workflows/build-ipa.yml b/.github/workflows/build-ipa.yml
+index 275e202d4b63f444e57c8d9e1bf02bd77ec35585..d555f78246590d9f898e82689265bcca98924cc4 100644
+--- a/.github/workflows/build-ipa.yml
++++ b/.github/workflows/build-ipa.yml
+@@ -45,8 +45,27 @@ jobs:
+ 
+       - run: make release
+ 
++      - name: Verify the supplied 9.1.78 EEVEE package is preserved
++        run: |
++          python3 - <<'PY'
++          from pathlib import Path
++          import zipfile, plistlib
++          outputs = list(Path('out').glob('*.ipa'))
++          assert len(outputs) == 1
++          with zipfile.ZipFile('ipa/spotify.ipa') as original, zipfile.ZipFile(outputs[0]) as result:
++              info_path = next(n for n in original.namelist() if n.startswith('Payload/') and n.endswith('.app/Info.plist') and n.count('/') == 2)
++              assert plistlib.loads(original.read(info_path))['CFBundleShortVersionString'] == '9.1.78'
++              assert plistlib.loads(result.read(info_path))['CFBundleShortVersionString'] == '9.1.78'
++              retained = [n for n in original.namelist() if 'eevee' in n.lower() or 'SwiftProtobuf.framework/' in n]
++              assert any(n.endswith('.dylib') for n in retained), 'Supplied EEVEE dylib missing'
++              for n in retained:
++                  assert n in result.namelist() and original.read(n) == result.read(n), 'EEVEE payload changed: ' + n
++              print('Preserved', len(retained), 'supplied EEVEE files; no EEVEE rebuild or replacement')
++          outputs[0].rename('out/Spotify-9.1.78-Lyrics-Lift-Roll.ipa')
++          PY
++
+       - uses: actions/upload-artifact@v5
+         with:
+-          name: spoti-issue-144-async-translation-ipa
++          name: spoti-9.1.78-lyrics-lift-roll-ipa
+           path: out/*.ipa
+           if-no-files-found: error
+diff --git a/docs/native-missing-lyrics-roll-2026-10-20.md b/docs/native-missing-lyrics-roll-2026-10-20.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..55b3a9332c82e96f7c4a194be74fb9e3b39176ae
+--- /dev/null
++++ b/docs/native-missing-lyrics-roll-2026-10-20.md
+@@ -0,0 +1,67 @@
++# 9.1.78 native-missing preview and English release labels
++
++Baseline: `d95a5c5`, the previously tested custom lyrics branch. This is not the
++official 1.0 Beta / Spotify 9.1.90 branch. Input is the user's existing
++`EeveeSpotify-6.6.8-9.1.78.ipa` from `ddyec/python38`, release `22`.
++EEVEE is not rebuilt or replaced; packaging checks its 81 payload files against
++the supplied input. Existing EEVEE settings/state remain those of that package
++and installation. This change does not claim to change EEVEE's startup defaults.
++
++## Player behavior
++
++Spotify's raw `has_lyrics` is noted before the custom lyric hook changes it.
++Absent metadata now stays unknown. Only unknown native availability is queried
++quietly, using Spotify's captured headers and the existing own-request bypass.
++At most one request per track is in flight; unsuccessful unknown probes have a
++30-second cooldown and a two-attempt cap in a bounded 40-track cache. Responses
++are keyed to the requested track, never the track playing when the reply lands.
++The probe never writes Spotify lyrics into the selected-provider display cache.
++
++A real 404/204 or valid empty lyrics JSON means missing. Authentication errors,
++rate limits, server errors, malformed JSON and transport failures stay unknown.
++Only known missing native lyrics plus ready custom timed lyrics can reserve
++additional space. Available space is measured against the information row and
++artwork band; the cover and shadow move upward by an absolute bounded offset,
++without changing the existing playing/paused scale. Repeated layout does not
++accumulate displacement. Full lyrics, transitions, animated artwork and absent
++custom lyrics release that compensation. Extra-long lines retain scrolling
++when the available header-safe space is insufficient.
++
++Sequential line changes slide the old view upward out and the new view upward
++in through the clipped preview. There is no crossfade. Track changes, seeks,
++background return and Reduce Motion snap to the current line. Translation-only
++or size updates do not replay a line-change animation.
++
++## STAY investigation
++
++The supplied log identifies Spotify `5HCyWlXZPP0y6Gqq8TgA20`,
++`STAY (with Justin Bieber)`, The Kid LAROI, 142 seconds. It searched the full
++credit-bearing title and fell back to Spotify. The NetEase candidates included
++uploaders, karaoke, acoustic covers and remixes; none warrants relaxed identity.
++
++A bounded QQ query with the normalized title finds song `318931533`,
++`STAY (Explicit)`, The Kid LAROI / Justin Bieber, 141 seconds. The follow-up
++fetched 1,434 normalized lyric characters. KuGou did not return a verified
++candidate in that same bounded check; this result is a verified-metadata single
++source, not independent text corroboration.
++
++The title normalizer now handles trailing `(with <performer>)` as a credit and
++an exact trailing `(Explicit)` as a parental-advisory display label. It preserves
++Clean/Radio/Live/Remix/Cover markers, including markers nested in a credit.
++Artist and duration checks, metadata limits, source ordering and the two-candidate
++lyric-fetch limit are unchanged. No artist-library search is added.
++
++## Validation and device acceptance
++
++The native Foundation/CoreGraphics regression extracts the real status verdict,
++layout, line-change decision and matching code. It covers native present versus
++missing versus unknown, layout repetition/header bounds, normal sequential
++scrolling versus seeks/Reduce Motion, STAY credit/advisory equivalence and wrong
++artist/version rejection. The English audit replays eight common recordings
++against QQ and KuGou with production regexes; it is not execution of iOS hooks.
++
++On iOS 27.2 / Spotify 9.1.78 in the redesigned look, install the output with the
++normal signer and restart. Check a native-lyrics song, a native-missing song with
++QQ lyrics, a long Latin line and STAY. Confirm no extra shrink, no cover drift
++after repeated opens/skips, no lyric/title overlap, upward sequential movement,
++and unchanged source order. Device appearance remains unverified until that test.
+diff --git a/docs/stay-release-label-audit-2026-10-20.json b/docs/stay-release-label-audit-2026-10-20.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..774d3dee4d8319533c6f7901328a65ca8cbe4284
+--- /dev/null
++++ b/docs/stay-release-label-audit-2026-10-20.json
+@@ -0,0 +1,35 @@
++{
++  "checked_at": "2026-10-20T13:29:11.230828+00:00",
++  "method": "Windows metadata/lyrics replay; iOS and visual behavior unverified",
++  "limits": {
++    "search_rows": 12,
++    "lyric_candidates_per_provider": 2,
++    "metadata_queries_per_provider": 1,
++    "providers": [
++      "qqmusic",
++      "kugou"
++    ]
++  },
++  "tracks": [
++    {
++      "spotify_title": "STAY (with Justin Bieber)",
++      "spotify_artist": "The Kid LAROI",
++      "search_title": "STAY",
++      "providers": {
++        "qqmusic": {
++          "id": 318931533,
++          "title": "STAY (Explicit)",
++          "artist": "The Kid LAROI, Justin Bieber",
++          "seconds": 141,
++          "aliases": [],
++          "original_characters": 1434
++        },
++        "kugou": {
++          "status": "no_verified_candidate"
++        }
++      },
++      "seconds": 142,
++      "status": "verified_metadata_single_source"
++    }
++  ]
++}
+\ No newline at end of file
+diff --git a/scripts/audit-english-release-labels.py b/scripts/audit-english-release-labels.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..d4afd2890543295364a14a12ead271eae0cf23c4
+--- /dev/null
++++ b/scripts/audit-english-release-labels.py
+@@ -0,0 +1,90 @@
++"""Bounded English release-credit replay. Not execution of the iOS hooks.
++
++One metadata query per provider, at most two lyric candidates, QQ then KuGou.
++No artist-library search; no full lyrics, credentials or lyric keys in reports.
++"""
++from pathlib import Path
++import datetime
++import difflib
++import importlib.util
++import json
++import sys
++
++sys.stdout.reconfigure(encoding='utf-8')
++ROOT = Path(__file__).resolve().parents[1]
++spec = importlib.util.spec_from_file_location('audit', ROOT/'scripts/audit-selective-lyrics.py')
++audit = importlib.util.module_from_spec(spec)
++spec.loader.exec_module(audit)
++
++samples = [
++    ('STAY (with Justin Bieber)', 'The Kid LAROI', 142),
++    ("I Don't Care (with Justin Bieber)", 'Ed Sheeran', None),
++    ('See You Again (feat. Charlie Puth)', 'Wiz Khalifa', None),
++    ("We Don't Talk Anymore (feat. Selena Gomez)", 'Charlie Puth', None),
++    ('Closer (feat. Halsey)', 'The Chainsmokers', None),
++    ('Something Just Like This', 'The Chainsmokers', None),
++    ('Señorita', 'Shawn Mendes', None),
++    ('Die With A Smile', 'Lady Gaga', None),
++]
++
++
++def controls():
++    for title, _, _ in samples:
++        assert audit.title_match(title, audit.catalogue.title_core(title)), title
++    for bad in ['STAY (Live)', 'STAY (with Justin Bieber Live)', 'STAY (Remix)',
++                'STAY (with Orchestra)', 'STAY (Acoustic Cover)',
++                'Stay - Justin Bieber&The Kid Laroi', 'STAY (Karaoke Version)']:
++        assert not audit.title_match(bad, 'STAY (with Justin Bieber)'), bad
++    assert audit.artist_score('恋雪海螺', 'The Kid LAROI') == 0
++    assert audit.artist_score('The Kid LAROI, Justin Bieber', 'The Kid LAROI') > 0
++    assert audit.title_match('STAY (Explicit)', 'STAY (with Justin Bieber)')
++    assert not audit.title_match('STAY (Explicit)', 'STAY (Clean)')
++    assert not audit.title_match('STAY (Live) (Explicit)', 'STAY')
++    print('PASS: English credit equivalence and strict version/artist negative controls', flush=True)
++
++
++def run(stay_only=False):
++    controls()
++    rows = []
++    for title, artist, duration in samples[:1] if stay_only else samples:
++        row = {'spotify_title': title, 'spotify_artist': artist,
++               'search_title': audit.catalogue.title_core(title), 'providers': {}}
++        try:
++            if duration is None:
++                reference = audit.apple(audit.catalogue.title_core(title), artist, 'us')
++                duration = reference['seconds']
++                row['duration_reference'] = {k:v for k,v in reference.items() if k != 'text'}
++            track = {'title':title, 'artist':artist, 'seconds':duration}
++            row['seconds'] = duration
++            hits = []
++            for provider in ['qqmusic', 'kugou']:
++                try:
++                    hit = audit.search(track, provider, strategy=True)
++                    row['providers'][provider] = ({k:v for k,v in hit.items() if k != 'text'}
++                                                  if hit else {'status':'no_verified_candidate'})
++                    if hit: hits.append(hit)
++                except Exception as error:
++                    row['providers'][provider] = {'status':'unavailable', 'error':str(error)}
++            if len(hits) == 2:
++                ratio = difflib.SequenceMatcher(None, hits[0]['text'], hits[1]['text'], autojunk=False).ratio()
++                row['original_similarity'] = round(ratio, 4)
++                row['status'] = 'corroborated' if ratio >= 0.70 else 'conflicting_text'
++            else:
++                row['status'] = 'verified_metadata_single_source' if hits else 'unavailable'
++        except Exception as error:
++            row.update(status='unavailable', error=str(error))
++        rows.append(row)
++        print(title, row['status'], row.get('original_similarity',''), flush=True)
++    report = {'checked_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),
++              'method':'Windows metadata/lyrics replay; iOS and visual behavior unverified',
++              'limits':{'search_rows':12, 'lyric_candidates_per_provider':2,
++                        'metadata_queries_per_provider':1, 'providers':['qqmusic','kugou']},
++              'tracks':rows}
++    target = ROOT/'docs'/('stay-release-label-audit-2026-10-20.json' if stay_only else 'english-release-label-audit-2026-10-20.json')
++    target.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
++    print('REPORT', target, flush=True)
++
++
++if __name__ == '__main__':
++    if '--controls-only' in sys.argv: controls()
++    else: run('--stay-only' in sys.argv)
+diff --git a/scripts/probe-lyrics-catalogue.py b/scripts/probe-lyrics-catalogue.py
+index 0ce14f1b67ceb7820a67294e45f7c9786c5dba0f..b65a9f0c623bd3b2a6ebdb6d3d89c98f71714201 100644
+--- a/scripts/probe-lyrics-catalogue.py
++++ b/scripts/probe-lyrics-catalogue.py
+@@ -19,12 +19,17 @@ SUFFIX = re.compile(pattern('suffix', 'NSString *SGLyricsSearchTitle('))
+ THEME = re.compile(pattern('theme', 'NSString *SGLyricsSearchTitle('), re.I)
+ VERSION = re.compile(pattern('version', 'NSString *SGLyricsSearchTitle('), re.I)
+ FEATURED = re.compile(pattern('featured', 'NSString *SGLyricsSearchTitle('), re.I)
++ADVISORY = re.compile(pattern('advisory', 'NSString *SGLyricsSearchTitle('), re.I)
++ARRANGEMENT = re.compile(pattern('arrangement', 'NSString *SGLyricsSearchTitle('), re.I)
+ REJECT_REST = json.loads(re.search(r'for \(NSString \*version in @(\[.*?\])\)', TEXT, re.S).group(1).replace('@"','"'))
+ SEP = re.compile(pattern('separator','static NSArray<NSString *> *artistParts('), re.I)
+ def comparable(s):
+     return ''.join(c for c in unicodedata.normalize('NFKD', s or '').casefold() if c.isalnum())
+ def title_core(s):
+-    value = FEATURED.sub('',unicodedata.normalize('NFKC', s or ''))
++    value = ADVISORY.sub('', unicodedata.normalize('NFKC', s or ''))
++    credit = FEATURED.search(value)
++    if credit and not VERSION.search(credit.group()) and not ARRANGEMENT.search(credit.group()):
++        value = value[:credit.start()]
+     m=SUFFIX.search(value)
+     return value[:m.start()].strip() if m and m.start()>0 and THEME.search(m.group()) and not VERSION.search(m.group()) else value.strip()
+ def title_match(a,b):
+diff --git a/scripts/test-lyrics-identity.py b/scripts/test-lyrics-identity.py
+index 9879a255932fbd849ae81e244060afd47e099f69..b7ed8f876a69a002d710f85e5ba17406cadcf4c5 100644
+--- a/scripts/test-lyrics-identity.py
++++ b/scripts/test-lyrics-identity.py
+@@ -36,7 +36,9 @@ eligibility = section(base / "LyricsSources/LyricsSources.m", "static BOOL needs
+ preview = section(root / "tweak/Sources/Native/Player/LyricsPreview.x", "static CGRect previewFrame(", "static BOOL showing(")
+ redesignPreview = section(root / "tweak/Sources/Redesigned/Player/PlayerPreview.x", "static CGRect sgrPreviewFrame(", "static BOOL sgrShowing(")
+ prefetchSelection = section(base / "LyricsSources/LyricsSources.m", "static BOOL shouldPublishPrefetchedLines(", "void SGLyricsPrefetch(")
+-source = ("#import <Foundation/Foundation.h>\n#import <CoreGraphics/CoreGraphics.h>\n#import <dispatch/dispatch.h>\n#include <stdio.h>\n#include <stdlib.h>\n"
++nativeVerdict = (base / 'Lyrics/NativeLyricsStatus.h').read_text(encoding='utf-8')
++source = ("#import <Foundation/Foundation.h>\n#import <CoreGraphics/CoreGraphics.h>\n#import <dispatch/dispatch.h>\n#include <stdio.h>\n#include <stdlib.h>\n#include <math.h>\n"
++          + nativeVerdict
+           + model + query + "BOOL SGLyricsTimedCredit(NSString *); BOOL SGLyricsContainsHan(NSString *);\n"
+           + "BOOL SGLyricsDiagnosticsEnabled(void) { return NO; }\nvoid SGLyricsLog(NSString *format, ...) {}\n"
+           + timing + lrc + matching + aliases + qrc + eligibility + qqMetadata + qqEligibility + krc + preview + redesignPreview + prefetchSelection)
+@@ -57,6 +59,38 @@ int main(void) {
+         check(CGRectContainsRect(bilingualRect, previewRect) && CGRectGetMinY(bilingualRect) > CGRectGetMaxY(cover) &&
+             CGRectGetMaxY(bilingualRect) < CGRectGetMinY(info), @"bilingual preview uses available gap without moving artwork or overlapping title");
+         check(CGRectIsNull(sgrPreviewFrame(cover, CGRectMake(0, 490, 402, 64), player)), @"redesigned preview cannot overlap controls");
++        CGRect lowCover = CGRectMake(24, 162, 354, 354), area = CGRectMake(0, 110, 402, 466);
++        CGFloat lift = sgrPreviewNeededLift(lowCover, info, player, area, 88, 0, YES);
++        check(lift == 44, @"native missing + bilingual preview reserves only bounded header-safe space");
++        check(sgrPreviewNeededLift(lowCover, info, player, area, 88, 1, YES) == 0, @"native present never gets a second lift");
++        check(sgrPreviewNeededLift(lowCover, info, player, area, 88, -1, YES) == 0, @"unknown or failed probe never shifts artwork");
++        check(sgrPreviewNeededLift(lowCover, info, player, area, 88, 0, NO) == 0, @"no custom preview/full lyrics/transition restores artwork");
++        check(sgrPreviewNeededLift(cover, info, player, area, 88, 0, YES) == 0, @"existing native spacing is not pushed twice");
++        for (int i = 0; i < 50; i++) check(sgrPreviewNeededLift(lowCover, info, player, area, 88, 0, YES) == lift,
++            @"layout refresh computes an absolute offset, not cumulative movement");
++        check(SGNativeLyricsVerdict(404, NO, NO, NO) == 0, @"native 404 is absent");
++        check(SGNativeLyricsVerdict(200, NO, YES, YES) == 1, @"valid native lyrics are present");
++        check(SGNativeLyricsVerdict(200, NO, YES, NO) == 0, @"valid empty native lyrics are absent");
++        for (NSNumber *status in @[@401, @403, @429, @500])
++            check(SGNativeLyricsVerdict(status.integerValue, NO, YES, NO) == -1, @"auth/rate/server errors stay unknown");
++        check(SGNativeLyricsVerdict(200, NO, NO, NO) == -1 && SGNativeLyricsVerdict(404, YES, NO, NO) == -1,
++            @"malformed JSON and transport failure never mean no lyrics");
++        check(sgrPreviewShouldRoll(YES, 2, 3, 250, NO), @"sequential lyric change rolls upward");
++        check(!sgrPreviewShouldRoll(YES, 3, 2, 250, NO) && !sgrPreviewShouldRoll(YES, 2, 5, 250, NO), @"seeks do not replay intermediate lines");
++        check(!sgrPreviewShouldRoll(NO, 2, 3, 250, NO) && !sgrPreviewShouldRoll(YES, 2, 3, 250, YES), @"track change and reduced motion do not animate");
++        check(!sgrPreviewShouldRoll(YES, 2, 3, 5000, NO), @"return from background snaps to current line");
++        check([SGLyricsSearchTitle(@"STAY (with Justin Bieber)") isEqualToString:@"STAY"], @"STAY collaborator display is not a different recording");
++        check(SGLyricsTitleMatches(@"STAY", @"STAY (with Justin Bieber)"), @"domestic/international title credit equivalence");
++        check(SGLyricsTitleMatches(@"STAY (Explicit)", @"STAY (with Justin Bieber)"), @"QQ explicit title label matches Spotify separate E badge");
++        check(!SGLyricsTitleMatches(@"STAY (Explicit)", @"STAY (Clean)"), @"clean edition is not collapsed into explicit");
++        check(!SGLyricsTitleMatches(@"STAY (Live) (Explicit)", @"STAY"), @"explicit cleanup retains live qualifier");
++        for (NSString *bad in @[@"STAY (with Justin Bieber Live)", @"STAY (Live)", @"STAY (with Orchestra)",
++              @"STAY (with Vocals)", @"STAY (Remix)", @"STAY (Acoustic Cover)", @"Stay - Justin Bieber&The Kid Laroi"])
++            check(!SGLyricsTitleMatches(bad, @"STAY (with Justin Bieber)"), @"credit cleanup does not erase versions or uploader titles");
++        SGLyricsQuery *stay = [SGLyricsQuery new]; stay.title = @"STAY (with Justin Bieber)";
++        stay.artist = @"The Kid LAROI"; stay.seconds = 142;
++        check(SGLyricsMetadataConfident(@"STAY", @"The Kid LAROI, Justin Bieber", 142, 6, stay), @"STAY still needs the real artist and recording duration");
++        check(!SGLyricsMetadataConfident(@"STAY", @"恋雪海螺", 142, 6, stay), @"same length uploader is not the official recording");
+         NSString *longTitle = @"Moon Halo - Honkai Impact 3Rd \"Everlasting Flames\" Animated Short Theme";
+         for (NSString *title in @[
+             longTitle,
+diff --git a/tweak/Sources/Redesigned/Player/Player.h b/tweak/Sources/Redesigned/Player/Player.h
+index 14d3e2e0d3bf50de2097bad0efb15c274c82e428..bb9014772e36ca6649abd0fbfe7c58f90116c6b1 100644
+--- a/tweak/Sources/Redesigned/Player/Player.h
++++ b/tweak/Sources/Redesigned/Player/Player.h
+@@ -95,6 +95,9 @@ UIView *SGRPlayerCoverList(void);
+ // The cover on screen as it is drawn, its paused shrink included, in `host`'s coordinates; CGRectNull
+ // when no cover has laid out.
+ CGRect SGRPlayerCoverFrameIn(UIView *host);
++// A preview-only vertical compensation; the upstream paused scale is unchanged.
++CGFloat SGRPlayerPreviewLift(void);
++void SGRPlayerSetPreviewLift(NSString *trackID, CGFloat lift);
+ // The band that cover sits in -- the room the player gives its artwork, between the header row and the
+ // title -- in `host`'s coordinates; CGRectNull when no cover has laid out.
+ CGRect SGRPlayerArtworkAreaIn(UIView *host);
+diff --git a/tweak/Sources/Redesigned/Player/PlayerArtwork.x b/tweak/Sources/Redesigned/Player/PlayerArtwork.x
+index 001d1594ef84474fa70b288232988a1aabd66ed5..d68784cb540a1a14114b687db5fa617378d09422 100644
+--- a/tweak/Sources/Redesigned/Player/PlayerArtwork.x
++++ b/tweak/Sources/Redesigned/Player/PlayerArtwork.x
+@@ -12,6 +12,8 @@
+ #import "Core/SGCore.h"
+ #import "Redesigned/Kit/SGRKit.h"
+ #import "Player.h"
++#import "Shared/Lyrics/Lyrics.h"
++#include <math.h>
+ 
+ static const CGFloat kPausedScale = 0.84, kPausedScaleReduceMotion = 0.92;
+ // The bar's 40pt cover lives in a tilt view of its own; the player's is 354.
+@@ -22,6 +24,13 @@ static NSHashTable<UIView *> *sg_tilts;
+ // The cover of each tilt view once found. A frame Spotify sets on a scaled view becomes its scaled
+ // size, leaving bounds that no longer match the tilt view's, so the cover is not looked for by size again.
+ static NSMapTable<UIView *, UIView *> *sg_covers;
++static NSString *sg_previewLiftTrack;
++static CGFloat sg_previewLift;
++
++CGFloat SGRPlayerPreviewLift(void) {
++    if (SGRPlayerLyricsOpen() || SGRPlayerIsTransitioning()) return 0;
++    return [sg_previewLiftTrack isEqualToString:SGKaraokePlayingTrack()] ? sg_previewLift : 0;
++}
+ 
+ static CGFloat currentScale(void) {
+     SPTPlayerState *state = SGPlayerState();
+@@ -56,6 +65,7 @@ static void scaleCover(UIView *tilt, CGFloat scale) {
+     if (!cover) return;
+     SGRShadowPlate *plate = SGRShadowPlateIn(tilt, &kPlateKey);
+     CGAffineTransform transform = CGAffineTransformMakeScale(scale, scale);
++    transform.ty = -SGRPlayerPreviewLift();
+     cover.transform = transform;
+     plate.transform = transform;
+ }
+@@ -179,6 +189,13 @@ static void scaleEveryCover(BOOL animated) {
+     else apply();
+ }
+ 
++void SGRPlayerSetPreviewLift(NSString *trackID, CGFloat lift) {
++    lift = MAX(0, lift);
++    if ([sg_previewLiftTrack isEqualToString:trackID] && fabs(sg_previewLift - lift) < 0.5) return;
++    sg_previewLiftTrack = [trackID copy]; sg_previewLift = lift;
++    scaleEveryCover(NO);
++}
++
+ %hook _TtC35CreativeWorkCommons_CoverArtTiltKit16CoverArtTiltView
+ - (void)layoutSubviews {
+     %orig;
+diff --git a/tweak/Sources/Redesigned/Player/PlayerPreview.x b/tweak/Sources/Redesigned/Player/PlayerPreview.x
+index e963153bb4b70413149c03eafef436584f718814..681b5984fb64682c18468b0a6a20b23b4de07454 100644
+--- a/tweak/Sources/Redesigned/Player/PlayerPreview.x
++++ b/tweak/Sources/Redesigned/Player/PlayerPreview.x
+@@ -30,6 +30,23 @@ static CGRect sgrPreviewFrame(CGRect cover, CGRect info, CGRect host) {
+                       host.size.width - side * 2, height);
+ }
+ 
++// Input is the unshifted cover. Recompute an absolute lift, never accumulate it.
++static CGFloat sgrPreviewNeededLift(CGRect cover, CGRect info, CGRect host, CGRect area,
++                                    CGFloat neededHeight, NSInteger nativeStatus, BOOL ready) {
++    if (!ready || nativeStatus != 0 || CGRectIsNull(cover) || CGRectIsNull(area) ||
++        info.size.height <= 0 || cover.size.width < 200) return 0;
++    CGFloat gap = CGRectGetMinY(info) - CGRectGetMaxY(cover) - 16;
++    CGFloat firstSafeTop = MAX(CGRectGetMinY(host) + 8, CGRectGetMinY(area) + 8);
++    CGFloat limit = MAX(0, CGRectGetMinY(cover) - firstSafeTop);
++    return MIN(limit, ceil(MAX(0, neededHeight - gap)));
++}
++
++static BOOL sgrPreviewShouldRoll(BOOL sameTrack, NSInteger oldIndex, NSInteger newIndex,
++                                 NSInteger elapsed, BOOL reducedMotion) {
++    return sameTrack && oldIndex >= 0 && newIndex == oldIndex + 1 &&
++        elapsed >= 0 && elapsed < 2000 && !reducedMotion;
++}
++
+ static BOOL sgrShowing(UIView *view, UIView *host) {
+     if (!view || ![view isDescendantOfView:host]) return NO;
+     for (UIView *v = view; v && v != host; v = v.superview) {
+@@ -43,8 +60,11 @@ static BOOL sgrShowing(UIView *view, UIView *host) {
+ @property (nonatomic, strong) CADisplayLink *link;
+ @property (nonatomic, strong) UIScrollView *scroll;
+ @property (nonatomic, strong) UIView *lineView;
++@property (nonatomic, strong) UIView *retiring;
+ @property (nonatomic, strong) SGKaraokeLine *line;
+ @property (nonatomic, copy) NSString *translation;
++@property (nonatomic, copy) NSString *track;
++@property (nonatomic) NSInteger lineIndex, position;
+ @property (nonatomic) CGSize measured;
+ - (void)refresh;
+ @end
+@@ -60,6 +80,7 @@ static BOOL sgrShowing(UIView *view, UIView *host) {
+     [self addSubview:_scroll];
+     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(refresh) name:SGKaraokeLinesDidChangeNotification object:nil];
+     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(refresh) name:SGLyricsTranslationUpdatedNotification object:nil];
++    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(refresh) name:SGKaraokeNativeLyricsDidChangeNotification object:nil];
+     return self;
+ }
+ - (void)dealloc { [NSNotificationCenter.defaultCenter removeObserver:self]; }
+@@ -67,7 +88,7 @@ static BOOL sgrShowing(UIView *view, UIView *host) {
+     [super didMoveToWindow];
+     [self.timer invalidate]; self.timer = nil;
+     [self.link invalidate]; self.link = nil;
+-    if (!self.window) return;
++    if (!self.window) { SGRPlayerSetPreviewLift(nil, 0); return; }
+     __weak SGRPlayerPreview *weakSelf = self;
+     self.timer = [NSTimer timerWithTimeInterval:0.25 repeats:YES block:^(NSTimer *timer) { [weakSelf refresh]; }];
+     [NSRunLoop.mainRunLoop addTimer:self.timer forMode:NSRunLoopCommonModes];
+@@ -82,27 +103,48 @@ static BOOL sgrShowing(UIView *view, UIView *host) {
+     UIView *host = self.superview, *info = sgr_previewInfo;
+     if (!host) return;
+     BOOL timed = SGRPlayerPreviewAvailable();
+-    // Spotify owns artwork layout; reading its final frame avoids a second shrink.
++    // Keep Spotify's artwork scale. Only supplement its absent native lyrics layout.
+     SGRPlayerLyricsChanged();
+-    CGRect cover = SGRPlayerCoverFrameIn(host);
+-    CGRect information = sgrShowing(info, host) ? [host convertRect:info.bounds fromView:info] : CGRectZero;
+-    CGRect frame = CGRectIsNull(cover) ? CGRectNull : sgrPreviewFrame(cover, information, host.bounds);
+-    CGFloat clip = 0; SGRPlayerAnimatedShowing(&clip, NULL);
++    NSString *track = SGKaraokePlayingTrack();
+     NSInteger ms = SGKaraokePositionMs();
+-    NSArray *lines = SGKaraokeLinesForTrack(SGKaraokePlayingTrack());
++    NSArray<SGKaraokeLine *> *lines = SGKaraokeLinesForTrack(track);
+     NSInteger index = timed && ms >= 0 ? SGKaraokeLeadLine(lines, ms) : -1;
+     SGKaraokeLine *line = index >= 0 ? lines[index] : nil;
+-    BOOL visible = timed && line && ms <= SGKaraokeSungEnd(line) + 4000 && !CGRectIsNull(frame) &&
++    CGFloat clip = 0; SGRPlayerAnimatedShowing(&clip, NULL);
++    BOOL ready = timed && line && ms <= SGKaraokeSungEnd(line) + 4000 &&
+         !SGRPlayerLyricsOpen() && !SGRPlayerIsTransitioning() && clip < 0.01 &&
+         UIApplication.sharedApplication.applicationState == UIApplicationStateActive;
++    if (ready) SGKaraokeProbeNativeLyrics(track);
++    CGRect cover = SGRPlayerCoverFrameIn(host);
++    CGRect information = sgrShowing(info, host) ? [host convertRect:info.bounds fromView:info] : CGRectZero;
++    CGRect baseline = cover;
++    if (!CGRectIsNull(baseline)) baseline.origin.y += SGRPlayerPreviewLift();
++    // Reserve a stable per-song budget, not a different cover position on each line.
++    CGFloat needed = 64;
++    for (SGKaraokeLine *candidate in lines) if (candidate.translation.length) { needed = 88; break; }
++    CGFloat lift = sgrPreviewNeededLift(baseline, information, host.bounds, SGRPlayerArtworkAreaIn(host),
++        needed, SGLyricsSpotifyHas(track), ready);
++    SGRPlayerSetPreviewLift(track, lift);
++    cover = SGRPlayerCoverFrameIn(host);
++    CGRect frame = CGRectIsNull(cover) ? CGRectNull : sgrPreviewFrame(cover, information, host.bounds);
++    BOOL visible = ready && !CGRectIsNull(frame);
+     self.alpha = visible ? 1 : 0;
+-    if (!visible) { [self.link invalidate]; self.link = nil; return; }
++    if (!visible) {
++        [self.link invalidate]; self.link = nil;
++        [self.retiring removeFromSuperview]; self.retiring = nil;
++        self.track = nil; self.lineIndex = -1; self.position = -1;
++        return;
++    }
+     self.frame = frame;
+     self.scroll.frame = self.bounds;
+-    if (line != self.line || !CGSizeEqualToSize(self.measured, self.bounds.size) ||
++    BOOL sameTrack = [self.track isEqualToString:track];
++    if (!sameTrack || line != self.line || !CGSizeEqualToSize(self.measured, self.bounds.size) ||
+         ![(line.translation ?: @"") isEqualToString:(self.translation ?: @"")]) {
+-        BOOL changesLine = self.line && line != self.line;
+-        [self.lineView removeFromSuperview];
++        BOOL rolls = sgrPreviewShouldRoll(sameTrack, self.lineIndex, index, ms - self.position,
++            UIAccessibilityIsReduceMotionEnabled());
++        [self.retiring removeFromSuperview]; self.retiring = nil;
++        UIView *outgoing = self.lineView;
++        [outgoing.layer removeAllAnimations]; outgoing.transform = CGAffineTransformIdentity;
+         self.line = line; self.translation = line.translation; self.measured = self.bounds.size;
+         self.lineView = SGRKaraokePreviewLine(line, self.bounds.size.width, self.bounds.size.height);
+         self.lineView.frame = CGRectMake(0, MAX(0, (self.bounds.size.height - self.lineView.bounds.size.height) / 2),
+@@ -110,11 +152,23 @@ static BOOL sgrShowing(UIView *view, UIView *host) {
+         [self.scroll addSubview:self.lineView];
+         self.scroll.contentSize = CGSizeMake(self.bounds.size.width, MAX(self.bounds.size.height, self.lineView.bounds.size.height));
+         self.scroll.contentOffset = CGPointZero;
+-        if (changesLine && !UIAccessibilityIsReduceMotionEnabled()) {
+-            CATransition *fade = [CATransition animation]; fade.type = kCATransitionFade; fade.duration = 0.25;
+-            [self.scroll.layer addAnimation:fade forKey:@"lyricsLine"];
+-        }
++        if (rolls && outgoing) {
++            UIView *incoming = self.lineView;
++            CGFloat travel = MAX(self.bounds.size.height, MAX(outgoing.bounds.size.height, incoming.bounds.size.height)) + 8;
++            incoming.transform = CGAffineTransformMakeTranslation(0, travel);
++            self.retiring = outgoing;
++            __weak SGRPlayerPreview *weakSelf = self;
++            [UIView animateWithDuration:0.28 delay:0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionAllowUserInteraction
++                animations:^{
++                    outgoing.transform = CGAffineTransformMakeTranslation(0, -travel);
++                    incoming.transform = CGAffineTransformIdentity;
++                } completion:^(BOOL finished) {
++                    [outgoing removeFromSuperview];
++                    if (weakSelf.retiring == outgoing) weakSelf.retiring = nil;
++                }];
++        } else [outgoing removeFromSuperview];
+     }
++    self.track = track; self.lineIndex = index; self.position = ms;
+     [self animateText];
+     if (!self.link) {
+         self.link = [CADisplayLink displayLinkWithTarget:self selector:@selector(animateText)];
+diff --git a/tweak/Sources/Shared/Lyrics/KaraokeSource.x b/tweak/Sources/Shared/Lyrics/KaraokeSource.x
+index eb851a0376fce4034713691668e0b3766f1ec909..f9fae13dcf4b7ed3e69c0de1280369f46d1c72f8 100644
+--- a/tweak/Sources/Shared/Lyrics/KaraokeSource.x
++++ b/tweak/Sources/Shared/Lyrics/KaraokeSource.x
+@@ -7,12 +7,14 @@
+ #import "Core/SGCore.h"
+ #import "Shared/Sing/SGSingController.h"
+ #import "Lyrics.h"
++#import "NativeLyricsStatus.h"
+ #import "Shared/LockScreenLyrics/LockScreenLyrics.h"
+ #import "Shared/LyricsSources/LyricsSources.h"
+ #import "Shared/Player/PlayerState.h"
+ #import "Headers/SPTPlayer.h"
+ 
+ NSNotificationName const SGKaraokeLinesDidChangeNotification = @"spotifyglass.karaokeLinesDidChange";
++NSNotificationName const SGKaraokeNativeLyricsDidChangeNotification = @"spotifyglass.nativeLyricsDidChange";
+ 
+ static const NSUInteger kKeptTracks = 40;
+ static const NSUInteger kSeenTracks = 200;
+@@ -143,6 +145,49 @@ NSString *SGKaraokeSpotifyAuthorization(void) {
+     return sg_spclientHeaders[@"authorization"];
+ }
+ 
++void SGKaraokeProbeNativeLyrics(NSString *trackID) {
++    if (!NSThread.isMainThread) {
++        dispatch_async(dispatch_get_main_queue(), ^{ SGKaraokeProbeNativeLyrics(trackID); });
++        return;
++    }
++    if (!trackID.length || SGLyricsSpotifyHas(trackID) >= 0 || !sg_spclientHeaders[@"authorization"]) return;
++    static NSCache<NSString *, NSDictionary *> *attempts;
++    static NSMutableSet<NSString *> *inFlight;
++    static dispatch_once_t once;
++    dispatch_once(&once, ^{
++        attempts = [NSCache new]; attempts.countLimit = 40;
++        inFlight = [NSMutableSet set];
++    });
++    NSDictionary *old = [attempts objectForKey:trackID];
++    NSTimeInterval now = NSDate.timeIntervalSinceReferenceDate;
++    if ([inFlight containsObject:trackID] || [old[@"count"] integerValue] >= 2 || [old[@"next"] doubleValue] > now) return;
++    [attempts setObject:@{@"count": @([old[@"count"] integerValue] + 1), @"next": @(now + 30)} forKey:trackID];
++    [inFlight addObject:trackID];
++    NSString *address = [NSString stringWithFormat:@"https://spclient.wg.spotify.com/color-lyrics/v2/track/%@?format=json&vocalRemoval=false&market=from_token", trackID];
++    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:address]
++        cachePolicy:NSURLRequestReloadIgnoringLocalCacheData timeoutInterval:8];
++    [sg_spclientHeaders enumerateKeysAndObjectsUsingBlock:^(NSString *name, NSString *value, BOOL *stop) {
++        [request setValue:value forHTTPHeaderField:name];
++    }];
++    [request setValue:@"application/json" forHTTPHeaderField:@"Accept"];
++    [NSURLProtocol setProperty:@YES forKey:SGLyricsOwnRequestKey inRequest:request];
++    [[NSURLSession.sharedSession dataTaskWithRequest:request completionHandler:^(NSData *body, NSURLResponse *response, NSError *error) {
++        NSInteger status = [response isKindOfClass:NSHTTPURLResponse.class] ? ((NSHTTPURLResponse *)response).statusCode : 0;
++        id root = body.length ? [NSJSONSerialization JSONObjectWithData:body options:0 error:nil] : nil;
++        id lyrics = [root isKindOfClass:NSDictionary.class] ? root[@"lyrics"] : nil;
++        id rows = [lyrics isKindOfClass:NSDictionary.class] ? lyrics[@"lines"] : nil;
++        BOOL valid = [rows isKindOfClass:NSArray.class];
++        NSInteger verdict = SGNativeLyricsVerdict(status, error != nil, valid, valid && [rows count] > 0);
++        dispatch_async(dispatch_get_main_queue(), ^{
++            [inFlight removeObject:trackID];
++            if (verdict < 0) return;
++            // A late answer for the previous track only updates that track's key.
++            SGLyricsNoteSpotifyHas(trackID, verdict == 1);
++            [NSNotificationCenter.defaultCenter postNotificationName:SGKaraokeNativeLyricsDidChangeNotification object:trackID];
++        });
++    }] resume];
++}
++
+ // `retry`: the sources' walk failed on the way, so an answer with no lines is not final either.
+ static void requestFromSpotify(NSString *trackID, BOOL retry) {
+     NSDictionary<NSString *, NSString *> *headers = sg_spclientHeaders;
+diff --git a/tweak/Sources/Shared/Lyrics/Lyrics.h b/tweak/Sources/Shared/Lyrics/Lyrics.h
+index c7df80a96b81f72f6e0f84c20e29e4f14214f910..332c368e73b08d8b3b5df61afe2f3d643ee43182 100644
+--- a/tweak/Sources/Shared/Lyrics/Lyrics.h
++++ b/tweak/Sources/Shared/Lyrics/Lyrics.h
+@@ -103,6 +103,10 @@ void SGKaraokeRequestLyrics(NSString *trackID);
+ // Asks Spotify's JSON lyrics for the track once, and keeps its lines only if they are more finely
+ // timed than the ones kept: the lyrics view was left with plain text, and Spotify may have it timed.
+ void SGKaraokeAskSpotifyForTiming(NSString *trackID);
++// Only probes unknown native availability, coalesced and capped at two attempts
++// per cached track. Never publishes these lyrics into the selected-source cache.
++void SGKaraokeProbeNativeLyrics(NSString *trackID);
++extern NSNotificationName const SGKaraokeNativeLyricsDidChangeNotification;
+ // The Authorization header of Spotify's own requests, nil until one has gone out. Only ever sent
+ // back to Spotify's servers (the lock screen's canvaz lookup), never to a lyrics source.
+ NSString *SGKaraokeSpotifyAuthorization(void);
+diff --git a/tweak/Sources/Shared/Lyrics/NativeLyricsStatus.h b/tweak/Sources/Shared/Lyrics/NativeLyricsStatus.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..cf4b8040a3c42e80e8d405cd257cb9954eba8c16
+--- /dev/null
++++ b/tweak/Sources/Shared/Lyrics/NativeLyricsStatus.h
+@@ -0,0 +1,9 @@
++// Native Spotify availability is distinct from the selected provider's result.
++// Network/auth/rate-limit failures are unknown, never catalogue misses.
++#import <Foundation/Foundation.h>
++static inline NSInteger SGNativeLyricsVerdict(NSInteger status, BOOL failed, BOOL validBody, BOOL hasLines) {
++    if (failed) return -1;
++    if (status == 404 || status == 204) return 0;
++    if (status == 200 && validBody) return hasLines ? 1 : 0;
++    return -1;
++}
+diff --git a/tweak/Sources/Shared/LyricsSources/LyricsHook.x b/tweak/Sources/Shared/LyricsSources/LyricsHook.x
+index e99e584425754a7fcc114d7b3cb2772e8409fde2..b8c99432ce827c2289bfaa1288f19e829ef267a6 100644
+--- a/tweak/Sources/Shared/LyricsSources/LyricsHook.x
++++ b/tweak/Sources/Shared/LyricsSources/LyricsHook.x
+@@ -588,7 +588,11 @@ static void completed(id delegate, NSURLSession *session, NSURLSessionTask *task
+     NSString *track = trackOf(self);
+     if (!track) return metadata;
+     BOOL has = [@"true" isEqual:metadata[@"has_lyrics"]];
+-    SGLyricsNoteSpotifyHas(track, has);
++    // Missing metadata is unknown, not evidence that Spotify has no lyrics.
++    id rawHas = metadata[@"has_lyrics"];
++    if ([rawHas isKindOfClass:NSNumber.class]) has = [rawHas boolValue];
++    if ([rawHas isKindOfClass:NSNumber.class] || [rawHas isEqual:@"true"] || [rawHas isEqual:@"false"])
++        SGLyricsNoteSpotifyHas(track, has);
+     SGKaraokeRememberTrack(self);
+     if (has || !SGLyricsMayHave(track)) return metadata;
+     static dispatch_once_t once;
+diff --git a/tweak/Sources/Shared/LyricsSources/LyricsMatching.m b/tweak/Sources/Shared/LyricsSources/LyricsMatching.m
+index aba8735f1d3d9272b533c8ca5c9779b4c1def798..b07ad183f1623def1946a1a29ad28d9dcd768a0d 100644
+--- a/tweak/Sources/Shared/LyricsSources/LyricsMatching.m
++++ b/tweak/Sources/Shared/LyricsSources/LyricsMatching.m
+@@ -124,11 +124,13 @@ BOOL SGLyricsTimedCredit(NSString *text) {
+ NSString *SGLyricsSearchTitle(NSString *title) {
+     if (![title isKindOfClass:NSString.class]) return @"";
+     NSString *value = [title precomposedStringWithCompatibilityMapping];
+-    static NSRegularExpression *suffix, *theme, *version, *featured;
++    static NSRegularExpression *suffix, *theme, *version, *featured, *advisory;
+     static dispatch_once_t once;
+     dispatch_once(&once, ^{
++        advisory = [NSRegularExpression regularExpressionWithPattern:@"\\s*[\\(\\[（【]Explicit[)\\]）】]\\s*$"
++            options:NSRegularExpressionCaseInsensitive error:nil];
+         featured = [NSRegularExpression regularExpressionWithPattern:
+-            @"\\s*[\\(\\[（【](?:feat\\.?|ft\\.?|featuring)\\s+[^)\\]）】]+[)\\]）】]\\s*$"
++            @"\\s*[\\(\\[（【](?:feat\\.?|ft\\.?|featuring|with)\\s+[^)\\]）】]+[)\\]）】]\\s*$"
+             options:NSRegularExpressionCaseInsensitive error:nil];
+         suffix = [NSRegularExpression regularExpressionWithPattern:
+             @"\\s+(?:[-–—:]\\s+)(.+)$|\\s*[\\(\\[（【](.+)[\\)\\]）】]\\s*$" options:0 error:nil];
+@@ -139,9 +141,27 @@ NSString *SGLyricsSearchTitle(NSString *title) {
+             @"\\b(?:live|remix|mix|bootleg|cover|instrumental|acoustic|karaoke|demo|remaster(?:ed)?|piano|sped[ -]+up|slowed)\\b|现场|現場|伴奏|翻唱|混音|加速|降速|重制|重製|片段|剪辑|剪輯|钢琴|鋼琴|纯音乐|純音樂|摇滚|搖滾|爵士|重金属|重金屬|翻奏|演绎|演繹"
+             options:NSRegularExpressionCaseInsensitive error:nil];
+     });
++    // QQ puts its parental advisory in the title; Spotify displays a separate E badge.
++    // Only the exact Explicit label is removed, never Clean/Radio/Live/Remix variants.
++    NSString *withoutAdvisory = [advisory stringByReplacingMatchesInString:value options:0
++        range:NSMakeRange(0, value.length) withTemplate:@""];
++    BOOL removedAdvisory = ![withoutAdvisory isEqualToString:value];
++    value = withoutAdvisory;
+     // Featured performers are credits, often absent from another catalogue's title.
+     // Strip only a trailing feature-credit bracket; live/remix markers stay intact.
+-    NSString *withoutFeature = [featured stringByReplacingMatchesInString:value options:0 range:NSMakeRange(0, value.length) withTemplate:@""];
++    NSTextCheckingResult *credit = [featured firstMatchInString:value options:0 range:NSMakeRange(0, value.length)];
++    NSString *creditText = credit ? [value substringWithRange:credit.range] : @"";
++    // A feature credit may itself contain a version marker: never erase it.
++    BOOL versionedCredit = credit && [version firstMatchInString:creditText options:0 range:NSMakeRange(0, creditText.length)];
++    static NSRegularExpression *arrangement;
++    static dispatch_once_t arrangementOnce;
++    dispatch_once(&arrangementOnce, ^{
++        arrangement = [NSRegularExpression regularExpressionWithPattern:@"\\b(?:orchestra|orchestral|strings|choir|vocals)\\b"
++            options:NSRegularExpressionCaseInsensitive error:nil];
++    });
++    BOOL arrangedCredit = credit && [arrangement firstMatchInString:creditText options:0 range:NSMakeRange(0, creditText.length)];
++    NSString *withoutFeature = credit && !versionedCredit && !arrangedCredit
++        ? [value stringByReplacingCharactersInRange:credit.range withString:@""] : value;
+     BOOL removedFeature = ![withoutFeature isEqualToString:value];
+     value = withoutFeature;
+     // Check the whole suffix, including a nested version such as
+@@ -155,7 +175,7 @@ NSString *SGLyricsSearchTitle(NSString *title) {
+                 stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+         }
+     }
+-    return removedFeature ? [value stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet] : title;
++    return removedFeature || removedAdvisory ? [value stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet] : title;
+ }
+ 
+ BOOL SGLyricsTitleMatches(NSString *candidate, NSString *wanted) {
+-- 
+2.34.1
+

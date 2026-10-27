@@ -1,0 +1,26 @@
+From 7be3f72795a6ec2e1de593dd7779f6c31c16f6cb Mon Sep 17 00:00:00 2001
+From: ddyec <89333385+ddyec@users.noreply.github.com>
+Date: Tue, 20 Oct 2026 21:40:48 +0800
+Subject: [PATCH] fix: declare lyric preview playback properties separately
+
+---
+ tweak/Sources/Redesigned/Player/PlayerPreview.x | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/tweak/Sources/Redesigned/Player/PlayerPreview.x b/tweak/Sources/Redesigned/Player/PlayerPreview.x
+index 681b5984fb64682c18468b0a6a20b23b4de07454..094d4a3f7986b5f1c623564b31e991b26fb87451 100644
+--- a/tweak/Sources/Redesigned/Player/PlayerPreview.x
++++ b/tweak/Sources/Redesigned/Player/PlayerPreview.x
+@@ -64,7 +64,8 @@ static BOOL sgrShowing(UIView *view, UIView *host) {
+ @property (nonatomic, strong) SGKaraokeLine *line;
+ @property (nonatomic, copy) NSString *translation;
+ @property (nonatomic, copy) NSString *track;
+-@property (nonatomic) NSInteger lineIndex, position;
++@property (nonatomic) NSInteger lineIndex;
++@property (nonatomic) NSInteger position;
+ @property (nonatomic) CGSize measured;
+ - (void)refresh;
+ @end
+-- 
+2.34.1
+

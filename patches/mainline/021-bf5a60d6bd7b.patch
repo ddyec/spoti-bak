@@ -1,0 +1,146 @@
+From bf5a60d6bd7b25703a68e9eb60267b0b69d0bc49 Mon Sep 17 00:00:00 2001
+From: Codex <codex@users.noreply.github.com>
+Date: Sun, 18 Oct 2026 22:17:46 +0800
+Subject: [PATCH] fix: run audit gates through existing build scripts
+
+---
+ .github/workflows/build-ipa.yml       | 20 ++------------------
+ .github/workflows/release.yml         |  8 +-------
+ docs/beta-lyrics-review-2026-10-18.md | 10 ++++++++--
+ scripts/pipeline.sh                   |  4 ++++
+ scripts/test-lyrics-identity.py       |  7 +++++++
+ 5 files changed, 22 insertions(+), 27 deletions(-)
+
+diff --git a/.github/workflows/build-ipa.yml b/.github/workflows/build-ipa.yml
+index 80d565a8057be0e0bab2e39f102f551e92f0078a..275e202d4b63f444e57c8d9e1bf02bd77ec35585 100644
+--- a/.github/workflows/build-ipa.yml
++++ b/.github/workflows/build-ipa.yml
+@@ -24,10 +24,7 @@ jobs:
+           xcode-version: latest-stable
+ 
+       - name: Check lyrics recording identity
+-        run: |
+-          python3 -c "import json; r=json.load(open('docs/lyrics-live-audit-round2-2026-10-18.json')); assert r['all_passed'] and r['reused_results']==0; print('Fresh multilingual audit gate passed')"
+-          python3 scripts/test-lyrics-identity.py
+-          python3 scripts/test-lyrics-requests.py
++        run: python3 scripts/test-lyrics-identity.py
+ 
+       - uses: actions/checkout@v5
+         with:
+@@ -46,23 +43,10 @@ jobs:
+           curl -fsSL "${{ inputs.ipa_url }}" -o ipa/spotify.ipa
+           case "$(file --mime-type -b ipa/spotify.ipa)" in application/zip|application/x-ios-app) ;; *) echo "::error::Not an IPA"; exit 1 ;; esac
+ 
+-      - name: Verify Spotify version
+-        run: |
+-          python3 - <<'PY'
+-          import plistlib, re, zipfile
+-          with zipfile.ZipFile('ipa/spotify.ipa') as archive:
+-              names = [n for n in archive.namelist() if re.fullmatch(r'Payload/[^/]+\.app/Info\.plist', n)]
+-              assert len(names) == 1, 'Ambiguous app bundle in IPA'
+-              info = plistlib.loads(archive.read(names[0]))
+-          version = info.get('CFBundleShortVersionString')
+-          print('Spotify IPA version:', version)
+-          assert version == '9.1.78', 'Spotify version changed: stop without building'
+-          PY
+-
+       - run: make release
+ 
+       - uses: actions/upload-artifact@v5
+         with:
+-          name: spoti-beta-selective-lyrics-ipa
++          name: spoti-issue-144-async-translation-ipa
+           path: out/*.ipa
+           if-no-files-found: error
+diff --git a/.github/workflows/release.yml b/.github/workflows/release.yml
+index 630d5baef9c41b6aa50c8d8d56b0c6287f697a47..50a5ca77023b3a109d3b5aa655b886f57a762a5f 100644
+--- a/.github/workflows/release.yml
++++ b/.github/workflows/release.yml
+@@ -1,13 +1,11 @@
+ # Every push to main updates one release PR (version.txt and CHANGELOG.md from the feat:/fix:
+ # commits since the last release). Merging it tags vX.Y.Z and makes the GitHub Release, and the
+ # second job builds the tweak's .deb and attaches it. No IPA is built or published here.
+-# beta does the same from release-please-config.beta.json, as vX.Y.Z-beta.N pre-releases. After a
+-# release on main, an empty commit on beta with the body "Release-As: 0.24.0-beta.1" starts the next.
+ name: Release
+ 
+ on:
+   push:
+-    branches: [main, beta]
++    branches: [main]
+ 
+ permissions:
+   contents: write
+@@ -22,10 +20,6 @@ jobs:
+     steps:
+       - uses: googleapis/release-please-action@v4
+         id: release
+-        with:
+-          target-branch: ${{ github.ref_name }}
+-          config-file: ${{ github.ref_name == 'beta' && 'release-please-config.beta.json' || 'release-please-config.json' }}
+-          manifest-file: ${{ github.ref_name == 'beta' && '.release-please-manifest.beta.json' || '.release-please-manifest.json' }}
+ 
+   deb:
+     needs: release-please
+diff --git a/docs/beta-lyrics-review-2026-10-18.md b/docs/beta-lyrics-review-2026-10-18.md
+index f8dbca307f6ada948756eef46a67adee80d6776b..8f7da3ee42b068221e1291f769e170e528081c1e 100644
+--- a/docs/beta-lyrics-review-2026-10-18.md
++++ b/docs/beta-lyrics-review-2026-10-18.md
+@@ -163,7 +163,13 @@ NetEase's own request function was also found to bypass the shared request cache
+ It now goes through `SGLyricsReadJSON`, retaining its 3s timeout, with sorted URL
+ parameters so lyric and translation consumers can actually reuse the same request.
+ 
+-The Action checks the final audit gate, compiles/runs both Objective-C regressions,
+-and reads the IPA's real CFBundleShortVersionString before building. It must stop
++The existing Action calls the identity script, which checks the final audit gate
++and compiles/runs both Objective-C regressions. The existing pipeline reads the
++IPA's real CFBundleShortVersionString before building and now must stop
+ if that version differs from 9.1.78. A successful Action still requires phone
+ acceptance of the cover/preview behavior described above.
++
++The current GitHub OAuth credential cannot update workflow files. This branch
++therefore retains the fork's existing `.github/workflows` files unchanged from
++the earlier test branch; the new gates live in the scripts those workflows already
++invoke. No credential scope expansion is needed.
+diff --git a/scripts/pipeline.sh b/scripts/pipeline.sh
+index 073d71175cfc163f8dd9711e0f4ac661d0663905..2436406f6e14303d406186ef5757975c73f5bc03 100755
+--- a/scripts/pipeline.sh
++++ b/scripts/pipeline.sh
+@@ -58,6 +58,10 @@ APP_DIR="$(unzip -Z1 "$IN" | grep -oE '^Payload/[^/]+\.app/' | sort -u | head -1
+ [ -n "$APP_DIR" ] || { echo "no Payload/*.app in $IN" >&2; exit 1; }
+ SPOTIFY_VERSION="$(unzip -p "$IN" "${APP_DIR}Info.plist" > "$ROOT/out/.info.plist" && plutil -extract CFBundleShortVersionString raw -o - "$ROOT/out/.info.plist")"
+ rm -f "$ROOT/out/.info.plist"
++if [ "$SPOTIFY_VERSION" != "9.1.78" ]; then
++  echo "Spotify version changed: expected 9.1.78, got $SPOTIFY_VERSION; stopping without building" >&2
++  exit 2
++fi
+ # The name carries the mod's version, not Spotify's: it is the one the About page shows and the one
+ # worth telling builds apart by. version.txt is read the way tweak/Makefile reads it, so a build from
+ # a fork left behind by a release is named for the version it really is.
+diff --git a/scripts/test-lyrics-identity.py b/scripts/test-lyrics-identity.py
+index faf3bb1f413205c531ee07ed94da815b1cad2da7..dfb83e278b0db6cf88b2cd8c85cf7488c2421f26 100644
+--- a/scripts/test-lyrics-identity.py
++++ b/scripts/test-lyrics-identity.py
+@@ -5,8 +5,13 @@ Extract Foundation-only code, avoiding UIKit and duplicating no matching logic.
+ from pathlib import Path
+ import subprocess
+ import tempfile
++import json
++import sys
+ 
+ root = Path(__file__).resolve().parents[1]
++audit = json.loads((root / 'docs/lyrics-live-audit-round2-2026-10-18.json').read_text(encoding='utf-8'))
++assert audit['all_passed'] and audit['reused_results'] == 0, 'Fresh multilingual audit did not pass'
++print('Fresh multilingual audit gate passed', flush=True)
+ base = root / "tweak/Sources/Shared"
+ def section(path, begin, end):
+     text = path.read_text(encoding="utf-8")
+@@ -198,3 +203,5 @@ with tempfile.TemporaryDirectory(prefix="lyrics-identity-") as directory:
+     subprocess.run(["xcrun", "clang", "-fobjc-arc", "-fblocks", "-framework", "Foundation", "-framework", "CoreGraphics",
+                     str(path / "identity.m"), "-o", str(path / "identity")], check=True)
+     subprocess.run([str(path / "identity")], check=True)
++
++subprocess.run([sys.executable, str(root / 'scripts/test-lyrics-requests.py')], check=True)
+-- 
+2.34.1
+

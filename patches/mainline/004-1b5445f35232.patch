@@ -1,0 +1,179 @@
+From 1b5445f3523284ceb4382f0ad5db45bf3e2182fc Mon Sep 17 00:00:00 2001
+From: Codex <codex@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 19:02:43 +0800
+Subject: [PATCH] fix: fetch Musixmatch translations after lyrics reply
+
+---
+ .github/workflows/build-ipa.yml               |  2 +-
+ .../Redesigned/Lyrics/SGRKaraokeView.m        | 12 ++++
+ .../Shared/LyricsSources/LyricsSources.h      |  2 +
+ .../Shared/LyricsSources/LyricsSources.m      |  2 +
+ .../Sources/Shared/LyricsSources/Musixmatch.m | 57 ++++++++++++-------
+ 5 files changed, 54 insertions(+), 21 deletions(-)
+
+diff --git a/.github/workflows/build-ipa.yml b/.github/workflows/build-ipa.yml
+index f28c1250813bb1c9b9249f7812b640709d3b8e9d..cc3176b146090633c5cd77f2aedebf8cbe2969bf 100644
+--- a/.github/workflows/build-ipa.yml
++++ b/.github/workflows/build-ipa.yml
+@@ -44,6 +44,6 @@ jobs:
+ 
+       - uses: actions/upload-artifact@v5
+         with:
+-          name: spoti-issue-144-test-ipa
++          name: spoti-issue-144-async-translation-ipa
+           path: out/*.ipa
+           if-no-files-found: error
+diff --git a/tweak/Sources/Redesigned/Lyrics/SGRKaraokeView.m b/tweak/Sources/Redesigned/Lyrics/SGRKaraokeView.m
+index 9e9ac706da8cfbe86114596e3ea1d918b4adf3f8..fbea25f8e51e6a7ac8b04e3951b38876440a62de 100644
+--- a/tweak/Sources/Redesigned/Lyrics/SGRKaraokeView.m
++++ b/tweak/Sources/Redesigned/Lyrics/SGRKaraokeView.m
+@@ -1116,6 +1116,7 @@ typedef struct {
+     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(playerTransitionChanged:) name:SGPlayerTransitionNotification object:nil];
+     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(playerTransitionChanged:) name:SGPlayerTransitionEndedNotification object:nil];
+     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(restyle) name:SGRLyricsTextDidChangeNotification object:nil];
++    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(translationUpdated:) name:SGLyricsTranslationUpdatedNotification object:nil];
+     // A locked phone leaves the card in its window, so the link has to be put down by the app going
+     // away rather than by the view going: see scheduleLink.
+     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(scheduleLink) name:UIApplicationDidBecomeActiveNotification object:nil];
+@@ -1351,6 +1352,17 @@ typedef struct {
+ 
+ #pragma mark - the pronunciation and the translation
+ 
++- (void)translationUpdated:(NSNotification *)notification {
++    if (![_track isEqualToString:notification.object] || !_lines) return;
++    BOOL available = NO;
++    for (SGKaraokeLine *line in _lines) {
++        if (line.translation.length) { available = YES; break; }
++    }
++    if (available == _hasTranslation) return;
++    _hasTranslation = available;
++    [self restyle];
++}
++
+ // What a line shows besides its words: what the song has, of what the lyrics menu has switched on.
+ - (SGRKaraokeStyle *)styleNow {
+     return [[SGRKaraokeStyle alloc] initWithSize:_fontSize order:SGRLyricsTextOrder()
+diff --git a/tweak/Sources/Shared/LyricsSources/LyricsSources.h b/tweak/Sources/Shared/LyricsSources/LyricsSources.h
+index 8bab11413dcf236683c9a3df48854dab418f70e6..12e0dccef3da2b3b95a7e74b1a6ae4f485a494aa 100644
+--- a/tweak/Sources/Shared/LyricsSources/LyricsSources.h
++++ b/tweak/Sources/Shared/LyricsSources/LyricsSources.h
+@@ -121,6 +121,8 @@ NSArray<NSString *> *SGLyricsTranslationLanguages(void);
+ NSArray<NSString *> *SGLyricsTranslationLanguageNames(void);
+ // The tag of the language asked for, nil for whatever the source has.
+ NSString *SGLyricsTranslationLanguage(void);
++// Posted on the main queue with the Spotify track id as object when a late translation arrives.
++extern NSNotificationName const SGLyricsTranslationUpdatedNotification;
+ 
+ 
+ // The sources themselves, each in its own file.
+diff --git a/tweak/Sources/Shared/LyricsSources/LyricsSources.m b/tweak/Sources/Shared/LyricsSources/LyricsSources.m
+index ace867365e4889ac4e1f08cb756473f7478297d8..baae074985a6048d48979b4798cc5714cf2da74f 100644
+--- a/tweak/Sources/Shared/LyricsSources/LyricsSources.m
++++ b/tweak/Sources/Shared/LyricsSources/LyricsSources.m
+@@ -482,6 +482,8 @@ __attribute__((constructor)) static void registerForcer(void) {
+ 
+ #pragma mark - the language of translations
+ 
++NSNotificationName const SGLyricsTranslationUpdatedNotification = @"spotifyglass.lyricsTranslationUpdated";
++
+ NSArray<NSString *> *SGLyricsTranslationLanguages(void) {
+     return @[@"", @"ar", @"zh-Hans", @"zh-Hant", @"cs", @"da", @"nl", @"en", @"fi", @"fr", @"de", @"el", @"he",
+              @"hi", @"hu", @"id", @"it", @"ja", @"ko", @"nb", @"pl", @"pt", @"ro", @"ru", @"sk", @"es", @"sv",
+diff --git a/tweak/Sources/Shared/LyricsSources/Musixmatch.m b/tweak/Sources/Shared/LyricsSources/Musixmatch.m
+index 1e88bc198c3e647f413aac12ce5280a9137c42f6..493f14b2b6feadcf1d1d016aef8d3eecadccbf18 100644
+--- a/tweak/Sources/Shared/LyricsSources/Musixmatch.m
++++ b/tweak/Sources/Shared/LyricsSources/Musixmatch.m
+@@ -264,8 +264,8 @@ static NSString *comparable(NSString *text) {
+     return [value stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet].lowercaseString;
+ }
+ 
+-static void applyTranslations(SGLyricsResult *lyrics, id list) {
+-    if (![list isKindOfClass:NSArray.class] || !lyrics.karaokeLines.count) return;
++static NSUInteger applyTranslations(SGLyricsResult *lyrics, id list) {
++    if (![list isKindOfClass:NSArray.class] || !lyrics.karaokeLines.count) return 0;
+     NSMutableDictionary<NSString *, NSString *> *byLine = [NSMutableDictionary dictionary];
+     for (NSDictionary *item in list) {
+         id value = [item isKindOfClass:NSDictionary.class] ? item[@"translation"] : nil;
+@@ -279,33 +279,52 @@ static void applyTranslations(SGLyricsResult *lyrics, id list) {
+         if ([lyrics.starts[i] isKindOfClass:NSNumber.class] && [lyrics.texts[i] isKindOfClass:NSString.class])
+             originalAt[lyrics.starts[i]] = lyrics.texts[i];
+     }
++    NSUInteger matched = 0;
+     for (SGKaraokeLine *line in lyrics.karaokeLines) {
+         NSString *original = SGKaraokeLineText(line);
+         NSString *rendered = byLine[comparable(original)] ?: byLine[comparable(originalAt[@(line.start)])];
+-        if (rendered.length && ![comparable(rendered) isEqualToString:comparable(original)])
++        if (rendered.length && ![comparable(rendered) isEqualToString:comparable(original)]) {
+             line.translation = rendered;
++            matched++;
++        }
+     }
++    return matched;
+ }
+ 
+-static void withTranslations(SGLyricsResult *lyrics, id track, NSString *token, void (^done)(SGLyricsResult *)) {
+-    id trackID = [track isKindOfClass:NSDictionary.class] ? track[@"track_id"] : nil;
+-    if (!lyrics.karaokeLines.count || !([trackID isKindOfClass:NSString.class] || [trackID isKindOfClass:NSNumber.class])) {
+-        done(lyrics);
+-        return;
+-    }
+-    NSString *language = SGLyricsTranslationLanguage() ?: NSLocale.preferredLanguages.firstObject ?: @"en";
+-    language = [language componentsSeparatedByString:@"-"].firstObject.lowercaseString;
+-    if (!language.length) language = @"en";
++static void fetchTranslations(SGLyricsResult *lyrics, NSString *musixmatchTrackID, NSString *spotifyTrackID, NSString *token,
++                              NSArray<NSString *> *languages, NSUInteger index) {
++    if (index >= languages.count) return;
++    NSString *language = languages[index];
+     call(@"crowd.track.translations.get", @{
+-        @"usertoken": token, @"track_id": [trackID description], @"selected_language": language,
++        @"usertoken": token, @"track_id": musixmatchTrackID, @"selected_language": language,
+         @"translation_fields_set": @"minimal", @"comment_format": @"text", @"part": @"user"
+     }, ^(NSDictionary *message) {
+-        if ([dig(message, @"header/status_code") integerValue] == 200)
+-            applyTranslations(lyrics, dig(message, @"body/translations_list"));
+-        done(lyrics);
++        NSInteger status = [dig(message, @"header/status_code") integerValue];
++        id list = dig(message, @"body/translations_list");
++        NSUInteger count = [list isKindOfClass:NSArray.class] ? [list count] : 0;
++        NSUInteger matched = status == 200 ? applyTranslations(lyrics, list) : 0;
++        SGLog(@"musixmatch: translation %@ status %ld, %lu entries, %lu matched lines",
++              language, (long)status, (unsigned long)count, (unsigned long)matched);
++        if (matched) {
++            [NSNotificationCenter.defaultCenter postNotificationName:SGLyricsTranslationUpdatedNotification object:spotifyTrackID];
++        } else if (index + 1 < languages.count) {
++            fetchTranslations(lyrics, musixmatchTrackID, spotifyTrackID, token, languages, index + 1);
++        }
+     });
+ }
+ 
++static void startTranslations(SGLyricsResult *lyrics, id track, NSString *token, NSString *spotifyTrackID) {
++    id trackID = [track isKindOfClass:NSDictionary.class] ? track[@"track_id"] : nil;
++    if (!lyrics.karaokeLines.count || !([trackID isKindOfClass:NSString.class] || [trackID isKindOfClass:NSNumber.class])) return;
++    NSString *chosen = SGLyricsTranslationLanguage() ?: NSLocale.preferredLanguages.firstObject ?: @"en";
++    NSString *language = chosen.lowercaseString;
++    NSArray<NSString *> *languages;
++    if ([language hasPrefix:@"zh-hans"] || [language hasPrefix:@"zh-cn"]) languages = @[@"zh-CN", @"zh"];
++    else if ([language hasPrefix:@"zh-hant"] || [language hasPrefix:@"zh-tw"]) languages = @[@"zh-TW", @"zh"];
++    else languages = @[[language componentsSeparatedByString:@"-"].firstObject ?: @"en"];
++    fetchTranslations(lyrics, [trackID description], spotifyTrackID, token, languages, 0);
++}
++
+ static void ask(NSString *trackID, BOOL renewToken) {
+     withToken(^(NSString *token) {
+         if (!token) {
+@@ -339,10 +358,8 @@ static void ask(NSString *trackID, BOOL renewToken) {
+                   : [NSString stringWithFormat:@"%lu untimed lines", (unsigned long)lyrics.texts.count]);
+             id track = dig(calls, @"matcher.track.get/message/body/track");
+             SGLyricsResult *named = withTrack(lyrics, track);
+-            if (lyrics) withTranslations(named, track, token, ^(SGLyricsResult *translated) {
+-                finish(trackID, translated, YES);
+-            });
+-            else finish(trackID, named, YES);
++            finish(trackID, named, YES);
++            if (lyrics) startTranslations(named, track, token, trackID);
+         });
+     });
+ }
+-- 
+2.34.1
+

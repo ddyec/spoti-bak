@@ -1,0 +1,6 @@
+tree 90422705d8e8f5d8dd39c58b7ca947c5b81c364d
+parent 7a1b5acd92d1e5b60eb19247df1b6ae9bd7d2180
+author ddyec <89333385+ddyec@users.noreply.github.com> 1792558979 +0000
+committer ddyec <89333385+ddyec@users.noreply.github.com> 1792558979 +0000
+
+fix: keep reading typography stable while artwork moves

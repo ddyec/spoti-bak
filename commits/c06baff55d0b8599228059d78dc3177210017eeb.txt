@@ -1,0 +1,6 @@
+tree 2191c922fe8cc7d99af0b516140cece85cb43f83
+parent db9c0cb87b8afc43442681107dbb1faf2520c4dd
+author ddyec <89333385+ddyec@users.noreply.github.com> 1792556024 +0000
+committer ddyec <89333385+ddyec@users.noreply.github.com> 1792556024 +0000
+
+build: avoid repeating unsupported alternate icon compilation

@@ -1,0 +1,6 @@
+tree 0c228931bb6745c1bb0f93d9c3e3a848712245bc
+parent 1b5445f3523284ceb4382f0ad5db45bf3e2182fc
+author Codex <codex@users.noreply.github.com> 1790594203 +0800
+committer Codex <codex@users.noreply.github.com> 1790594203 +0800
+
+feat: fetch Chinese lyric translations and diagnose KuGou fallback

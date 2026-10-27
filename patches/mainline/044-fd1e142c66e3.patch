@@ -1,0 +1,25 @@
+From fd1e142c66e31014dcef9e8366beb65de775b6c9 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 23 Oct 2026 12:11:00 +0000
+Subject: [PATCH] fix: preserve artist names in localized selection actions
+
+---
+ tweak/Sources/Shared/ArtistBlock/ArtistBlockSettings.m | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tweak/Sources/Shared/ArtistBlock/ArtistBlockSettings.m b/tweak/Sources/Shared/ArtistBlock/ArtistBlockSettings.m
+index 0ca1005146fe4a4a2ae1667161ad74b13baa84fd..1532f8deeb5b5c2e10a36bd9b80ea28e7bed0402 100644
+--- a/tweak/Sources/Shared/ArtistBlock/ArtistBlockSettings.m
++++ b/tweak/Sources/Shared/ArtistBlock/ArtistBlockSettings.m
+@@ -142,7 +142,7 @@ typedef NS_ENUM(NSInteger, SGArtistSection) {
+     [artists enumerateObjectsUsingBlock:^(NSDictionary *artist, NSUInteger index, BOOL *stop) {
+         BOOL blocked = SGArtistBlocked(artist[SGArtistURI]);
+         NSString *title = index == 0 ? artist[SGArtistName] : [NSString stringWithFormat:SGText(@"%@ (featured)"), artist[SGArtistName]];
+-        UIAlertAction *action = [SGSettingsAction actionWithTitle:title style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
++        UIAlertAction *action = [UIAlertAction actionWithTitle:title style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
+             SGBlockArtist(artist);
+             [self reload];
+         }];
+-- 
+2.34.1
+

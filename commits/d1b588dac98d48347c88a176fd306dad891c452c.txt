@@ -1,0 +1,6 @@
+tree 0905fef07ac5ab83c4ccf4760494d3293fdb2522
+parent 2ee6a6d5570d6810d5c9f465338c6974aee79d52
+author Codex <codex@users.noreply.github.com> 1790608349 +0800
+committer Codex <codex@users.noreply.github.com> 1790608349 +0800
+
+fix: match multi-artist lyrics and handle source timing metadata

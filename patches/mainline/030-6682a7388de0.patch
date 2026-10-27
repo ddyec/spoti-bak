@@ -1,0 +1,64 @@
+From 6682a7388de00a046aecd7a7a94ebd524aa96681 Mon Sep 17 00:00:00 2001
+From: ddyec <89333385+ddyec@users.noreply.github.com>
+Date: Wed, 21 Oct 2026 02:39:49 +0000
+Subject: [PATCH] fix: include settings presentation API and keep opted-out
+ launches idle
+
+---
+ .github/workflows/performance-checks.yml        | 5 ++++-
+ tweak/Sources/App/Performance/PerformancePage.m | 1 +
+ tweak/Sources/Diagnostics/SGPerformance.m       | 5 ++++-
+ 3 files changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/.github/workflows/performance-checks.yml b/.github/workflows/performance-checks.yml
+index 2115d42181c45200a0d13caef19ccb4c4766d798..4554ff8dfe50934ffa81b9bfafea7780e7dfe7c8 100644
+--- a/.github/workflows/performance-checks.yml
++++ b/.github/workflows/performance-checks.yml
+@@ -45,12 +45,15 @@ jobs:
+           echo 'dc1706972885217081b3a9debcf07e3a5762a5d59ef5873aa2533ebd8bd719b5  ipa/spotify.ipa' | shasum -a 256 -c -
+           python3 scripts/extract-flags.py ipa/spotify.ipa
+       - name: Compile the full tweak
+-        run: gmake -C tweak package
++        run: gmake -C tweak -k package
+       - name: Compile the player animation harness
++        id: harness
++        if: ${{ !cancelled() }}
+         env:
+           HARNESS_ARCH: x86_64
+         run: sh harness/player/build.sh
+       - name: Record and check rapid lyric reversals
++        if: ${{ !cancelled() && steps.harness.outcome == 'success' }}
+         run: |
+           mkdir -p out/motion
+           DEVICE="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x["udid"] for group in d["devices"].values() for x in group if x["name"].startswith("iPhone")))')"
+diff --git a/tweak/Sources/App/Performance/PerformancePage.m b/tweak/Sources/App/Performance/PerformancePage.m
+index bda07283337f4e6e1bf369486000b85256e9921e..cdaa8ba4225f2618bceddfb890a87071946cc8e8 100644
+--- a/tweak/Sources/App/Performance/PerformancePage.m
++++ b/tweak/Sources/App/Performance/PerformancePage.m
+@@ -1,6 +1,7 @@
+ #import "PerformancePage.h"
+ #import "Core/SGCore.h"
+ #import "Settings/SGModPage.h"
++#import "Settings/SGPageStyle.h"
+ #import "Diagnostics/SGPerformance.h"
+ 
+ static void message(NSString *title, NSString *text) {
+diff --git a/tweak/Sources/Diagnostics/SGPerformance.m b/tweak/Sources/Diagnostics/SGPerformance.m
+index 939904d4e8562e4abf02314292f3c05b534470a5..ab6603cdaf3ce1ae7240b64d8984d5f3ae4ab820 100644
+--- a/tweak/Sources/Diagnostics/SGPerformance.m
++++ b/tweak/Sources/Diagnostics/SGPerformance.m
+@@ -197,7 +197,10 @@ static SGPerformanceMonitor *monitor(void) {
+     dispatch_once(&once, ^{ value = [SGPerformanceMonitor new]; });
+     return value;
+ }
+-void SGPerformanceStart(void) { [monitor() refresh]; }
++void SGPerformanceStart(void) {
++    // An opted-out launch creates no monitor, reads no history and starts no diagnostic work.
++    if (SGFlag(SGKeyPerformance, NO)) [monitor() refresh];
++}
+ void SGPerformanceRefresh(void) { [monitor() refresh]; }
+ NSDictionary *SGPerformanceSnapshot(void) {
+     SGPerformanceMonitor *m = monitor();
+-- 
+2.34.1
+

@@ -1,0 +1,6 @@
+tree ae25289a146e4ef12a38b497624b46334d285322
+parent 0567146ba901f04069b9884ad5e469450f289cc9
+author Codex <codex@users.noreply.github.com> 1790758862 +0800
+committer Codex <codex@users.noreply.github.com> 1790758862 +0800
+
+fix: add current-line preview to redesigned player with visible setting

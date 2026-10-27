@@ -1,0 +1,112 @@
+From f9a89eef0c4a3cb1d5d41a53cb5ebcfc0bfa525e Mon Sep 17 00:00:00 2001
+From: Codex <codex@users.noreply.github.com>
+Date: Wed, 30 Sep 2026 18:55:54 +0800
+Subject: [PATCH] fix: publish prefetched provider lyrics directly to display
+ cache
+
+---
+ docs/lyrics-matching.md                       |  6 +++++
+ scripts/test-lyrics-identity.py               |  8 ++++++-
+ .../Sources/Redesigned/Player/PlayerPreview.x |  3 +++
+ .../Shared/LyricsSources/LyricsSources.m      | 23 ++++++++++++++++++-
+ 4 files changed, 38 insertions(+), 2 deletions(-)
+
+diff --git a/docs/lyrics-matching.md b/docs/lyrics-matching.md
+index a6a7402ca618e6c6758c27b46fee49cf86ddad06..21aff75d506f2d8ad5de2a9bd5bace208559b9f1 100644
+--- a/docs/lyrics-matching.md
++++ b/docs/lyrics-matching.md
+@@ -53,6 +53,12 @@ The existing redesigned lyrics corner menu exposes Pronunciation when data is pr
+ No synthesized Japanese kanji reading or machine translation is introduced.
+ # Native player preview
+ 
++Source prefetch publishes validated karaoke lines directly to the display cache. The
++redesigned lyrics page and preview no longer depend on Spotify making a color-lyrics
++request to copy a successful provider result there. Existing finer timing is retained;
++the provider can still supply translations/pronunciation. `prefetch` diagnostics record
++publication or retention without logging lyric text.
++
+ The native player now renders the shared cache's current timed line in its own overlay on
+ the player, measured between the visible cover and the information row. It does not depend
+ on Spotify creating or sizing `LyricsContainerView` or populating its preview model. This is
+diff --git a/scripts/test-lyrics-identity.py b/scripts/test-lyrics-identity.py
+index 4a380e69c7f98a068a4f3cd18ef75fa8c6181d51..3bdd3aeed31c1e87d69acb00845b143efd72e6ca 100644
+--- a/scripts/test-lyrics-identity.py
++++ b/scripts/test-lyrics-identity.py
+@@ -27,10 +27,11 @@ qqEligibility = section(base / "LyricsSources/QQMusic.m", "static BOOL matches("
+ eligibility = section(base / "LyricsSources/LyricsSources.m", "static BOOL needsChineseTranslations(", "// Calculate off main;")
+ preview = section(root / "tweak/Sources/Native/Player/LyricsPreview.x", "static CGRect previewFrame(", "static BOOL showing(")
+ redesignPreview = section(root / "tweak/Sources/Redesigned/Player/PlayerPreview.x", "static CGRect sgrPreviewFrame(", "static BOOL sgrShowing(")
++prefetchSelection = section(base / "LyricsSources/LyricsSources.m", "static BOOL shouldPublishPrefetchedLines(", "void SGLyricsPrefetch(")
+ source = ("#import <Foundation/Foundation.h>\n#import <CoreGraphics/CoreGraphics.h>\n#import <dispatch/dispatch.h>\n#include <stdio.h>\n#include <stdlib.h>\n"
+           + model + query + "BOOL SGLyricsTimedCredit(NSString *);\n"
+           + "BOOL SGLyricsDiagnosticsEnabled(void) { return NO; }\nvoid SGLyricsLog(NSString *format, ...) {}\n"
+-          + timing + lrc + matching + aliases + qrc + eligibility + qqMetadata + qqEligibility + krc + preview + redesignPreview)
++          + timing + lrc + matching + aliases + qrc + eligibility + qqMetadata + qqEligibility + krc + preview + redesignPreview + prefetchSelection)
+ tests = r'''
+ static void check(BOOL ok, NSString *label) {
+     if (!ok) { NSLog(@"FAIL: %@", label); exit(1); }
+@@ -76,6 +77,11 @@ int main(void) {
+         check(SGLyricsArtistMatchCount(@"HOYO-MiX", artists) == 1, @"label-only local release");
+         check(SGLyricsArtistMatchCount(@"茶理理", artists) == 1, @"short Chinese artist");
+         NSArray *split = SGLyricsLinesFromLRC(@"[00:08]The paper birds are flying\n[00:11]over a quiet morning harbor\n[00:16]We watch the distant lights return");
++        check(shouldPublishPrefetchedLines(nil, split), @"prefetch publishes when Spotify never requested lyrics");
++        check(!shouldPublishPrefetchedLines(split, nil), @"missing result never removes existing display lyrics");
++        SGKaraokeLine *fine = [SGKaraokeLine new]; fine.timing = SGKaraokeTimingWords;
++        check(!shouldPublishPrefetchedLines(@[fine], split), @"prefetch retains finer Spotify word timing");
++        check(shouldPublishPrefetchedLines(split, @[fine]), @"word-timed provider upgrades display cache");
+         NSString *joined = @"[00:08]The paper birds are flying over a quiet morning harbor\n[00:16]We watch the distant lights return";
+         NSString *translation = @"[00:08]纸鸟飞过安静的晨港\n[00:16]我们看远方灯火归来";
+         check(SGLyricsRecordingMatches(split, SGLyricsLinesFromLRC(joined)), @"split/merged original evidence");
+diff --git a/tweak/Sources/Redesigned/Player/PlayerPreview.x b/tweak/Sources/Redesigned/Player/PlayerPreview.x
+index 6599fc3a70738060e29ad6b9863e49747fe0b474..e83d6335d485c7572023b7c09af0f9caf4021315 100644
+--- a/tweak/Sources/Redesigned/Player/PlayerPreview.x
++++ b/tweak/Sources/Redesigned/Player/PlayerPreview.x
+@@ -69,6 +69,9 @@ static BOOL sgrShowing(UIView *view, UIView *host) {
+     if (UIApplication.sharedApplication.applicationState != UIApplicationStateActive) return;
+     UIView *host = self.superview, *info = sgr_previewInfo;
+     if (!host) return;
++    // Sources can finish after the footer's track-change grace period. Refresh its
++    // availability from the same display cache; this call exits when nothing changed.
++    SGRPlayerLyricsChanged();
+     CGRect coverRect = SGRPlayerCoverFrameIn(host);
+     BOOL geometry = !CGRectIsNull(coverRect) && sgrShowing(info, host);
+     CGRect infoRect = geometry ? [host convertRect:info.bounds fromView:info] : CGRectZero;
+diff --git a/tweak/Sources/Shared/LyricsSources/LyricsSources.m b/tweak/Sources/Shared/LyricsSources/LyricsSources.m
+index e941369d2631d95656b9b56e6e0d08440b56c9dd..d689c0e54a7bb7c47541ad758f5ae1634c1e3d04 100644
+--- a/tweak/Sources/Shared/LyricsSources/LyricsSources.m
++++ b/tweak/Sources/Shared/LyricsSources/LyricsSources.m
+@@ -607,9 +607,30 @@ BOOL SGLyricsMayHave(NSString *trackID) {
+     @synchronized (sg_missing) { return ![sg_missing containsObject:trackID]; }
+ }
+ 
++static BOOL shouldPublishPrefetchedLines(NSArray<SGKaraokeLine *> *shown, NSArray<SGKaraokeLine *> *fresh) {
++    return fresh.count && (!shown.count || SGKaraokeLinesTiming(fresh) <= SGKaraokeLinesTiming(shown));
++}
++
+ void SGLyricsPrefetch(NSString *trackID) {
+     if (!trackID.length) return;
+-    SGLyricsFetch(trackID, ^(SGLyricsResult *result) {});
++    SGLyricsFetch(trackID, ^(SGLyricsResult *result) {
++        // A custom lyrics page reads the karaoke cache directly. It must not wait for
++        // Spotify's separate color-lyrics/card request to arrive (or ever be made).
++        NSArray<SGKaraokeLine *> *shown = SGKaraokeLinesForTrack(trackID);
++        NSArray<SGKaraokeLine *> *fresh = result.karaokeLines;
++        if (shouldPublishPrefetchedLines(shown, fresh)) {
++            SGKaraokeKeepLines(trackID, fresh);
++            SGLyricsSetCredit(trackID, result.provider);
++            SGLyricsFetchChineseTranslations(trackID, fresh);
++            SGLyricsLog(@"prefetch: %@ publishing %lu %@ lines to display cache from %@ without waiting for Spotify",
++                trackID, (unsigned long)fresh.count, timingName(fresh), result.provider);
++        } else if (fresh.count && shown.count) {
++            SGLyricsEnrichPronunciations(trackID, shown, fresh);
++            SGLyricsFetchChineseTranslations(trackID, shown);
++            SGLyricsLog(@"prefetch: %@ retaining finer display timing %@ over %@",
++                trackID, timingName(shown), timingName(fresh));
++        }
++    });
+ }
+ 
+ NSInteger SGLyricsSpotifyHas(NSString *trackID) {
+-- 
+2.34.1
+

@@ -1,0 +1,26 @@
+From 93abc92f57ae54b1297b418346d776d45bef3863 Mon Sep 17 00:00:00 2001
+From: ddyec <89333385+ddyec@users.noreply.github.com>
+Date: Tue, 20 Oct 2026 22:03:24 +0800
+Subject: [PATCH] fix: use Intel macOS runner after ARM capacity failure
+
+---
+ .github/workflows/build-ipa.yml | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/.github/workflows/build-ipa.yml b/.github/workflows/build-ipa.yml
+index d555f78246590d9f898e82689265bcca98924cc4..d1e507c4bb68ae2d85f5280f5c1441da2362dad2 100644
+--- a/.github/workflows/build-ipa.yml
++++ b/.github/workflows/build-ipa.yml
+@@ -13,7 +13,8 @@ env:
+ 
+ jobs:
+   build:
+-    runs-on: macos-latest
++    # Avoid the ARM hosted-runner capacity failure; iOS arm64 remains the target.
++    runs-on: macos-15-intel
+     steps:
+       - uses: actions/checkout@v5
+ 
+-- 
+2.34.1
+

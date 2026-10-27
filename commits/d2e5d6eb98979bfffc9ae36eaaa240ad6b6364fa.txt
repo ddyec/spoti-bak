@@ -1,0 +1,6 @@
+tree 3e8857e4ae9390b2b0c9ea61fc200adfe31631a2
+parent 9751e54dbd32920ef3c6a81a439675ab7bb616e8
+author ddyec <89333385+ddyec@users.noreply.github.com> 1792550001 +0000
+committer ddyec <89333385+ddyec@users.noreply.github.com> 1792550001 +0000
+
+test: record lyric reversals in the iOS simulator

@@ -1,0 +1,6 @@
+tree 2de6079a65f74447a16b2314d6d88bc7ae70b6bf
+parent 7be3f72795a6ec2e1de593dd7779f6c31c16f6cb
+author ddyec <89333385+ddyec@users.noreply.github.com> 1792505004 +0800
+committer ddyec <89333385+ddyec@users.noreply.github.com> 1792505004 +0800
+
+fix: use Intel macOS runner after ARM capacity failure

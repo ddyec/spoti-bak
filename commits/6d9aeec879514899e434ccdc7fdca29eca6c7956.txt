@@ -1,0 +1,6 @@
+tree 28969c8e8a9a333617f9e31f5727fcbf6a2f9fde
+parent e1e8cd5bb99a024afe12f637eea9073e03f214e0
+author Codex <codex@openai.com> 1792749422 +0000
+committer Codex <codex@openai.com> 1792749422 +0000
+
+fix: center artwork during sustained lyric-free playback

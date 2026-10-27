@@ -1,0 +1,6 @@
+tree 21281e872919fa16b0b9de6aab951bc4e23a13a2
+parent d95a5c5e58247f92d4dbe287edf065f837dad2c3
+author ddyec <89333385+ddyec@users.noreply.github.com> 1792503114 +0800
+committer ddyec <89333385+ddyec@users.noreply.github.com> 1792503114 +0800
+
+fix: reserve missing native lyric space and roll preview lines upward

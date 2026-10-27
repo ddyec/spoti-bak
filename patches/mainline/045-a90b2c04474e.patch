@@ -1,0 +1,25 @@
+From a90b2c04474e2fd13fc0dd792ecc85527c5299e7 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 23 Oct 2026 13:32:18 +0000
+Subject: [PATCH] fix: import localization declarations in settings source
+ ordering page
+
+---
+ tweak/Sources/Settings/SGOrderPage.m | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/tweak/Sources/Settings/SGOrderPage.m b/tweak/Sources/Settings/SGOrderPage.m
+index 86b1dda169aa01d024f76b712c425c4bd4d602b8..5d912416cf02d2678e26c73063fc8d4a8abd1437 100644
+--- a/tweak/Sources/Settings/SGOrderPage.m
++++ b/tweak/Sources/Settings/SGOrderPage.m
+@@ -2,6 +2,7 @@
+ #import "SGModPage.h"
+ #import "SGPage.h"
+ #import "SGPageStyle.h"
++#import "Core/SGLocalization.h"
+ 
+ @implementation SGOrderItem
+ @end
+-- 
+2.34.1
+

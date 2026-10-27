@@ -1,0 +1,6 @@
+tree 4b21637fdd17cb76813078b11f4cc59b729d2f6b
+parent c06baff55d0b8599228059d78dc3177210017eeb
+author ddyec <89333385+ddyec@users.noreply.github.com> 1792557445 +0000
+committer ddyec <89333385+ddyec@users.noreply.github.com> 1792557445 +0000
+
+fix: respect lyric edge anchors and restore continuous upward transitions

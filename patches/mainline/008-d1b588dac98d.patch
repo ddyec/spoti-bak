@@ -1,0 +1,443 @@
+From d1b588dac98d48347c88a176fd306dad891c452c Mon Sep 17 00:00:00 2001
+From: Codex <codex@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 23:12:29 +0800
+Subject: [PATCH] fix: match multi-artist lyrics and handle source timing
+ metadata
+
+---
+ .../Redesigned/Lyrics/SGRKaraokeView.m        |  3 +-
+ tweak/Sources/Shared/LyricsSources/KuGou.m    | 25 +++---
+ tweak/Sources/Shared/LyricsSources/LrcLib.m   | 19 ++++-
+ .../Shared/LyricsSources/LyricsMatching.m     | 53 ++++++++++++
+ .../Shared/LyricsSources/LyricsSources.h      |  3 +
+ tweak/Sources/Shared/LyricsSources/NetEase.m  | 29 +++++--
+ tweak/Sources/Shared/LyricsSources/QQMusic.m  | 85 +++++++++++++------
+ 7 files changed, 161 insertions(+), 56 deletions(-)
+
+diff --git a/tweak/Sources/Redesigned/Lyrics/SGRKaraokeView.m b/tweak/Sources/Redesigned/Lyrics/SGRKaraokeView.m
+index c191f0ebd59e1b19015c66fed959b34c06ecb220..cf6d14714396805a62e5debf1881be1a3841424f 100644
+--- a/tweak/Sources/Redesigned/Lyrics/SGRKaraokeView.m
++++ b/tweak/Sources/Redesigned/Lyrics/SGRKaraokeView.m
+@@ -1358,8 +1358,9 @@ typedef struct {
+     for (SGKaraokeLine *line in _lines) {
+         if (line.translation.length) { available = YES; break; }
+     }
+-    if (available == _hasTranslation) return;
+     _hasTranslation = available;
++    // The source may fill previously empty rows while the translation control was already on.
++    // Rebuild those labels even when availability itself did not change.
+     [self restyle];
+ }
+ 
+diff --git a/tweak/Sources/Shared/LyricsSources/KuGou.m b/tweak/Sources/Shared/LyricsSources/KuGou.m
+index 2bdde34b750fa853f61dfe7a10067c6fb567c8ac..a3dcefafd84b80700c173715f80b8120a1e87e2f 100644
+--- a/tweak/Sources/Shared/LyricsSources/KuGou.m
++++ b/tweak/Sources/Shared/LyricsSources/KuGou.m
+@@ -4,24 +4,11 @@
+ #import <string.h>
+ #import <zlib.h>
+ 
+-static NSString *normalized(NSString *text) {
+-    if (![text isKindOfClass:NSString.class]) return @"";
+-    NSMutableString *out = [NSMutableString string];
+-    NSCharacterSet *skip = [NSCharacterSet characterSetWithCharactersInString:@" -_.,:;!?()[]{}'\"·，。！？（）【】—　\t\n"];
+-    for (NSUInteger i = 0; i < text.length; i++) {
+-        unichar c = [text characterAtIndex:i];
+-        if (![skip characterIsMember:c]) [out appendFormat:@"%C", c];
+-    }
+-    return out.lowercaseString;
+-}
+-
+ static BOOL matches(NSDictionary *candidate, SGLyricsQuery *query) {
+     if (!([candidate[@"id"] isKindOfClass:NSString.class] || [candidate[@"id"] isKindOfClass:NSNumber.class]) ||
+         ![candidate[@"accesskey"] isKindOfClass:NSString.class] ||
+         !SGLyricsTitleMatches(candidate[@"song"], query.title)) return NO;
+-    NSString *artist = normalized([query.artist componentsSeparatedByString:@" feat"].firstObject);
+-    NSString *singer = normalized(candidate[@"singer"]);
+-    if (!artist.length || !singer.length || !([artist containsString:singer] || [singer containsString:artist])) return NO;
++    if (!SGLyricsArtistMatchCount(candidate[@"singer"], query.artist)) return NO;
+     NSInteger duration = [candidate[@"duration"] respondsToSelector:@selector(integerValue)]
+         ? [candidate[@"duration"] integerValue] : 0;
+     return query.seconds <= 0 || duration <= 0 || labs(duration / 1000 - query.seconds) <= 8;
+@@ -49,6 +36,7 @@ static NSArray<SGKaraokeLine *> *linesFromKRC(NSString *krc) {
+         part = [NSRegularExpression regularExpressionWithPattern:@"<(\\d+),(\\d+),-?\\d+>" options:0 error:nil];
+     });
+     NSMutableArray<SGKaraokeLine *> *lines = [NSMutableArray array];
++    BOOL singing = NO;
+     for (NSString *row in [krc componentsSeparatedByCharactersInSet:NSCharacterSet.newlineCharacterSet]) {
+         NSTextCheckingResult *head = [header firstMatchInString:row options:0 range:NSMakeRange(0, row.length)];
+         if (!head) continue;
+@@ -90,6 +78,10 @@ static NSArray<SGKaraokeLine *> *linesFromKRC(NSString *krc) {
+         line.start = lineStart;
+         line.end = MAX(lineEnd, words.lastObject.end);
+         line.timing = SGKaraokeTimingWords;
++        NSString *text = SGKaraokeLineText(line);
++        if (!singing && line.start < 30000 && SGLyricsTimedCredit(text)) continue;
++        if (!singing && line.start < 2500 && [text containsString:@" - "]) continue;
++        singing = YES;
+         [lines addObject:line];
+     }
+     return lines.count ? lines : nil;
+@@ -151,7 +143,7 @@ SGLyricsAsk SGKuGouAsk = ^(SGLyricsQuery *query, void (^done)(SGLyricsResult *))
+     if (!query.title.length || !query.artist.length) { done(nil); return; }
+     NSURL *url = SGLyricsURL(@"https://krcs.kugou.com/search", @{
+         @"ver": @"1", @"man": @"yes", @"client": @"mobi", @"hash": @"", @"album_audio_id": @"",
+-        @"keyword": [NSString stringWithFormat:@"%@ - %@", query.artist, query.title],
++        @"keyword": [NSString stringWithFormat:@"%@ - %@", SGLyricsLeadArtist(query.artist) ?: query.artist, query.title],
+         @"duration": [NSString stringWithFormat:@"%ld", (long)MAX(query.seconds, 0) * 1000]});
+     SGLyricsGetJSON(url, @{@"User-Agent": @"Mozilla/5.0"}, ^(id root) {
+         NSDictionary *reply = [root isKindOfClass:NSDictionary.class] ? root : nil;
+@@ -160,6 +152,9 @@ SGLyricsAsk SGKuGouAsk = ^(SGLyricsQuery *query, void (^done)(SGLyricsResult *))
+         NSMutableArray<NSDictionary *> *fitting = [NSMutableArray array];
+         for (id song in candidates) if ([song isKindOfClass:NSDictionary.class] && matches(song, query)) [fitting addObject:song];
+         [fitting sortUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) {
++            NSUInteger aScore = SGLyricsArtistMatchCount(a[@"singer"], query.artist);
++            NSUInteger bScore = SGLyricsArtistMatchCount(b[@"singer"], query.artist);
++            if (aScore != bScore) return aScore > bScore ? NSOrderedAscending : NSOrderedDescending;
+             NSInteger x = labs([a[@"duration"] integerValue] / 1000 - query.seconds);
+             NSInteger y = labs([b[@"duration"] integerValue] / 1000 - query.seconds);
+             return x < y ? NSOrderedAscending : x > y ? NSOrderedDescending : NSOrderedSame;
+diff --git a/tweak/Sources/Shared/LyricsSources/LrcLib.m b/tweak/Sources/Shared/LyricsSources/LrcLib.m
+index 7b9c600f79c09d4b4c8439b3fd1448246e3f1df9..d46fd3921df532cad85250014f5ef84938939359 100644
+--- a/tweak/Sources/Shared/LyricsSources/LrcLib.m
++++ b/tweak/Sources/Shared/LyricsSources/LrcLib.m
+@@ -22,13 +22,18 @@ static NSDictionary<NSString *, NSString *> *headers(void) {
+ // carries three digits. A line may be stamped more than once when it is sung more than once, and
+ // the tags LRC opens with ([ar:…], [length:…]) are not timestamps, so they fall out on their own.
+ NSArray<SGKaraokeLine *> *SGLyricsLinesFromLRC(NSString *lrc) {
+-    static NSRegularExpression *stamp;
++    static NSRegularExpression *stamp, *offsetTag;
+     static dispatch_once_t once;
+     dispatch_once(&once, ^{
+         stamp = [NSRegularExpression regularExpressionWithPattern:@"\\[(\\d{1,3}):(\\d{1,2})(?:[.:](\\d{1,3}))?\\]" options:0 error:nil];
++        offsetTag = [NSRegularExpression regularExpressionWithPattern:@"^\\[offset:([+-]?\\d{1,6})\\]$"
++                                                                options:NSRegularExpressionCaseInsensitive error:nil];
+     });
+     NSMutableArray<NSDictionary *> *stamped = [NSMutableArray array];
++    NSInteger offset = 0;
+     for (NSString *row in [lrc componentsSeparatedByCharactersInSet:NSCharacterSet.newlineCharacterSet]) {
++        NSTextCheckingResult *tag = [offsetTag firstMatchInString:row options:0 range:NSMakeRange(0, row.length)];
++        if (tag) { offset = [row substringWithRange:[tag rangeAtIndex:1]].integerValue; continue; }
+         NSArray<NSTextCheckingResult *> *found = [stamp matchesInString:row options:0 range:NSMakeRange(0, row.length)];
+         // Only the stamps a line opens with are its own; one further in is part of the words.
+         NSUInteger end = 0;
+@@ -48,18 +53,26 @@ NSArray<SGKaraokeLine *> *SGLyricsLinesFromLRC(NSString *lrc) {
+         }
+         if (!at.count) continue;
+         NSString *text = [[row substringFromIndex:end] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
+-        for (NSNumber *ms in at) [stamped addObject:@{@"ms": ms, @"text": text}];
++        for (NSNumber *ms in at) [stamped addObject:[@{@"ms": ms, @"text": text} mutableCopy]];
+     }
+     if (!stamped.count) return nil;
++    // A positive LRC offset advances the displayed line. Do this after reading all rows so
++    // a metadata tag before or after the lyrics has the same meaning.
++    for (NSMutableDictionary *row in stamped) row[@"ms"] = @(MAX((NSInteger)0, [row[@"ms"] integerValue] - offset));
+     [stamped sortUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) {
+         return [a[@"ms"] compare:b[@"ms"]];
+     }];
+     // The empty rows stay in: they are the breaks, and each one is the end of the line before it.
+     NSMutableArray<NSNumber *> *starts = [NSMutableArray array];
+     NSMutableArray<NSString *> *texts = [NSMutableArray array];
++    BOOL singing = NO;
+     for (NSDictionary *row in stamped) {
++        NSString *text = row[@"text"];
++        if (!singing && [row[@"ms"] integerValue] < 30000 && SGLyricsTimedCredit(text)) continue;
++        if (!singing && [row[@"ms"] integerValue] < 2500 && [text containsString:@" - "]) continue;
++        if (text.length) singing = YES;
+         [starts addObject:row[@"ms"]];
+-        [texts addObject:row[@"text"]];
++        [texts addObject:text];
+     }
+     return SGKaraokeEstimatedLines(starts, texts);
+ }
+diff --git a/tweak/Sources/Shared/LyricsSources/LyricsMatching.m b/tweak/Sources/Shared/LyricsSources/LyricsMatching.m
+index 2c1f187df1f15ecbdf204083765ab5b9b4413090..03928ba3ec524af6daa85fb7359f5bfdf98bf3d9 100644
+--- a/tweak/Sources/Shared/LyricsSources/LyricsMatching.m
++++ b/tweak/Sources/Shared/LyricsSources/LyricsMatching.m
+@@ -21,6 +21,59 @@ BOOL SGLyricsContainsHan(NSString *text) {
+     return NO;
+ }
+ 
++static NSArray<NSString *> *artistParts(NSString *artists) {
++    if (![artists isKindOfClass:NSString.class] || !artists.length) return @[];
++    static NSRegularExpression *separator;
++    static dispatch_once_t once;
++    dispatch_once(&once, ^{
++        separator = [NSRegularExpression regularExpressionWithPattern:@"\\s*(?:,|，|、|/|&|;|；)\\s*|\\s+(?:feat\\.?|ft\\.?|featuring)\\s+"
++                                                            options:NSRegularExpressionCaseInsensitive error:nil];
++    });
++    NSString *separated = [separator stringByReplacingMatchesInString:artists options:0
++                                                               range:NSMakeRange(0, artists.length) withTemplate:@"\n"];
++    NSMutableArray<NSString *> *parts = [NSMutableArray array];
++    for (NSString *part in [separated componentsSeparatedByString:@"\n"]) {
++        NSString *name = [part stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
++        if (name.length) [parts addObject:name];
++    }
++    return parts;
++}
++
++NSString *SGLyricsLeadArtist(NSString *artists) {
++    return artistParts(artists).firstObject;
++}
++
++NSUInteger SGLyricsArtistMatchCount(NSString *candidate, NSString *wanted) {
++    NSArray<NSString *> *candidateParts = artistParts(candidate);
++    NSUInteger matches = 0;
++    for (NSString *wantedPart in artistParts(wanted)) {
++        NSString *name = comparable(wantedPart);
++        if (name.length < 4) continue;
++        for (NSString *candidatePart in candidateParts) {
++            NSString *other = comparable(candidatePart);
++            if (other.length >= 4 && ([name isEqualToString:other] ||
++                                      (MIN(name.length, other.length) >= 6 &&
++                                       ([name containsString:other] || [other containsString:name])))) {
++                matches++;
++                break;
++            }
++        }
++    }
++    return matches;
++}
++
++BOOL SGLyricsTimedCredit(NSString *text) {
++    if (![text isKindOfClass:NSString.class]) return NO;
++    static NSRegularExpression *credit;
++    static dispatch_once_t once;
++    dispatch_once(&once, ^{
++        credit = [NSRegularExpression regularExpressionWithPattern:
++            @"^\\s*(?:作词|作曲|编曲|演唱|原唱|歌手|混音(?:师)?|录音(?:师)?|母带(?:处理工程师)?|制作(?:人)?|出品|策划|监制|发行|合声|和声|原声吉他|电吉他|乐队|词|曲|Lyrics? by|Composed by|Arranged by|Produced by|Vocal(?:ist)?|OP|SP)(?:\\s+[A-Za-z][A-Za-z&/ ]{0,30})?\\s*[:：]"
++            options:NSRegularExpressionCaseInsensitive error:nil];
++    });
++    return [credit firstMatchInString:text options:0 range:NSMakeRange(0, text.length)] != nil;
++}
++
+ BOOL SGLyricsTitleMatches(NSString *candidate, NSString *wanted) {
+     NSString *a = comparable(candidate), *b = comparable(wanted);
+     if (!a.length || !b.length) return NO;
+diff --git a/tweak/Sources/Shared/LyricsSources/LyricsSources.h b/tweak/Sources/Shared/LyricsSources/LyricsSources.h
+index 4ba093d421e86f5b77174408a112f9987026b7a8..40fc17b2138aee9161632d461aa2ddbac4f5450b 100644
+--- a/tweak/Sources/Shared/LyricsSources/LyricsSources.h
++++ b/tweak/Sources/Shared/LyricsSources/LyricsSources.h
+@@ -131,6 +131,9 @@ void SGLyricsFetchChineseTranslations(NSString *trackID, NSArray<SGKaraokeLine *
+ // A bilingual local title may contain Spotify's title after a translated prefix.
+ BOOL SGLyricsTitleMatches(NSString *candidate, NSString *wanted);
+ BOOL SGLyricsContainsHan(NSString *text);
++NSString *SGLyricsLeadArtist(NSString *artists);
++NSUInteger SGLyricsArtistMatchCount(NSString *candidate, NSString *wanted);
++BOOL SGLyricsTimedCredit(NSString *text);
+ // Only use a translated recording when its original LRC agrees with the lines already shown.
+ NSUInteger SGLyricsOriginalOverlap(NSArray<SGKaraokeLine *> *target, NSString *originalLRC);
+ NSDictionary<NSNumber *, NSString *> *SGLyricsChineseTranslationMap(NSArray<SGKaraokeLine *> *target,
+diff --git a/tweak/Sources/Shared/LyricsSources/NetEase.m b/tweak/Sources/Shared/LyricsSources/NetEase.m
+index ea17b14033af8ecac62ace3d490b36f945b13dca..12bef2a275cfda69fa53698379e3f7f4197323cb 100644
+--- a/tweak/Sources/Shared/LyricsSources/NetEase.m
++++ b/tweak/Sources/Shared/LyricsSources/NetEase.m
+@@ -11,6 +11,16 @@ static const NSTimeInterval kTimeout = 3;
+ static const NSInteger kLengthSlack = 3;
+ static const NSUInteger kTriedSongs = 3;
+ 
++static NSString *artistsOf(NSDictionary *song) {
++    NSMutableArray<NSString *> *names = [NSMutableArray array];
++    NSArray *artists = [song[@"artists"] isKindOfClass:NSArray.class] ? song[@"artists"] : @[];
++    for (NSDictionary *artist in artists) {
++        NSString *name = [artist isKindOfClass:NSDictionary.class] ? artist[@"name"] : nil;
++        if ([name isKindOfClass:NSString.class] && name.length) [names addObject:name];
++    }
++    return [names componentsJoinedByString:@", "];
++}
++
+ static void get(NSString *path, NSDictionary<NSString *, NSString *> *query, void (^done)(NSDictionary *root)) {
+     NSURLComponents *url = [NSURLComponents componentsWithString:[@"https://music.163.com/api/" stringByAppendingString:path]];
+     NSMutableArray<NSURLQueryItem *> *items = [NSMutableArray array];
+@@ -39,6 +49,7 @@ static NSArray<SGKaraokeLine *> *linesFromYrc(NSString *yrc) {
+         piece = [NSRegularExpression regularExpressionWithPattern:@"\\((\\d+),(\\d+),-?\\d+\\)" options:0 error:nil];
+     });
+     NSMutableArray<SGKaraokeLine *> *lines = [NSMutableArray array];
++    BOOL singing = NO;
+     for (NSString *row in [yrc componentsSeparatedByString:@"\n"]) {
+         NSTextCheckingResult *head = [header firstMatchInString:row options:0 range:NSMakeRange(0, row.length)];
+         if (!head) continue;
+@@ -78,6 +89,10 @@ static NSArray<SGKaraokeLine *> *linesFromYrc(NSString *yrc) {
+         line.words = words;
+         line.start = [row substringWithRange:[head rangeAtIndex:1]].integerValue;
+         line.end = line.start + [row substringWithRange:[head rangeAtIndex:2]].integerValue;
++        NSString *text = SGKaraokeLineText(line);
++        if (!singing && line.start < 30000 && SGLyricsTimedCredit(text)) continue;
++        if (!singing && line.start < 2500 && [text containsString:@" - "]) continue;
++        singing = YES;
+         [lines addObject:line];
+     }
+     return lines.count ? lines : nil;
+@@ -103,7 +118,7 @@ static void tryLyrics(NSArray<NSNumber *> *songs, NSUInteger index, void (^done)
+ // A recording is only taken when its length is this close to the track's, so the words fall on the
+ // same beat as the recording Spotify is playing.
+ static void findSongs(SGLyricsQuery *query, BOOL requireTitle, void (^done)(NSArray<NSNumber *> *ids)) {
+-    NSString *lead = [query.artist componentsSeparatedByString:@" feat"].firstObject.lowercaseString;
++    NSString *lead = SGLyricsLeadArtist(query.artist);
+     NSString *title = query.title;
+     NSInteger seconds = query.seconds;
+     if (!title.length || !lead.length || seconds <= 0) {
+@@ -116,16 +131,12 @@ static void findSongs(SGLyricsQuery *query, BOOL requireTitle, void (^done)(NSAr
+         for (NSDictionary *song in [songs isKindOfClass:NSArray.class] ? songs : @[]) {
+             if (![song isKindOfClass:NSDictionary.class] || labs([song[@"duration"] integerValue] / 1000 - seconds) > kLengthSlack ||
+                 (requireTitle && !SGLyricsTitleMatches(song[@"name"], title))) continue;
+-            id artists = song[@"artists"];
+-            for (NSDictionary *credited in [artists isKindOfClass:NSArray.class] ? artists : @[]) {
+-                NSString *name = [credited isKindOfClass:NSDictionary.class] && [credited[@"name"] isKindOfClass:NSString.class] ? [credited[@"name"] lowercaseString] : nil;
+-                if (name.length && ([name containsString:lead] || [lead containsString:name])) {
+-                    [fitting addObject:song];
+-                    break;
+-                }
+-            }
++            if (SGLyricsArtistMatchCount(artistsOf(song), query.artist)) [fitting addObject:song];
+         }
+         [fitting sortUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) {
++            NSUInteger aScore = SGLyricsArtistMatchCount(artistsOf(a), query.artist);
++            NSUInteger bScore = SGLyricsArtistMatchCount(artistsOf(b), query.artist);
++            if (aScore != bScore) return aScore > bScore ? NSOrderedAscending : NSOrderedDescending;
+             return [@(labs([a[@"duration"] integerValue] / 1000 - seconds)) compare:@(labs([b[@"duration"] integerValue] / 1000 - seconds))];
+         }];
+         NSArray *ids = [[fitting valueForKey:@"id"] subarrayWithRange:NSMakeRange(0, MIN(fitting.count, kTriedSongs))];
+diff --git a/tweak/Sources/Shared/LyricsSources/QQMusic.m b/tweak/Sources/Shared/LyricsSources/QQMusic.m
+index 563f7c75ba5f8d55685bb8d9c08622b94664f708..5963ad0038c223ef37c77a945f3bfcb6cd234872 100644
+--- a/tweak/Sources/Shared/LyricsSources/QQMusic.m
++++ b/tweak/Sources/Shared/LyricsSources/QQMusic.m
+@@ -9,26 +9,19 @@ static NSDictionary<NSString *, NSString *> *headers(void) {
+     return @{@"Referer": @"https://y.qq.com/", @"User-Agent": @"Mozilla/5.0", @"Accept": @"application/json"};
+ }
+ 
+-static NSString *normalized(NSString *text) {
+-    if (![text isKindOfClass:NSString.class]) return @"";
+-    NSMutableString *out = [NSMutableString string];
+-    NSCharacterSet *skip = [NSCharacterSet characterSetWithCharactersInString:@" -_.,:;!?()[]{}'\"·，。！？（）【】—　\t\n"];
+-    for (NSUInteger i = 0; i < text.length; i++) {
+-        unichar c = [text characterAtIndex:i];
+-        if (![skip characterIsMember:c]) [out appendFormat:@"%C", c];
++static NSString *singers(NSDictionary *song) {
++    NSMutableArray<NSString *> *names = [NSMutableArray array];
++    for (NSDictionary *singer in [song[@"singer"] isKindOfClass:NSArray.class] ? song[@"singer"] : @[]) {
++        NSString *name = [singer isKindOfClass:NSDictionary.class] ? singer[@"name"] : nil;
++        if ([name isKindOfClass:NSString.class] && name.length) [names addObject:name];
+     }
+-    return out.lowercaseString;
++    return [names componentsJoinedByString:@", "];
+ }
+ 
+ static BOOL matchesRecording(NSDictionary *song, SGLyricsQuery *query) {
+     if (query.seconds > 0 && [song[@"interval"] respondsToSelector:@selector(integerValue)] &&
+         labs([song[@"interval"] integerValue] - query.seconds) > 6) return NO;
+-    NSString *wanted = normalized([query.artist componentsSeparatedByString:@" feat"].firstObject);
+-    for (NSDictionary *singer in [song[@"singer"] isKindOfClass:NSArray.class] ? song[@"singer"] : @[]) {
+-        NSString *name = normalized([singer isKindOfClass:NSDictionary.class] ? singer[@"name"] : nil);
+-        if (name.length && wanted.length && ([name containsString:wanted] || [wanted containsString:name])) return YES;
+-    }
+-    return NO;
++    return SGLyricsArtistMatchCount(singers(song), query.artist) > 0;
+ }
+ 
+ static void lyricReply(NSNumber *songID, BOOL translation, void (^done)(NSDictionary *data)) {
+@@ -72,13 +65,12 @@ static void lyricsForSong(NSNumber *songID, void (^done)(SGLyricsResult *)) {
+     });
+ }
+ 
+-static void search(SGLyricsQuery *query, void (^done)(NSArray<NSDictionary *> *list)) {
+-    if (!query.title.length || !query.artist.length) { done(@[]); return; }
++static void searchKeyword(NSString *keyword, void (^done)(NSArray<NSDictionary *> *list)) {
+     NSDictionary *request = @{
+         @"comm": @{@"ct": @"19", @"cv": @"1859", @"uin": @"0"},
+         @"req": @{@"method": @"DoSearchForQQMusicDesktop", @"module": @"music.search.SearchCgiService",
+                   @"param": @{@"grp": @1, @"num_per_page": @15, @"page_num": @1,
+-                               @"query": [NSString stringWithFormat:@"%@ %@", query.title, query.artist], @"search_type": @0}}
++                               @"query": keyword, @"search_type": @0}}
+     };
+     SGLyricsPostJSON([NSURL URLWithString:kMusicu], headers(), request, ^(id root) {
+         id value = [root isKindOfClass:NSDictionary.class] ? root[@"req"] : nil;
+@@ -91,22 +83,56 @@ static void search(SGLyricsQuery *query, void (^done)(NSArray<NSDictionary *> *l
+     });
+ }
+ 
+-static void findSong(SGLyricsQuery *query, void (^done)(NSNumber *songID)) {
+-    search(query, ^(NSArray<NSDictionary *> *list) {
++static void search(SGLyricsQuery *query, BOOL requireTitle, void (^done)(NSArray<NSDictionary *> *list)) {
++    if (!query.title.length || !query.artist.length) { done(@[]); return; }
++    NSString *lead = SGLyricsLeadArtist(query.artist) ?: query.artist;
++    searchKeyword([NSString stringWithFormat:@"%@ %@", query.title, lead], ^(NSArray<NSDictionary *> *list) {
++        for (NSDictionary *song in list) {
++            if ([song isKindOfClass:NSDictionary.class] &&
++                (requireTitle ? matches(song, query) : matchesRecording(song, query))) { done(list); return; }
++        }
++        // Some catalogues omit the international title or index only the single's title.
++        searchKeyword(query.title, done);
++    });
++}
++
++static void findSongs(SGLyricsQuery *query, void (^done)(NSArray<NSNumber *> *songIDs)) {
++    search(query, YES, ^(NSArray<NSDictionary *> *list) {
++        NSMutableArray<NSDictionary *> *fitting = [NSMutableArray array];
+         for (NSDictionary *candidate in list) {
+-            if (![candidate isKindOfClass:NSDictionary.class] || !matches(candidate, query)) continue;
+-            NSNumber *songID = [candidate[@"id"] isKindOfClass:NSNumber.class] ? candidate[@"id"] : nil;
+-            if (songID) { done(songID); return; }
++            if (![candidate isKindOfClass:NSDictionary.class] || !matches(candidate, query) ||
++                ![candidate[@"id"] isKindOfClass:NSNumber.class]) continue;
++            [fitting addObject:candidate];
+         }
+-        SGLog(@"qqmusic: no matching recording for %@ by %@", query.title, query.artist);
+-        done(nil);
++        [fitting sortUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) {
++            NSUInteger aScore = SGLyricsArtistMatchCount(singers(a), query.artist);
++            NSUInteger bScore = SGLyricsArtistMatchCount(singers(b), query.artist);
++            if (aScore != bScore) return aScore > bScore ? NSOrderedAscending : NSOrderedDescending;
++            NSInteger aGap = labs([a[@"interval"] integerValue] - query.seconds);
++            NSInteger bGap = labs([b[@"interval"] integerValue] - query.seconds);
++            return aGap < bGap ? NSOrderedAscending : aGap > bGap ? NSOrderedDescending : NSOrderedSame;
++        }];
++        NSMutableArray<NSNumber *> *ids = [NSMutableArray array];
++        for (NSDictionary *song in fitting) {
++            if (ids.count >= 3) break;
++            if (![ids containsObject:song[@"id"]]) [ids addObject:song[@"id"]];
++        }
++        if (!ids.count) SGLog(@"qqmusic: no matching recording for %@ by %@", query.title, query.artist);
++        done(ids);
++    });
++}
++
++static void tryLyrics(NSArray<NSNumber *> *ids, NSUInteger index, void (^done)(SGLyricsResult *)) {
++    if (index >= ids.count) { done(nil); return; }
++    lyricsForSong(ids[index], ^(SGLyricsResult *result) {
++        if (result) done(result);
++        else tryLyrics(ids, index + 1, done);
+     });
+ }
+ 
+ SGLyricsAsk SGQQMusicAsk = ^(SGLyricsQuery *query, void (^done)(SGLyricsResult *)) {
+-    findSong(query, ^(NSNumber *songID) {
+-        if (!songID) { done(nil); return; }
+-        lyricsForSong(songID, done);
++    findSongs(query, ^(NSArray<NSNumber *> *ids) {
++        tryLyrics(ids, 0, done);
+     });
+ };
+ 
+@@ -135,7 +161,7 @@ static void tryTranslations(NSArray<NSDictionary *> *songs, NSUInteger index, SG
+ }
+ 
+ void SGQQMusicTranslationAsk(SGLyricsQuery *query, NSArray<SGKaraokeLine *> *target, SGLyricsTranslationReply done) {
+-    search(query, ^(NSArray<NSDictionary *> *list) {
++    search(query, NO, ^(NSArray<NSDictionary *> *list) {
+         NSMutableArray<NSDictionary *> *candidates = [NSMutableArray array];
+         for (NSDictionary *song in list) {
+             if ([song isKindOfClass:NSDictionary.class] && matchesRecording(song, query)) [candidates addObject:song];
+@@ -144,6 +170,9 @@ void SGQQMusicTranslationAsk(SGLyricsQuery *query, NSArray<SGKaraokeLine *> *tar
+             BOOL aTitle = SGLyricsTitleMatches(a[@"title"], query.title);
+             BOOL bTitle = SGLyricsTitleMatches(b[@"title"], query.title);
+             if (aTitle != bTitle) return aTitle ? NSOrderedAscending : NSOrderedDescending;
++            NSUInteger aArtists = SGLyricsArtistMatchCount(singers(a), query.artist);
++            NSUInteger bArtists = SGLyricsArtistMatchCount(singers(b), query.artist);
++            if (aArtists != bArtists) return aArtists > bArtists ? NSOrderedAscending : NSOrderedDescending;
+             NSInteger aGap = labs([a[@"interval"] integerValue] - query.seconds);
+             NSInteger bGap = labs([b[@"interval"] integerValue] - query.seconds);
+             return aGap < bGap ? NSOrderedAscending : aGap > bGap ? NSOrderedDescending : NSOrderedSame;
+-- 
+2.34.1
+

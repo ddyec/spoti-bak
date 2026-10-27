@@ -1,0 +1,6 @@
+tree 552ca8eec5e638a0e9f8ce4dc160dd9d69592746
+parent bf5a60d6bd7b25703a68e9eb60267b0b69d0bc49
+author Codex <codex@users.noreply.github.com> 1792336231 +0800
+committer Codex <codex@users.noreply.github.com> 1792336231 +0800
+
+fix: respect lyric source priority and remove duplicate cover movement

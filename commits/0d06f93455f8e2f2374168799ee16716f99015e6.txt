@@ -1,0 +1,7 @@
+tree 743b3e6de5edd75057e053e52bb135dfd14b9aab
+parent a14b2a67ae5f2a9e91bdd383345f9bc8a3da4950
+parent 49e02e204f397b1e4197876dd622d4ee1663188e
+author Codex <codex@users.noreply.github.com> 1792331914 +0800
+committer Codex <codex@users.noreply.github.com> 1792331914 +0800
+
+fix: integrate beta with selective lyrics and animated cover preview

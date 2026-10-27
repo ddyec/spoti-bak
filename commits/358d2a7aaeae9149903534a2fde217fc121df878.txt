@@ -1,0 +1,6 @@
+tree a8489abcb4fa54187cb640fbb384f5278f23faf7
+parent f9a89eef0c4a3cb1d5d41a53cb5ebcfc0bfa525e
+author Codex <codex@users.noreply.github.com> 1790765911 +0800
+committer Codex <codex@users.noreply.github.com> 1790765911 +0800
+
+fix: include production timing selector in lyrics regression harness

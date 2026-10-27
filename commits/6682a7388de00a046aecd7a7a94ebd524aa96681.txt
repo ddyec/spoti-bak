@@ -1,0 +1,6 @@
+tree 2e6002c508b8cb52a62b6608244ead0327a3d6ae
+parent d2e5d6eb98979bfffc9ae36eaaa240ad6b6364fa
+author ddyec <89333385+ddyec@users.noreply.github.com> 1792550389 +0000
+committer ddyec <89333385+ddyec@users.noreply.github.com> 1792550389 +0000
+
+fix: include settings presentation API and keep opted-out launches idle

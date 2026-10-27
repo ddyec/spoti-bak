@@ -1,0 +1,2157 @@
+{
+  "schema": 1,
+  "created_utc": "2026-10-27",
+  "source_repository": "https://github.com/ddyec/spoti.pw",
+  "archive_repository": "https://github.com/ddyec/spoti-bak",
+  "base": "425d68bc1761e90a6b5828864720511bcef79fa9",
+  "initial_lyrics_head": "a14b2a67ae5f2a9e91bdd383345f9bc8a3da4950",
+  "beta_integration_base": "49e02e204f397b1e4197876dd622d4ee1663188e",
+  "beta_merge": "0d06f93455f8e2f2374168799ee16716f99015e6",
+  "tested_head": "a90b2c04474e2fd13fc0dd792ecc85527c5299e7",
+  "parallel_ev1_head": "22a7166633d6d5ca544480217b6ea8eaf939583f",
+  "commits": [
+    {
+      "sha": "1d93e93ccea8d98cebcd18f01fc3a39b42089cba",
+      "parents": [
+        "425d68bc1761e90a6b5828864720511bcef79fa9"
+      ],
+      "author": "Codex",
+      "author_email": "codex@users.noreply.github.com",
+      "authored": "2026-09-28T17:28:40+08:00",
+      "subject": "feat: add QQ Music and KuGou lyrics fallbacks with Musixmatch translations",
+      "message": "feat: add QQ Music and KuGou lyrics fallbacks with Musixmatch translations",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "425d68bc1761e90a6b5828864720511bcef79fa9",
+      "patch": "patches/mainline/001-1d93e93ccea8.patch",
+      "sha256": "bb36922465921a1706d3fad03c527b4126cab32b7d71eed19ead7fb111becedf",
+      "raw_commit": "commits/1d93e93ccea8d98cebcd18f01fc3a39b42089cba.txt",
+      "raw_commit_sha256": "7766ae0803de4ee2b66a64454a3fa337a3bf218f8cb0f4751d5fbe03d2ace1f1",
+      "tree": "0a3dd1864ece663bea7eef6ccbc0305a593d9874"
+    },
+    {
+      "sha": "e4959c411e5b8a2f99aaf6978960fa58b98053a6",
+      "parents": [
+        "1d93e93ccea8d98cebcd18f01fc3a39b42089cba"
+      ],
+      "author": "Codex",
+      "author_email": "codex@users.noreply.github.com",
+      "authored": "2026-09-28T18:19:09+08:00",
+      "subject": "test: build IPA without publishing artifact",
+      "message": "test: build IPA without publishing artifact",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "1d93e93ccea8d98cebcd18f01fc3a39b42089cba",
+      "patch": "patches/mainline/002-e4959c411e5b.patch",
+      "sha256": "355c8e996cb254c09bba7a69f609c84ce079f810c666bb01f443249f3ab9ccb5",
+      "raw_commit": "commits/e4959c411e5b8a2f99aaf6978960fa58b98053a6.txt",
+      "raw_commit_sha256": "c4d4ea780963ff740d159e440d196c97015a456253567fac7aa276ef02295f3c",
+      "tree": "5096c2e192aa7072c8feef6da654d2fd1f42d701"
+    },
+    {
+      "sha": "f875180c738061eb775007fdea8db260b797fb57",
+      "parents": [
+        "e4959c411e5b8a2f99aaf6978960fa58b98053a6"
+      ],
+      "author": "Codex",
+      "author_email": "codex@users.noreply.github.com",
+      "authored": "2026-09-28T18:28:19+08:00",
+      "subject": "test: upload built IPA as Actions artifact",
+      "message": "test: upload built IPA as Actions artifact",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "e4959c411e5b8a2f99aaf6978960fa58b98053a6",
+      "patch": "patches/mainline/003-f875180c7380.patch",
+      "sha256": "5e100dcf0cfc2d4b28b332883f336ac3d1ae64fd3d5ea726fc49e7dc551c5f69",
+      "raw_commit": "commits/f875180c738061eb775007fdea8db260b797fb57.txt",
+      "raw_commit_sha256": "7b3c4c0d2b02958021b2edbef34533b56a94e028eddad099949db8eeacbb0235",
+      "tree": "bd90c9253f869ed53d4f76b5264347fde24ae3a2"
+    },
+    {
+      "sha": "1b5445f3523284ceb4382f0ad5db45bf3e2182fc",
+      "parents": [
+        "f875180c738061eb775007fdea8db260b797fb57"
+      ],
+      "author": "Codex",
+      "author_email": "codex@users.noreply.github.com",
+      "authored": "2026-09-28T19:02:43+08:00",
+      "subject": "fix: fetch Musixmatch translations after lyrics reply",
+      "message": "fix: fetch Musixmatch translations after lyrics reply",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "f875180c738061eb775007fdea8db260b797fb57",
+      "patch": "patches/mainline/004-1b5445f35232.patch",
+      "sha256": "bf030b8a995a956094de87d1d69c37a09d67e4702d02ce4d8578f8360d5c4e76",
+      "raw_commit": "commits/1b5445f3523284ceb4382f0ad5db45bf3e2182fc.txt",
+      "raw_commit_sha256": "4ed45be350802dcbf7ec029eec5bd27253fe7caafcf19dc3e37b03b73f193353",
+      "tree": "b28ba82021e0725e5a657b95d94ae6487029123b"
+    },
+    {
+      "sha": "702daf6c95617be1a834984a3b0abdb9d46e1b3c",
+      "parents": [
+        "1b5445f3523284ceb4382f0ad5db45bf3e2182fc"
+      ],
+      "author": "Codex",
+      "author_email": "codex@users.noreply.github.com",
+      "authored": "2026-09-28T19:16:43+08:00",
+      "subject": "feat: fetch Chinese lyric translations and diagnose KuGou fallback",
+      "message": "feat: fetch Chinese lyric translations and diagnose KuGou fallback",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "1b5445f3523284ceb4382f0ad5db45bf3e2182fc",
+      "patch": "patches/mainline/005-702daf6c9561.patch",
+      "sha256": "81b2587e399d074aa1bea04b93d0c4ad53480cbd824f865b04f2ee8371686978",
+      "raw_commit": "commits/702daf6c95617be1a834984a3b0abdb9d46e1b3c.txt",
+      "raw_commit_sha256": "88e798b2b26971698c4d6e0d6edc0ebbafee507d5c0d2309a8a1fb2a67a8e918",
+      "tree": "0c228931bb6745c1bb0f93d9c3e3a848712245bc"
+    },
+    {
+      "sha": "61b0de901f5844795a56b07a3ab88cb1b31c02ad",
+      "parents": [
+        "702daf6c95617be1a834984a3b0abdb9d46e1b3c"
+      ],
+      "author": "Codex",
+      "author_email": "codex@users.noreply.github.com",
+      "authored": "2026-09-28T22:40:23+08:00",
+      "subject": "fix: match translated titles and keep lyrics processing off main",
+      "message": "fix: match translated titles and keep lyrics processing off main",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "702daf6c95617be1a834984a3b0abdb9d46e1b3c",
+      "patch": "patches/mainline/006-61b0de901f58.patch",
+      "sha256": "8c2b6e7144425f4af484381294472f3594eacbe270109f6b593c625c4184067f",
+      "raw_commit": "commits/61b0de901f5844795a56b07a3ab88cb1b31c02ad.txt",
+      "raw_commit_sha256": "6bdda75f325fe23efd8b6d28f79d393869073d40fccc48bcbb4bcfd1f32da82d",
+      "tree": "e4a0c0e49c82e400b868df903ba07830c67f82c6"
+    },
+    {
+      "sha": "2ee6a6d5570d6810d5c9f465338c6974aee79d52",
+      "parents": [
+        "61b0de901f5844795a56b07a3ab88cb1b31c02ad"
+      ],
+      "author": "Codex",
+      "author_email": "codex@users.noreply.github.com",
+      "authored": "2026-09-28T22:41:56+08:00",
+      "subject": "fix: align shifted lyric translations without borrowing adjacent lines",
+      "message": "fix: align shifted lyric translations without borrowing adjacent lines",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "61b0de901f5844795a56b07a3ab88cb1b31c02ad",
+      "patch": "patches/mainline/007-2ee6a6d5570d.patch",
+      "sha256": "76b36771a7246e4e68e738a3e6d3a70429384552bc3fc8916cd7a0780f50f8db",
+      "raw_commit": "commits/2ee6a6d5570d6810d5c9f465338c6974aee79d52.txt",
+      "raw_commit_sha256": "0f3ced59efff0f4c9117c1d51697433f388f8ba5b3acf12bfe196a0f2abe5a09",
+      "tree": "b45ac8f1e8aa67e6b8735f757db43289ac6bab76"
+    },
+    {
+      "sha": "d1b588dac98d48347c88a176fd306dad891c452c",
+      "parents": [
+        "2ee6a6d5570d6810d5c9f465338c6974aee79d52"
+      ],
+      "author": "Codex",
+      "author_email": "codex@users.noreply.github.com",
+      "authored": "2026-09-28T23:12:29+08:00",
+      "subject": "fix: match multi-artist lyrics and handle source timing metadata",
+      "message": "fix: match multi-artist lyrics and handle source timing metadata",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "2ee6a6d5570d6810d5c9f465338c6974aee79d52",
+      "patch": "patches/mainline/008-d1b588dac98d.patch",
+      "sha256": "8dff535e71d43284427903bfb163b515cc705bf53cac74cb61f229e38c3e54c7",
+      "raw_commit": "commits/d1b588dac98d48347c88a176fd306dad891c452c.txt",
+      "raw_commit_sha256": "56286c914ce1ded46670e208fc2c896985609461d223a677164bfdfdcd455e08",
+      "tree": "0905fef07ac5ab83c4ccf4760494d3293fdb2522"
+    },
+    {
+      "sha": "77b41834fe82dcc359c35548392222402062953d",
+      "parents": [
+        "d1b588dac98d48347c88a176fd306dad891c452c"
+      ],
+      "author": "Codex",
+      "author_email": "codex@users.noreply.github.com",
+      "authored": "2026-09-28T23:26:30+08:00",
+      "subject": "feat: decode QQ Music QRC for true word timing",
+      "message": "feat: decode QQ Music QRC for true word timing",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "d1b588dac98d48347c88a176fd306dad891c452c",
+      "patch": "patches/mainline/009-77b41834fe82.patch",
+      "sha256": "3ba069423dec6e8c82ede48ffec4d5ee8869091488127dd5b06a4c1dc0ccf9a3",
+      "raw_commit": "commits/77b41834fe82dcc359c35548392222402062953d.txt",
+      "raw_commit_sha256": "1a0a80a776d8959394c059ee79dabcf873ae02fb3144115f983ea48b244edf7d",
+      "tree": "4dae27c4e8bb6d158e74e676f993a19ae40b69d8"
+    },
+    {
+      "sha": "79a0ca1fb16e8d6e2d52c841a55ab1cd99c909e5",
+      "parents": [
+        "77b41834fe82dcc359c35548392222402062953d"
+      ],
+      "author": "Codex",
+      "author_email": "codex@users.noreply.github.com",
+      "authored": "2026-09-30T14:56:47+08:00",
+      "subject": "fix: validate translated lyric matches and add diagnostics",
+      "message": "fix: validate translated lyric matches and add diagnostics",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "77b41834fe82dcc359c35548392222402062953d",
+      "patch": "patches/mainline/010-79a0ca1fb16e.patch",
+      "sha256": "4709f20af9e5fe1674eb0f724785b6d2a6d6bf4d01d4336733fc7600f32bcc55",
+      "raw_commit": "commits/79a0ca1fb16e8d6e2d52c841a55ab1cd99c909e5.txt",
+      "raw_commit_sha256": "2bd87cf84de310012de78c03e4936cde14cef9a631385fdf0594c88e4f9d4365",
+      "tree": "c5a86ebf9b3695729bb3bdcbafa5b9d9e2b0f5eb"
+    },
+    {
+      "sha": "4a9f45ee331a7dfc606b0cfa77689e95ef0ee167",
+      "parents": [
+        "79a0ca1fb16e8d6e2d52c841a55ab1cd99c909e5"
+      ],
+      "author": "Codex",
+      "author_email": "codex@users.noreply.github.com",
+      "authored": "2026-09-30T16:31:13+08:00",
+      "subject": "fix: improve regional lyrics matching and add pronunciation and native preview",
+      "message": "fix: improve regional lyrics matching and add pronunciation and native preview",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "79a0ca1fb16e8d6e2d52c841a55ab1cd99c909e5",
+      "patch": "patches/mainline/011-4a9f45ee331a.patch",
+      "sha256": "64368665b07a7324d7ab513b901da838e4479ce24b81715fd937419e3aeaaf47",
+      "raw_commit": "commits/4a9f45ee331a7dfc606b0cfa77689e95ef0ee167.txt",
+      "raw_commit_sha256": "b83915590a44ca2af7491d160cc079047a91cb942760be6e39bce0d82ed6fb90",
+      "tree": "6410e290af5cb24ca44c655dab4c656b2ccb3e56"
+    },
+    {
+      "sha": "8e22673dfd43366dcda8d94e35e063a4c7244176",
+      "parents": [
+        "4a9f45ee331a7dfc606b0cfa77689e95ef0ee167"
+      ],
+      "author": "Codex",
+      "author_email": "codex@users.noreply.github.com",
+      "authored": "2026-09-30T16:34:56+08:00",
+      "subject": "fix: preserve unmodified catalogue title spelling",
+      "message": "fix: preserve unmodified catalogue title spelling",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "4a9f45ee331a7dfc606b0cfa77689e95ef0ee167",
+      "patch": "patches/mainline/012-8e22673dfd43.patch",
+      "sha256": "f35a49c89775a93f807b100354c29cfbec0cce7adac1bb2d44ef44d41b5f3b42",
+      "raw_commit": "commits/8e22673dfd43366dcda8d94e35e063a4c7244176.txt",
+      "raw_commit_sha256": "254400e577c91b759358707fb739b3ac41866199fb8c5907d8a4eaafd3b57b24",
+      "tree": "fbfa64d7215a4b9a3ecd40cbb9a476284cdfabe9"
+    },
+    {
+      "sha": "0567146ba901f04069b9884ad5e469450f289cc9",
+      "parents": [
+        "8e22673dfd43366dcda8d94e35e063a4c7244176"
+      ],
+      "author": "Codex",
+      "author_email": "codex@users.noreply.github.com",
+      "authored": "2026-09-30T16:57:54+08:00",
+      "subject": "fix: render native lyrics preview independently of Spotify container",
+      "message": "fix: render native lyrics preview independently of Spotify container",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "8e22673dfd43366dcda8d94e35e063a4c7244176",
+      "patch": "patches/mainline/013-0567146ba901.patch",
+      "sha256": "386620b91bdccab09506a871a9241032575bb4d72ec2eee9941d6243d4fd907d",
+      "raw_commit": "commits/0567146ba901f04069b9884ad5e469450f289cc9.txt",
+      "raw_commit_sha256": "00043cef3d488a49c998e074011c26f6e549f80ac6d75fe34c00582516aecd1c",
+      "tree": "10d0231a7f8ab711c01260ba4d9a5aeb7e909629"
+    },
+    {
+      "sha": "5b4fb0f6579721d2dcff0b7bbc421baea9eb4366",
+      "parents": [
+        "0567146ba901f04069b9884ad5e469450f289cc9"
+      ],
+      "author": "Codex",
+      "author_email": "codex@users.noreply.github.com",
+      "authored": "2026-09-30T17:01:02+08:00",
+      "subject": "fix: add current-line preview to redesigned player with visible setting",
+      "message": "fix: add current-line preview to redesigned player with visible setting",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "0567146ba901f04069b9884ad5e469450f289cc9",
+      "patch": "patches/mainline/014-5b4fb0f65797.patch",
+      "sha256": "bb5a847cd4e512a5b7668e7832c32089913168fde0c81971c4e42cd3d6f5835a",
+      "raw_commit": "commits/5b4fb0f6579721d2dcff0b7bbc421baea9eb4366.txt",
+      "raw_commit_sha256": "a01adeba57be7cf30ab9abd7ba7208185e5b151fea9168a4a16e1a41373b2613",
+      "tree": "ae25289a146e4ef12a38b497624b46334d285322"
+    },
+    {
+      "sha": "f9a89eef0c4a3cb1d5d41a53cb5ebcfc0bfa525e",
+      "parents": [
+        "5b4fb0f6579721d2dcff0b7bbc421baea9eb4366"
+      ],
+      "author": "Codex",
+      "author_email": "codex@users.noreply.github.com",
+      "authored": "2026-09-30T18:55:54+08:00",
+      "subject": "fix: publish prefetched provider lyrics directly to display cache",
+      "message": "fix: publish prefetched provider lyrics directly to display cache",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "5b4fb0f6579721d2dcff0b7bbc421baea9eb4366",
+      "patch": "patches/mainline/015-f9a89eef0c4a.patch",
+      "sha256": "442cf8de8c7f15cc1c84a0d670482a3afb237bed5c62c0b97634b7825651662a",
+      "raw_commit": "commits/f9a89eef0c4a3cb1d5d41a53cb5ebcfc0bfa525e.txt",
+      "raw_commit_sha256": "d60531b8bf8d3e5b479637edb59e1e106c80c920f079853973f5b930c589520c",
+      "tree": "f9db9d15de3ff0194feb9c8230b8746e59ec7fe3"
+    },
+    {
+      "sha": "358d2a7aaeae9149903534a2fde217fc121df878",
+      "parents": [
+        "f9a89eef0c4a3cb1d5d41a53cb5ebcfc0bfa525e"
+      ],
+      "author": "Codex",
+      "author_email": "codex@users.noreply.github.com",
+      "authored": "2026-09-30T18:58:31+08:00",
+      "subject": "fix: include production timing selector in lyrics regression harness",
+      "message": "fix: include production timing selector in lyrics regression harness",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "f9a89eef0c4a3cb1d5d41a53cb5ebcfc0bfa525e",
+      "patch": "patches/mainline/016-358d2a7aaeae.patch",
+      "sha256": "5e6c2fa63a4ec369420806ef7504509adaf747564c87604bc4fb0de7b73a4216",
+      "raw_commit": "commits/358d2a7aaeae9149903534a2fde217fc121df878.txt",
+      "raw_commit_sha256": "13d5ce1f16141ce8133b7d8288906c586804edfa03fc4fc6736c24c881ca2a3a",
+      "tree": "a8489abcb4fa54187cb640fbb384f5278f23faf7"
+    },
+    {
+      "sha": "a14b2a67ae5f2a9e91bdd383345f9bc8a3da4950",
+      "parents": [
+        "358d2a7aaeae9149903534a2fde217fc121df878"
+      ],
+      "author": "Codex",
+      "author_email": "codex@users.noreply.github.com",
+      "authored": "2026-09-30T19:37:30+08:00",
+      "subject": "fix: show translations and wrap long player preview lyrics",
+      "message": "fix: show translations and wrap long player preview lyrics",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "358d2a7aaeae9149903534a2fde217fc121df878",
+      "patch": "patches/mainline/017-a14b2a67ae5f.patch",
+      "sha256": "6f5f6d9c93e11b747fe1c4cc05c08fd63bf801d744fe5c44dfd83c1bdeb2d710",
+      "raw_commit": "commits/a14b2a67ae5f2a9e91bdd383345f9bc8a3da4950.txt",
+      "raw_commit_sha256": "b6431e7f31d4882cddafeb9f0c8a35a6196ed10037a47831baf46b805182080e",
+      "tree": "5575c1860fc157e67071ea4b855e4a82272bae3c"
+    },
+    {
+      "sha": "0d06f93455f8e2f2374168799ee16716f99015e6",
+      "parents": [
+        "a14b2a67ae5f2a9e91bdd383345f9bc8a3da4950",
+        "49e02e204f397b1e4197876dd622d4ee1663188e"
+      ],
+      "author": "Codex",
+      "author_email": "codex@users.noreply.github.com",
+      "authored": "2026-10-18T21:58:34+08:00",
+      "subject": "fix: integrate beta with selective lyrics and animated cover preview",
+      "message": "fix: integrate beta with selective lyrics and animated cover preview",
+      "group": "mainline",
+      "patch_kind": "git-diff-against-second-parent",
+      "apply_base": "49e02e204f397b1e4197876dd622d4ee1663188e",
+      "note": "The first-parent difference imports upstream beta. This patch instead records the custom integration relative to the beta parent; it is not the next patch to apply after the initial series.",
+      "patch": "patches/mainline/018-0d06f93455f8.patch",
+      "sha256": "dc1586c5238360588016cf6357e1c1099d32e496258abf862acbf814a5e34c75",
+      "raw_commit": "commits/0d06f93455f8e2f2374168799ee16716f99015e6.txt",
+      "raw_commit_sha256": "bd88d0d21f39c34efca613af046dfb119e62ab83be1f04dae886e90897c30204",
+      "tree": "743b3e6de5edd75057e053e52bb135dfd14b9aab"
+    },
+    {
+      "sha": "9add78b28c63621ed504bdf8fe3d6b8dade87e27",
+      "parents": [
+        "0d06f93455f8e2f2374168799ee16716f99015e6"
+      ],
+      "author": "Codex",
+      "author_email": "codex@users.noreply.github.com",
+      "authored": "2026-10-18T22:05:08+08:00",
+      "subject": "fix: normalize domestic lyrics searches and mixed duration units",
+      "message": "fix: normalize domestic lyrics searches and mixed duration units",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "0d06f93455f8e2f2374168799ee16716f99015e6",
+      "patch": "patches/mainline/019-9add78b28c63.patch",
+      "sha256": "dff7c787b209e26eb08ca4b7a52b5858865f37dd16452ba403019ddaa42c3070",
+      "raw_commit": "commits/9add78b28c63621ed504bdf8fe3d6b8dade87e27.txt",
+      "raw_commit_sha256": "7aacd5632b285f982d8557c4510136023f406e8386b67c612a8888b3ec5e9311",
+      "tree": "8ba0d8d8af70a27f53d8da76594c78225c5d16f1"
+    },
+    {
+      "sha": "6679223f9fa269289b9557ca98773c5d39c9fb46",
+      "parents": [
+        "9add78b28c63621ed504bdf8fe3d6b8dade87e27"
+      ],
+      "author": "Codex",
+      "author_email": "codex@users.noreply.github.com",
+      "authored": "2026-10-18T22:16:04+08:00",
+      "subject": "fix: validate fresh multilingual lyrics corpus before IPA build",
+      "message": "fix: validate fresh multilingual lyrics corpus before IPA build",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "9add78b28c63621ed504bdf8fe3d6b8dade87e27",
+      "patch": "patches/mainline/020-6679223f9fa2.patch",
+      "sha256": "e8671de82613fffa21f2de8985cc3db38cf922cf1adbee1b86005041bae66cd1",
+      "raw_commit": "commits/6679223f9fa269289b9557ca98773c5d39c9fb46.txt",
+      "raw_commit_sha256": "b3a9a47e7dba68125ae9935be6027d6069117dc7d8baa77d629e63783b3001b7",
+      "tree": "ce8013b05d427b08249fb30eae8e6f2069156e11"
+    },
+    {
+      "sha": "bf5a60d6bd7b25703a68e9eb60267b0b69d0bc49",
+      "parents": [
+        "6679223f9fa269289b9557ca98773c5d39c9fb46"
+      ],
+      "author": "Codex",
+      "author_email": "codex@users.noreply.github.com",
+      "authored": "2026-10-18T22:17:46+08:00",
+      "subject": "fix: run audit gates through existing build scripts",
+      "message": "fix: run audit gates through existing build scripts",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "6679223f9fa269289b9557ca98773c5d39c9fb46",
+      "patch": "patches/mainline/021-bf5a60d6bd7b.patch",
+      "sha256": "9baeba1b620cccbe80fa53b992ae60bf616b8f9d8045945cc596379f7497cb8a",
+      "raw_commit": "commits/bf5a60d6bd7b25703a68e9eb60267b0b69d0bc49.txt",
+      "raw_commit_sha256": "7613737e089fe1443b3c8c4710e1e215cb660d1e996d8e3cb717fdfaedf1e2fb",
+      "tree": "997445d781baee51645e533271d23bf4a734097b"
+    },
+    {
+      "sha": "d95a5c5e58247f92d4dbe287edf065f837dad2c3",
+      "parents": [
+        "bf5a60d6bd7b25703a68e9eb60267b0b69d0bc49"
+      ],
+      "author": "Codex",
+      "author_email": "codex@users.noreply.github.com",
+      "authored": "2026-10-18T23:10:31+08:00",
+      "subject": "fix: respect lyric source priority and remove duplicate cover movement",
+      "message": "fix: respect lyric source priority and remove duplicate cover movement",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "bf5a60d6bd7b25703a68e9eb60267b0b69d0bc49",
+      "patch": "patches/mainline/022-d95a5c5e5824.patch",
+      "sha256": "91b512735f258b9763045fa760a1b589114438f01c0d0d5bf6a444fd94669eb9",
+      "raw_commit": "commits/d95a5c5e58247f92d4dbe287edf065f837dad2c3.txt",
+      "raw_commit_sha256": "2420625780580da035d632e915439446942c4df33f48410290f7192a639f6537",
+      "tree": "552ca8eec5e638a0e9f8ce4dc160dd9d69592746"
+    },
+    {
+      "sha": "8ca0696df0dc280dd1a623da3ef62f07d243ae86",
+      "parents": [
+        "d95a5c5e58247f92d4dbe287edf065f837dad2c3"
+      ],
+      "author": "ddyec",
+      "author_email": "89333385+ddyec@users.noreply.github.com",
+      "authored": "2026-10-20T21:31:54+08:00",
+      "subject": "fix: reserve missing native lyric space and roll preview lines upward",
+      "message": "fix: reserve missing native lyric space and roll preview lines upward",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "d95a5c5e58247f92d4dbe287edf065f837dad2c3",
+      "patch": "patches/mainline/023-8ca0696df0dc.patch",
+      "sha256": "68530316f232a7673564ee98c17d0c0adab937f661d06cffa165d665ce79c963",
+      "raw_commit": "commits/8ca0696df0dc280dd1a623da3ef62f07d243ae86.txt",
+      "raw_commit_sha256": "d95c19ce82d6ad913dd9eb3696a47eb306e7c8726dbd9dcfd512ffd7e916dbef",
+      "tree": "21281e872919fa16b0b9de6aab951bc4e23a13a2"
+    },
+    {
+      "sha": "2108411030971bf696c5e1198c1f0e771e09599b",
+      "parents": [
+        "8ca0696df0dc280dd1a623da3ef62f07d243ae86"
+      ],
+      "author": "ddyec",
+      "author_email": "89333385+ddyec@users.noreply.github.com",
+      "authored": "2026-10-20T21:34:44+08:00",
+      "subject": "docs: record bounded English release label audit",
+      "message": "docs: record bounded English release label audit",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "8ca0696df0dc280dd1a623da3ef62f07d243ae86",
+      "patch": "patches/mainline/024-210841103097.patch",
+      "sha256": "5022e9651e30a04c1048e8f329474427eda67d552b506da469fb1f60f6a6f18c",
+      "raw_commit": "commits/2108411030971bf696c5e1198c1f0e771e09599b.txt",
+      "raw_commit_sha256": "19ef776518fe268d9f0c711334be023a3616faa5941fb82c9a5a165810fae65e",
+      "tree": "9632c7320981f5b26dcc15209f7afc866ae87471"
+    },
+    {
+      "sha": "7be3f72795a6ec2e1de593dd7779f6c31c16f6cb",
+      "parents": [
+        "2108411030971bf696c5e1198c1f0e771e09599b"
+      ],
+      "author": "ddyec",
+      "author_email": "89333385+ddyec@users.noreply.github.com",
+      "authored": "2026-10-20T21:40:48+08:00",
+      "subject": "fix: declare lyric preview playback properties separately",
+      "message": "fix: declare lyric preview playback properties separately",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "2108411030971bf696c5e1198c1f0e771e09599b",
+      "patch": "patches/mainline/025-7be3f72795a6.patch",
+      "sha256": "1d2b9607537f1d22dabf004709e97e11389ce5e1df57132dc1f9c9e4160197a4",
+      "raw_commit": "commits/7be3f72795a6ec2e1de593dd7779f6c31c16f6cb.txt",
+      "raw_commit_sha256": "b20b3e5af104a49218786c548ce4377a6b9a35d1f2fa3e3468e72ca4db10582b",
+      "tree": "00dc28250f4a085906c1c2dc62c8919df8c903bb"
+    },
+    {
+      "sha": "93abc92f57ae54b1297b418346d776d45bef3863",
+      "parents": [
+        "7be3f72795a6ec2e1de593dd7779f6c31c16f6cb"
+      ],
+      "author": "ddyec",
+      "author_email": "89333385+ddyec@users.noreply.github.com",
+      "authored": "2026-10-20T22:03:24+08:00",
+      "subject": "fix: use Intel macOS runner after ARM capacity failure",
+      "message": "fix: use Intel macOS runner after ARM capacity failure",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "7be3f72795a6ec2e1de593dd7779f6c31c16f6cb",
+      "patch": "patches/mainline/026-93abc92f57ae.patch",
+      "sha256": "f4c8e5c9883999c2d5a1ea8eea6c721f44db200bc3dad239dc830cf48934cbaf",
+      "raw_commit": "commits/93abc92f57ae54b1297b418346d776d45bef3863.txt",
+      "raw_commit_sha256": "f56e559285055c9329e6c5624b5ec6c6717898c0c82557eca296e7ef928d6953",
+      "tree": "2de6079a65f74447a16b2314d6d88bc7ae70b6bf"
+    },
+    {
+      "sha": "b522102b4ab9fb7596c5bcec1e7de1577cac35ad",
+      "parents": [
+        "93abc92f57ae54b1297b418346d776d45bef3863"
+      ],
+      "author": "ddyec",
+      "author_email": "89333385+ddyec@users.noreply.github.com",
+      "authored": "2026-10-20T22:20:05+08:00",
+      "subject": "fix: allow supplied Eevee components to be re-signed during packaging",
+      "message": "fix: allow supplied Eevee components to be re-signed during packaging",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "93abc92f57ae54b1297b418346d776d45bef3863",
+      "patch": "patches/mainline/027-b522102b4ab9.patch",
+      "sha256": "05c73a1db360dc85dd38e6297ddc23fe325b2cce3400ba8adbf5c442e56f8e68",
+      "raw_commit": "commits/b522102b4ab9fb7596c5bcec1e7de1577cac35ad.txt",
+      "raw_commit_sha256": "42c1bd4b95477337fed0352424ee3c7e431849a749ad4ef65ad6810b0d8a4a8f",
+      "tree": "b0ca7ec948eeaeaf121047ba329b3ff663d35dad"
+    },
+    {
+      "sha": "9751e54dbd32920ef3c6a81a439675ab7bb616e8",
+      "parents": [
+        "b522102b4ab9fb7596c5bcec1e7de1577cac35ad"
+      ],
+      "author": "ddyec",
+      "author_email": "89333385+ddyec@users.noreply.github.com",
+      "authored": "2026-10-21T02:32:05+00:00",
+      "subject": "feat: diagnose repeated operations and preserve lyric motion continuity",
+      "message": "feat: diagnose repeated operations and preserve lyric motion continuity",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "b522102b4ab9fb7596c5bcec1e7de1577cac35ad",
+      "patch": "patches/mainline/028-9751e54dbd32.patch",
+      "sha256": "fdb8d99345eca97f24dada0605cdea213e9aa9ab70b969c686b37c03071959db",
+      "raw_commit": "commits/9751e54dbd32920ef3c6a81a439675ab7bb616e8.txt",
+      "raw_commit_sha256": "1158cd2ae8903aea339e1ac7acd8b0f1008e1dd1c2b9b20dfc7e7cf2c1a12fdf",
+      "tree": "20132fd5d980c0fd7cbef54d2cbfdc6910802952"
+    },
+    {
+      "sha": "d2e5d6eb98979bfffc9ae36eaaa240ad6b6364fa",
+      "parents": [
+        "9751e54dbd32920ef3c6a81a439675ab7bb616e8"
+      ],
+      "author": "ddyec",
+      "author_email": "89333385+ddyec@users.noreply.github.com",
+      "authored": "2026-10-21T02:33:21+00:00",
+      "subject": "test: record lyric reversals in the iOS simulator",
+      "message": "test: record lyric reversals in the iOS simulator",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "9751e54dbd32920ef3c6a81a439675ab7bb616e8",
+      "patch": "patches/mainline/029-d2e5d6eb9897.patch",
+      "sha256": "c372be89ca811e551152a2f12912c80c12ee83b034e3cca0ad56f8fc089a81f5",
+      "raw_commit": "commits/d2e5d6eb98979bfffc9ae36eaaa240ad6b6364fa.txt",
+      "raw_commit_sha256": "3dd8404514fafe612303799362e531345dcc106cf2a28efe2a536b4022db7671",
+      "tree": "3e8857e4ae9390b2b0c9ea61fc200adfe31631a2"
+    },
+    {
+      "sha": "6682a7388de00a046aecd7a7a94ebd524aa96681",
+      "parents": [
+        "d2e5d6eb98979bfffc9ae36eaaa240ad6b6364fa"
+      ],
+      "author": "ddyec",
+      "author_email": "89333385+ddyec@users.noreply.github.com",
+      "authored": "2026-10-21T02:39:49+00:00",
+      "subject": "fix: include settings presentation API and keep opted-out launches idle",
+      "message": "fix: include settings presentation API and keep opted-out launches idle",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "d2e5d6eb98979bfffc9ae36eaaa240ad6b6364fa",
+      "patch": "patches/mainline/030-6682a7388de0.patch",
+      "sha256": "06066f8a49275f1ed8ba2a4a54b0af91cd50e1041c14e311086ab1a1c49f5d44",
+      "raw_commit": "commits/6682a7388de00a046aecd7a7a94ebd524aa96681.txt",
+      "raw_commit_sha256": "ee5be7667873546bdb57e52e60fdfdc391571f7dee5e4527def179d130bf237d",
+      "tree": "2e6002c508b8cb52a62b6608244ead0327a3d6ae"
+    },
+    {
+      "sha": "24c30e015099020fadabb154ec5a94ff6a710fbe",
+      "parents": [
+        "6682a7388de00a046aecd7a7a94ebd524aa96681"
+      ],
+      "author": "ddyec",
+      "author_email": "89333385+ddyec@users.noreply.github.com",
+      "authored": "2026-10-21T02:48:25+00:00",
+      "subject": "build: package the combined performance IPA for device acceptance",
+      "message": "build: package the combined performance IPA for device acceptance",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "6682a7388de00a046aecd7a7a94ebd524aa96681",
+      "patch": "patches/mainline/031-24c30e015099.patch",
+      "sha256": "6a9f78bed5adb581e1395205229952a320984b79ce32cbb9ae023b203595dbb6",
+      "raw_commit": "commits/24c30e015099020fadabb154ec5a94ff6a710fbe.txt",
+      "raw_commit_sha256": "cb406eb64e01fdf191a3767afb331027796ad9b0fd058c86b9ecce916da70635",
+      "tree": "2571dc69d94a2d94e1021caba8e338e1303e70f1"
+    },
+    {
+      "sha": "98a8dc3dae3f550be09ea0bf88b40fdcf8b8cd47",
+      "parents": [
+        "24c30e015099020fadabb154ec5a94ff6a710fbe"
+      ],
+      "author": "ddyec",
+      "author_email": "89333385+ddyec@users.noreply.github.com",
+      "authored": "2026-10-21T03:53:24+00:00",
+      "subject": "fix: sequence preview lyrics and follow visible artwork motion; reuse companion builds",
+      "message": "fix: sequence preview lyrics and follow visible artwork motion; reuse companion builds",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "24c30e015099020fadabb154ec5a94ff6a710fbe",
+      "patch": "patches/mainline/032-98a8dc3dae3f.patch",
+      "sha256": "53f246e3d3cbb968d19aca4c2eb64f7bf9ed1a79db0ff9d11d17a75264d2167f",
+      "raw_commit": "commits/98a8dc3dae3f550be09ea0bf88b40fdcf8b8cd47.txt",
+      "raw_commit_sha256": "be6d92f12814fec5e8b3c838fdcd0a7b1785c6275b4e4bda45f0f70cd5d9e790",
+      "tree": "2ffe565c58f9520af149e4fa64b173fb2b884f1d"
+    },
+    {
+      "sha": "4c9ab21948b8e809d6aa6debe4f31af7b049380f",
+      "parents": [
+        "98a8dc3dae3f550be09ea0bf88b40fdcf8b8cd47"
+      ],
+      "author": "ddyec",
+      "author_email": "89333385+ddyec@users.noreply.github.com",
+      "authored": "2026-10-21T03:59:34+00:00",
+      "subject": "fix: park idle lyric clocks and expose loading stalls without holding request locks",
+      "message": "fix: park idle lyric clocks and expose loading stalls without holding request locks",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "98a8dc3dae3f550be09ea0bf88b40fdcf8b8cd47",
+      "patch": "patches/mainline/033-4c9ab21948b8.patch",
+      "sha256": "6b98d8c0f3481867b2bda1fc092f3e1138d76238cf0eef4644c18a689251df79",
+      "raw_commit": "commits/4c9ab21948b8e809d6aa6debe4f31af7b049380f.txt",
+      "raw_commit_sha256": "ff401da59eb995231bc38f07643d71f18418e20beb658944a08e76f663b39f35",
+      "tree": "53c7bfd74f741102aebd4b380f11e514462113e3"
+    },
+    {
+      "sha": "db9c0cb87b8afc43442681107dbb1faf2520c4dd",
+      "parents": [
+        "4c9ab21948b8e809d6aa6debe4f31af7b049380f"
+      ],
+      "author": "ddyec",
+      "author_email": "89333385+ddyec@users.noreply.github.com",
+      "authored": "2026-10-21T04:02:48+00:00",
+      "subject": "fix: isolate playback CPU intervals and bound stall capture cost",
+      "message": "fix: isolate playback CPU intervals and bound stall capture cost",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "4c9ab21948b8e809d6aa6debe4f31af7b049380f",
+      "patch": "patches/mainline/034-db9c0cb87b8a.patch",
+      "sha256": "4085b30b089ddff0367f366b9de5e03a56ac930a22e16cef45b71cef9ef8b479",
+      "raw_commit": "commits/db9c0cb87b8afc43442681107dbb1faf2520c4dd.txt",
+      "raw_commit_sha256": "536e0be5cb284424e25ef4e72cf396fa69920ff8a440883868576bdbbd11da8c",
+      "tree": "8a8a94416a7e371c2aa54bd5c6352309eee8d290"
+    },
+    {
+      "sha": "c06baff55d0b8599228059d78dc3177210017eeb",
+      "parents": [
+        "db9c0cb87b8afc43442681107dbb1faf2520c4dd"
+      ],
+      "author": "ddyec",
+      "author_email": "89333385+ddyec@users.noreply.github.com",
+      "authored": "2026-10-21T04:13:44+00:00",
+      "subject": "build: avoid repeating unsupported alternate icon compilation",
+      "message": "build: avoid repeating unsupported alternate icon compilation",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "db9c0cb87b8afc43442681107dbb1faf2520c4dd",
+      "patch": "patches/mainline/035-c06baff55d0b.patch",
+      "sha256": "75bba3f6042ae0224b65d11489f01fc612e5bc57789a7d8084bc1a3c825ef8dd",
+      "raw_commit": "commits/c06baff55d0b8599228059d78dc3177210017eeb.txt",
+      "raw_commit_sha256": "65e1d9e8a643da4cb12a3d6d315f187c2dfcc538102d5dc548102364bbff0524",
+      "tree": "2191c922fe8cc7d99af0b516140cece85cb43f83"
+    },
+    {
+      "sha": "78ee51343c64ea812850065d5f556bd5f8086f41",
+      "parents": [
+        "c06baff55d0b8599228059d78dc3177210017eeb"
+      ],
+      "author": "ddyec",
+      "author_email": "89333385+ddyec@users.noreply.github.com",
+      "authored": "2026-10-21T04:37:25+00:00",
+      "subject": "fix: respect lyric edge anchors and restore continuous upward transitions",
+      "message": "fix: respect lyric edge anchors and restore continuous upward transitions",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "c06baff55d0b8599228059d78dc3177210017eeb",
+      "patch": "patches/mainline/036-78ee51343c64.patch",
+      "sha256": "88b34bc21a091ed09d7ff2e380edcfdd1609a6f1296a2a6b62ecaad008131a26",
+      "raw_commit": "commits/78ee51343c64ea812850065d5f556bd5f8086f41.txt",
+      "raw_commit_sha256": "d204c110b0d56251fb187e5163d62c1162d2f8e637afdc6fdd040bce4c8cdc88",
+      "tree": "4b21637fdd17cb76813078b11f4cc59b729d2f6b"
+    },
+    {
+      "sha": "7a1b5acd92d1e5b60eb19247df1b6ae9bd7d2180",
+      "parents": [
+        "78ee51343c64ea812850065d5f556bd5f8086f41"
+      ],
+      "author": "ddyec",
+      "author_email": "89333385+ddyec@users.noreply.github.com",
+      "authored": "2026-10-21T05:00:04+00:00",
+      "subject": "fix: continuously scale lyric canvas without clipping or delayed reflow",
+      "message": "fix: continuously scale lyric canvas without clipping or delayed reflow",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "78ee51343c64ea812850065d5f556bd5f8086f41",
+      "patch": "patches/mainline/037-7a1b5acd92d1.patch",
+      "sha256": "3483e653b40e8b789b1d7f5eb38d67005452e9a604d30a0ccb5b99aee13ff671",
+      "raw_commit": "commits/7a1b5acd92d1e5b60eb19247df1b6ae9bd7d2180.txt",
+      "raw_commit_sha256": "c8e8993e4aa5da10e3cb410df80dbd4bad9e2663081525ee368fc99688ddb7d5",
+      "tree": "37c2830d033112015f168e9fa26c47cf77469622"
+    },
+    {
+      "sha": "4e656891f50ed361f19549dec63323477baa06db",
+      "parents": [
+        "7a1b5acd92d1e5b60eb19247df1b6ae9bd7d2180"
+      ],
+      "author": "ddyec",
+      "author_email": "89333385+ddyec@users.noreply.github.com",
+      "authored": "2026-10-21T05:02:59+00:00",
+      "subject": "fix: keep reading typography stable while artwork moves",
+      "message": "fix: keep reading typography stable while artwork moves",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "7a1b5acd92d1e5b60eb19247df1b6ae9bd7d2180",
+      "patch": "patches/mainline/038-4e656891f50e.patch",
+      "sha256": "bfc06ac093bd555c9b8d3bff101f6c8d0b77fed8691ff4f7bde5c5d02a9ffe4e",
+      "raw_commit": "commits/4e656891f50ed361f19549dec63323477baa06db.txt",
+      "raw_commit_sha256": "64aed85da025a5a606227bdf339d6874b4df54b26ac1d8cbe09fce44dc573da8",
+      "tree": "90422705d8e8f5d8dd39c58b7ca947c5b81c364d"
+    },
+    {
+      "sha": "e1e8cd5bb99a024afe12f637eea9073e03f214e0",
+      "parents": [
+        "4e656891f50ed361f19549dec63323477baa06db"
+      ],
+      "author": "Codex",
+      "author_email": "codex@openai.com",
+      "authored": "2026-10-23T09:01:13+00:00",
+      "subject": "fix: anchor lyric preview artwork independently of native lyric loading",
+      "message": "fix: anchor lyric preview artwork independently of native lyric loading",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "4e656891f50ed361f19549dec63323477baa06db",
+      "patch": "patches/mainline/039-e1e8cd5bb99a.patch",
+      "sha256": "39bf5f1f894a99bf155811f4ec60557fbd3d8cce3e0535ae9e6010d12aec44ee",
+      "raw_commit": "commits/e1e8cd5bb99a024afe12f637eea9073e03f214e0.txt",
+      "raw_commit_sha256": "abb04c673220d6e8eb5e4ab7f45f5d7021e56982c91ab8a11ae7d6ff1ee4608a",
+      "tree": "1222db7606c4406620c466fe676a6b7083f7d149"
+    },
+    {
+      "sha": "6d9aeec879514899e434ccdc7fdca29eca6c7956",
+      "parents": [
+        "e1e8cd5bb99a024afe12f637eea9073e03f214e0"
+      ],
+      "author": "Codex",
+      "author_email": "codex@openai.com",
+      "authored": "2026-10-23T09:57:02+00:00",
+      "subject": "fix: center artwork during sustained lyric-free playback",
+      "message": "fix: center artwork during sustained lyric-free playback",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "e1e8cd5bb99a024afe12f637eea9073e03f214e0",
+      "patch": "patches/mainline/040-6d9aeec87951.patch",
+      "sha256": "0864c0308d48d8ba7210dac4d866c03b03866dd98a2210309f1153f028021c30",
+      "raw_commit": "commits/6d9aeec879514899e434ccdc7fdca29eca6c7956.txt",
+      "raw_commit_sha256": "9d7786e57006794d099f8b35cc68aaeac50dd190c61633a1cadfe2fc0216a8ca",
+      "tree": "28969c8e8a9a333617f9e31f5727fcbf6a2f9fde"
+    },
+    {
+      "sha": "0d93ca073cdc489eb6b5be205bd969e90554463d",
+      "parents": [
+        "6d9aeec879514899e434ccdc7fdca29eca6c7956"
+      ],
+      "author": "Codex",
+      "author_email": "codex@openai.com",
+      "authored": "2026-10-23T09:59:27+00:00",
+      "subject": "fix: time artwork centering and advance return from lyric gaps",
+      "message": "fix: time artwork centering and advance return from lyric gaps",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "6d9aeec879514899e434ccdc7fdca29eca6c7956",
+      "patch": "patches/mainline/041-0d93ca073cdc.patch",
+      "sha256": "1ef626a5a7953819126323206b3f8f5032ca9d34d8489c6a08acff196a211644",
+      "raw_commit": "commits/0d93ca073cdc489eb6b5be205bd969e90554463d.txt",
+      "raw_commit_sha256": "1dcbd025bad5b08f55cf1b9fe5344d40bf36cee27481b37e7e358473a8346c50",
+      "tree": "c5c1e2def88e45a6a6ea365aeb29cac2ed4ede16"
+    },
+    {
+      "sha": "2c175a7e7401fb1a05d047e493cd2ae098dc1513",
+      "parents": [
+        "0d93ca073cdc489eb6b5be205bd969e90554463d"
+      ],
+      "author": "Codex",
+      "author_email": "codex@openai.com",
+      "authored": "2026-10-23T12:03:54+00:00",
+      "subject": "feat: localize mod settings and prompts into Chinese",
+      "message": "feat: localize mod settings and prompts into Chinese",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "0d93ca073cdc489eb6b5be205bd969e90554463d",
+      "patch": "patches/mainline/042-2c175a7e7401.patch",
+      "sha256": "f042031df88ff599350d01ce08c44a275ab62b1a4d748392c441f9f9ebd4e3f9",
+      "raw_commit": "commits/2c175a7e7401fb1a05d047e493cd2ae098dc1513.txt",
+      "raw_commit_sha256": "b939febf167c2a2a20b026fca0d6ddefd9e9925206d3bb0416d0f00a9f1e02cf",
+      "tree": "8cf814eb4b5fb82a5a41832fdd6f931ce5fcff0e"
+    },
+    {
+      "sha": "bffa73667f86bca888bbe85295503501a4504f7b",
+      "parents": [
+        "2c175a7e7401fb1a05d047e493cd2ae098dc1513"
+      ],
+      "author": "Codex",
+      "author_email": "codex@openai.com",
+      "authored": "2026-10-23T12:06:08+00:00",
+      "subject": "test: parenthesize Objective-C format calls in localization assertions",
+      "message": "test: parenthesize Objective-C format calls in localization assertions",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "2c175a7e7401fb1a05d047e493cd2ae098dc1513",
+      "patch": "patches/mainline/043-bffa73667f86.patch",
+      "sha256": "0101593ad80d680c69ea2b275618a93e6a2a201c5effe478880a0c9472a78876",
+      "raw_commit": "commits/bffa73667f86bca888bbe85295503501a4504f7b.txt",
+      "raw_commit_sha256": "521137cfbc9a47a5cb6864d189c462741a5d18bc896765ff52fde3e436e71044",
+      "tree": "e20d39577f9003acca099c2da4bc594e70acf750"
+    },
+    {
+      "sha": "fd1e142c66e31014dcef9e8366beb65de775b6c9",
+      "parents": [
+        "bffa73667f86bca888bbe85295503501a4504f7b"
+      ],
+      "author": "Codex",
+      "author_email": "codex@openai.com",
+      "authored": "2026-10-23T12:11:00+00:00",
+      "subject": "fix: preserve artist names in localized selection actions",
+      "message": "fix: preserve artist names in localized selection actions",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "bffa73667f86bca888bbe85295503501a4504f7b",
+      "patch": "patches/mainline/044-fd1e142c66e3.patch",
+      "sha256": "15c7f05746378adee1e1af6ab7683f98e2001926058ef6909d8c13d617851e6f",
+      "raw_commit": "commits/fd1e142c66e31014dcef9e8366beb65de775b6c9.txt",
+      "raw_commit_sha256": "f9e4629d229e47ab2eca4f36332541e6e3118fcd30f1c88092d50987d1104682",
+      "tree": "d6e1e2da656736562f9f49c5312198c15095778c"
+    },
+    {
+      "sha": "a90b2c04474e2fd13fc0dd792ecc85527c5299e7",
+      "parents": [
+        "fd1e142c66e31014dcef9e8366beb65de775b6c9"
+      ],
+      "author": "Codex",
+      "author_email": "codex@openai.com",
+      "authored": "2026-10-23T13:32:18+00:00",
+      "subject": "fix: import localization declarations in settings source ordering page",
+      "message": "fix: import localization declarations in settings source ordering page",
+      "group": "mainline",
+      "patch_kind": "git-format-patch",
+      "apply_base": "fd1e142c66e31014dcef9e8366beb65de775b6c9",
+      "patch": "patches/mainline/045-a90b2c04474e.patch",
+      "sha256": "882d6f697be27db21e3aa35036f87e326703211c23fb3aaa44cc45751523219e",
+      "raw_commit": "commits/a90b2c04474e2fd13fc0dd792ecc85527c5299e7.txt",
+      "raw_commit_sha256": "470ca348434f5f5fc47742f9ffd4e987b61c61bc9524f94d020ac292d3e8a03a",
+      "tree": "3f0646cc73752edf359afee516fc9699910d4aaa"
+    },
+    {
+      "sha": "45d02f1d3b3dc4c2eceef1ce4c7817a14d7e5324",
+      "parents": [
+        "425d68bc1761e90a6b5828864720511bcef79fa9"
+      ],
+      "author": "ddyec",
+      "author_email": "89333385+ddyec@users.noreply.github.com",
+      "authored": "2026-10-19T11:30:41+08:00",
+      "subject": "feat: chain EV1 IPA into official spoti beta kit with preservation checks",
+      "message": "feat: chain EV1 IPA into official spoti beta kit with preservation checks",
+      "group": "parallel-ev1",
+      "patch_kind": "git-format-patch",
+      "apply_base": "425d68bc1761e90a6b5828864720511bcef79fa9",
+      "patch": "patches/parallel-ev1/001-45d02f1d3b3d.patch",
+      "sha256": "6b87c29e0623f655bba464bed107372c50a0d42af35c0a221470f7b917f732f0",
+      "raw_commit": "commits/45d02f1d3b3dc4c2eceef1ce4c7817a14d7e5324.txt",
+      "raw_commit_sha256": "a206964fe4edf35470070b11a6a33025a7574f33c746d1209682b762384b7d57",
+      "tree": "89bcec2cbb899f5aa611c48ff5d9c68d3b320512"
+    },
+    {
+      "sha": "22a7166633d6d5ca544480217b6ea8eaf939583f",
+      "parents": [
+        "45d02f1d3b3dc4c2eceef1ce4c7817a14d7e5324"
+      ],
+      "author": "ddyec",
+      "author_email": "89333385+ddyec@users.noreply.github.com",
+      "authored": "2026-10-19T11:33:48+08:00",
+      "subject": "fix: dispatch second stage through the registered IPA workflow",
+      "message": "fix: dispatch second stage through the registered IPA workflow",
+      "group": "parallel-ev1",
+      "patch_kind": "git-format-patch",
+      "apply_base": "45d02f1d3b3dc4c2eceef1ce4c7817a14d7e5324",
+      "patch": "patches/parallel-ev1/002-22a7166633d6.patch",
+      "sha256": "12773e3536d6fab990b886e6a2f314193f41f5d44bfc9199ed048995225a3815",
+      "raw_commit": "commits/22a7166633d6d5ca544480217b6ea8eaf939583f.txt",
+      "raw_commit_sha256": "c39575c5a247e2b327c102f6e37d307ba6b836b858ffe64040e790998de88653",
+      "tree": "580631fd0b2aff3836afb4e1b9fd81df7d3ac965"
+    }
+  ],
+  "snapshots": {
+    "initial-lyrics": {
+      "base": "425d68bc1761e90a6b5828864720511bcef79fa9",
+      "head": "a14b2a67ae5f2a9e91bdd383345f9bc8a3da4950",
+      "expected_tree": "5575c1860fc157e67071ea4b855e4a82272bae3c",
+      "consolidated_patch": "patches/consolidated/initial-lyrics.patch",
+      "files": [
+        {
+          "source_path": ".github/workflows/build-ipa.yml",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/initial-lyrics/.github/workflows/build-ipa.yml",
+          "source_blob": "275e202d4b63f444e57c8d9e1bf02bd77ec35585",
+          "sha256": "e4076f900ad8b4d27deb393e2f88a3801bc81a216b0ac17aa96fc924cf438bf6",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "docs/lyrics-catalogue-audit-2026-09-30.json",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/initial-lyrics/docs/lyrics-catalogue-audit-2026-09-30.json",
+          "source_blob": "18599af8fb6627650807b7890c5a9c38e6a703a2",
+          "sha256": "5a44afd89707e88b4f756e1716ac2c7e4cb50d6f8a10f61e17788bdc027376e5",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "docs/lyrics-catalogue-audit-2026-09-30.md",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/initial-lyrics/docs/lyrics-catalogue-audit-2026-09-30.md",
+          "source_blob": "6b2029a69082b8e114e4d7e42cd92fd75f81ae12",
+          "sha256": "7d9698ac3cc43b08fe7b5499c0a08c58bddb434486547195f0c1f6d73c3aff9e",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "docs/lyrics-matching.md",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/initial-lyrics/docs/lyrics-matching.md",
+          "source_blob": "dae707486e644e6a443ce337e558a4fe7fd80f0d",
+          "sha256": "f55ac4adac33ee3cfa2e216f86a4050035b553f3d4782b5fb3a8a3708b1accd2",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "docs/tweaks.md",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/initial-lyrics/docs/tweaks.md",
+          "source_blob": "34420706c67f7cbb8b12098c771e0a2bfdcc8311",
+          "sha256": "d640b93b792f38996cad8952d4cc349d5b50b4d33971d901d2c2f01153d30c4b",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "scripts/probe-lyrics-catalogue.py",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/initial-lyrics/scripts/probe-lyrics-catalogue.py",
+          "source_blob": "8ec681a4b0fe82218a244c61ac7ac031d87bac3a",
+          "sha256": "adabfa9fbdaf93e98aec395bed0c257aeb6ffa25e99f0c37bb4b57a84b49f07f",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "scripts/test-lyrics-identity.py",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/initial-lyrics/scripts/test-lyrics-identity.py",
+          "source_blob": "fb38da7a1b111c74dbca12983da57aa241ac6b8b",
+          "sha256": "83b37504d07c67d99248b2bc4dc2bcccababafbe73409b188c4d522344dae07b",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Makefile",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/initial-lyrics/tweak/Makefile",
+          "source_blob": "e3d844409013c22901c41fe580cb81efa4cdd1fe",
+          "sha256": "3e0af020e8ed88948b9c40f4d2c6fab15e4c22c941a70e5883aea696ab3304fc",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/App/Pages.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/initial-lyrics/tweak/Sources/App/Pages.m",
+          "source_blob": "88630510b55b708c384c213fe576b38f63b7c5ba",
+          "sha256": "e02f45375ad0a1ab41b90d125cd5b91341bb4a8731990532f195e7ebc8396e22",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Native/Player/LyricsPreview.x",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/initial-lyrics/tweak/Sources/Native/Player/LyricsPreview.x",
+          "source_blob": "58514ad4f27c23f5d6233b31932f1d9b9d40f6a6",
+          "sha256": "e7dc81b264f70c509d95b5381c80d0693001be26d5317df17d942981b0b5a1fd",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Redesigned/Lyrics/SGRKaraokeView.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/initial-lyrics/tweak/Sources/Redesigned/Lyrics/SGRKaraokeView.m",
+          "source_blob": "92e3c8de60e428f78930a434fd64b3edd98c471c",
+          "sha256": "4290ebd599d459ba25f28dc5bf1b16da6c4184ff3f78cc27fa2fe2531011f925",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Redesigned/NowPlayingBar/NowPlayingBarSettings.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/initial-lyrics/tweak/Sources/Redesigned/NowPlayingBar/NowPlayingBarSettings.m",
+          "source_blob": "7b0f3e0e6a341dd10337928a718a5d4d9ee2b3a5",
+          "sha256": "ac64623d25a378cb4a592a1272ea9d59c7171e99a5c6a0f26b1038b9ece84949",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Redesigned/Player/Player.h",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/initial-lyrics/tweak/Sources/Redesigned/Player/Player.h",
+          "source_blob": "8ddff6578589ce0be11c36f804709895eec3a8b7",
+          "sha256": "30b42668f9d3cd63c064e16f487a6135dfb3760db197aa6861efeb0773b4b5c0",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Redesigned/Player/PlayerPreview.x",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/initial-lyrics/tweak/Sources/Redesigned/Player/PlayerPreview.x",
+          "source_blob": "ff9901e21845c24b4446fd1cda11c4019a725e49",
+          "sha256": "1ac658718329c0bd22660b6bab58ad3f2835f4d97012fcba02dc28c1f23183e6",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/BiniLyrics.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/initial-lyrics/tweak/Sources/Shared/LyricsSources/BiniLyrics.m",
+          "source_blob": "c07bb865965d8fae9060a85a811ccebece3d327a",
+          "sha256": "a6089aca081cb4cba20387ae7a978e3ef46906bf6ef6da8fdd3566660e5aad8f",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/KuGou.m",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/initial-lyrics/tweak/Sources/Shared/LyricsSources/KuGou.m",
+          "source_blob": "176b2aa4f42c86769bd8bc3323f5ecbb8a949c9b",
+          "sha256": "0f2bb89d2b21d72365b8f48dc860e8bad177322385d687d7e78520eb37e3e3f5",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/LrcLib.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/initial-lyrics/tweak/Sources/Shared/LyricsSources/LrcLib.m",
+          "source_blob": "3e13fcf7b65793fa4bd8179dc82d03e9acd6e1c7",
+          "sha256": "cdc92d0317d47a9aa9811379eedd34a39e62ff67b3d889712cfa1274d80d0713",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/LyricsDiagnostics.h",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/initial-lyrics/tweak/Sources/Shared/LyricsSources/LyricsDiagnostics.h",
+          "source_blob": "7dd6438c0c30f3a06fa65bfd17213aad0e4380c7",
+          "sha256": "3be808065755623f63f9a139536f5a3c18a7152fe22b66af2756a8be524a899f",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/LyricsDiagnostics.m",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/initial-lyrics/tweak/Sources/Shared/LyricsSources/LyricsDiagnostics.m",
+          "source_blob": "bb0057581e559bea97f7c529d6e43170dd6cc108",
+          "sha256": "d21fefafe62ae86a5a7ba6c70b3f97caf4e08587c72da7c4379461263935f72d",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/LyricsHook.x",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/initial-lyrics/tweak/Sources/Shared/LyricsSources/LyricsHook.x",
+          "source_blob": "b202a04d2d2e086e8c3c5dffbb7a924d8af3800f",
+          "sha256": "0fe8415383c044716a9e6fff0251f9ba3acdbe5d406f5db17d03d0ed89c7fac3",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/LyricsMatching.m",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/initial-lyrics/tweak/Sources/Shared/LyricsSources/LyricsMatching.m",
+          "source_blob": "171f5ed950d0a2544dd7d64e5e142f72c66bd6b0",
+          "sha256": "010e5c0cf1bb3cbc4cff34011440a63a15ecd57bec212be06bfe2835af0a276b",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/LyricsSources.h",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/initial-lyrics/tweak/Sources/Shared/LyricsSources/LyricsSources.h",
+          "source_blob": "54532030565e4557ef9558e0750875b48561497b",
+          "sha256": "9a21fe54d9a657894932d0640ffa189496102133e68bd95bf5c2d9c5f2e11bdf",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/LyricsSources.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/initial-lyrics/tweak/Sources/Shared/LyricsSources/LyricsSources.m",
+          "source_blob": "d689c0e54a7bb7c47541ad758f5ae1634c1e3d04",
+          "sha256": "c3145e1efb53c2de4369edf61d9289f6001a179288ab4ef69e89c1766e10c97a",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/LyricsSourcesPage.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/initial-lyrics/tweak/Sources/Shared/LyricsSources/LyricsSourcesPage.m",
+          "source_blob": "7dff67816f2df6272b14103329f9175adea6e49a",
+          "sha256": "87caf2b9bd635e715aaddd52756dde03be184b46ff2dddc3cf2f20898f994af7",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/Musixmatch.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/initial-lyrics/tweak/Sources/Shared/LyricsSources/Musixmatch.m",
+          "source_blob": "c9344a93e2dc8dbaa139bdba5e14237516d9a4ba",
+          "sha256": "904207640555776999adba9d9a1f1e02a33dba88c9bc0a7805befa25ff5d4481",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/NetEase.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/initial-lyrics/tweak/Sources/Shared/LyricsSources/NetEase.m",
+          "source_blob": "78aa5613d9faf739e823a1c9bc19f56da49253e5",
+          "sha256": "3eee054f3ca9fd783d7955dbacfa7b03f11e485bcb2bbb4acefa00164ef3d8cc",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/QQMusic.m",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/initial-lyrics/tweak/Sources/Shared/LyricsSources/QQMusic.m",
+          "source_blob": "5dcb1374248fa42f1111e4d295983778b759b72f",
+          "sha256": "8f518b336395bab2355b0eabfdc39d90264a0ec270e78a5a6044602eb3405345",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/QQMusicDecoder-LICENSE",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/initial-lyrics/tweak/Sources/Shared/LyricsSources/QQMusicDecoder-LICENSE",
+          "source_blob": "8bee70b20c1ca0f8848f56f1792661ad2c16560a",
+          "sha256": "5f75d0871a70c89cc0de3ec8adcc51927640d9dde5ecc70efca074c0545557ec",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/QQMusicQRC.c",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/initial-lyrics/tweak/Sources/Shared/LyricsSources/QQMusicQRC.c",
+          "source_blob": "d017eccc275840b338344809287a41b3e99d0a3b",
+          "sha256": "472c0f012028c2ab6a7b7563c9a1fa83f71f6e42b98e50022e9ff6c6e631070f",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/QQMusicQRC.h",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/initial-lyrics/tweak/Sources/Shared/LyricsSources/QQMusicQRC.h",
+          "source_blob": "0e1db399aa92a6a1b2d35b1ab4b50a3d13745985",
+          "sha256": "3f0e020b12df560a27375ba0a25d131f4f5bdb51a3f2cc2c6d01f656bdfa563d",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/Unison.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/initial-lyrics/tweak/Sources/Shared/LyricsSources/Unison.m",
+          "source_blob": "b46e7db352cd25059f2f5cb2eee6da71f37278ce",
+          "sha256": "e68197c1a242340ecd0e454de6e88a9cee96180a294e78799870ddebf60c17f8",
+          "source_mode": "100644"
+        }
+      ]
+    },
+    "final": {
+      "base": "49e02e204f397b1e4197876dd622d4ee1663188e",
+      "head": "a90b2c04474e2fd13fc0dd792ecc85527c5299e7",
+      "expected_tree": "3f0646cc73752edf359afee516fc9699910d4aaa",
+      "consolidated_patch": "patches/consolidated/final.patch",
+      "files": [
+        {
+          "source_path": ".github/workflows/build-ipa.yml",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/.github/workflows/build-ipa.yml",
+          "source_blob": "9d88ade6d6ef8474dd08d5238b8581887e7c5e35",
+          "sha256": "b799e98a50d81adeaad3b662c63d480e8ecbe412235d9555a773ca86a029e963",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": ".github/workflows/release.yml",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/.github/workflows/release.yml",
+          "source_blob": "50a5ca77023b3a109d3b5aa655b886f57a762a5f",
+          "sha256": "765de1da520343b0d6e8b3b52504c6ae84b583be3ed402f589c5b4be578082c8",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "docs/beta-lyrics-review-2026-10-18.md",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/docs/beta-lyrics-review-2026-10-18.md",
+          "source_blob": "8f7da3ee42b068221e1291f769e170e528081c1e",
+          "sha256": "e5e958c224187c1104bccf6582158b37a7c80ea56ac2b42e2c2ef98db3e7e8b4",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "docs/chinese-mod-settings-2026-10-23.md",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/docs/chinese-mod-settings-2026-10-23.md",
+          "source_blob": "8e3ff6f235878a2a21e6c7db52affef5a939846b",
+          "sha256": "5328b4d33047843c40b08b4c1580cf156999002094e4276c3aaa42de657f9d07",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "docs/english-release-label-audit-2026-10-20.json",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/docs/english-release-label-audit-2026-10-20.json",
+          "source_blob": "31d107a6009665c24eb10f053c37cfe53e3c3b77",
+          "sha256": "bec18866669b0967c255dbb658d0cc72972b92092f9456f622659f0cd4b87263",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "docs/lyrics-catalogue-audit-2026-09-30.json",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/docs/lyrics-catalogue-audit-2026-09-30.json",
+          "source_blob": "18599af8fb6627650807b7890c5a9c38e6a703a2",
+          "sha256": "5a44afd89707e88b4f756e1716ac2c7e4cb50d6f8a10f61e17788bdc027376e5",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "docs/lyrics-catalogue-audit-2026-09-30.md",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/docs/lyrics-catalogue-audit-2026-09-30.md",
+          "source_blob": "6b2029a69082b8e114e4d7e42cd92fd75f81ae12",
+          "sha256": "7d9698ac3cc43b08fe7b5499c0a08c58bddb434486547195f0c1f6d73c3aff9e",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "docs/lyrics-live-audit-2026-10-18.json",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/docs/lyrics-live-audit-2026-10-18.json",
+          "source_blob": "fc1cc3b89bf1c90ffe660f1975bc32ffce27f915",
+          "sha256": "1d2cb23a146360c5eb92d767f63b7fbf571c30a606f6985864241a70c6ec4c4e",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "docs/lyrics-live-audit-round2-2026-10-18.json",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/docs/lyrics-live-audit-round2-2026-10-18.json",
+          "source_blob": "eec034ac1b9763d62a4702e50f66ce04c35f2a07",
+          "sha256": "562b34dbcb5bd51ac88b9d6244a1d0c904f29754516648982fcd30e0164b2b64",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "docs/lyrics-live-audit-round2-initial-2026-10-18.json",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/docs/lyrics-live-audit-round2-initial-2026-10-18.json",
+          "source_blob": "dea951b43d0154635296c97f5c7c324a3a268635",
+          "sha256": "4d905f5e6d9ef03b217b5192e6b85cba4ad36cf288adadd53e5d99d6f92a089e",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "docs/lyrics-live-audit-strategy-2026-10-18.json",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/docs/lyrics-live-audit-strategy-2026-10-18.json",
+          "source_blob": "75dd440a61e905251ef2fafcebf937b4ddcb1776",
+          "sha256": "cb4a9b62cf6d717b8c13a3135fbde0730e1a01f2e8589cd4cb6c98f1f1c4d009",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "docs/lyrics-matching.md",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/docs/lyrics-matching.md",
+          "source_blob": "dae707486e644e6a443ce337e558a4fe7fd80f0d",
+          "sha256": "f55ac4adac33ee3cfa2e216f86a4050035b553f3d4782b5fb3a8a3708b1accd2",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "docs/lyrics-priority-fix-2026-10-18.md",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/docs/lyrics-priority-fix-2026-10-18.md",
+          "source_blob": "b9d82b72e2821597b178c08c849e86bb51a8b59f",
+          "sha256": "e6e75b681e26af31ce34cddcc81aea23d2e0980c96bc8b4c313272d80eca6333",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "docs/lyrics-qq-retry-2026-10-18.json",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/docs/lyrics-qq-retry-2026-10-18.json",
+          "source_blob": "d460cd921a1c2608715b2c929f0ea93694ad85af",
+          "sha256": "479d28d9969a21a7e56723fdeef403d2cb56325e460c6c7dc423829e1dfcb2b3",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "docs/native-missing-lyrics-roll-2026-10-20.md",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/docs/native-missing-lyrics-roll-2026-10-20.md",
+          "source_blob": "1209d98b700f43b3c8c15d2f5b26947228fcbec8",
+          "sha256": "b2ff758670922220a8111de94c754cffb32d6d2e9aef03188b39c73151aa237e",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "docs/performance-followup-20261021.md",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/docs/performance-followup-20261021.md",
+          "source_blob": "4c9add87d6e6840bf908589b89a23b8d1589414a",
+          "sha256": "7192348211971f43493ca3ae1d55022231682979386341f65ae71aaf1c21a0da",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "docs/performance-review-2026-10-21.md",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/docs/performance-review-2026-10-21.md",
+          "source_blob": "a227a63898325c217e3fc7f1e6a51af321b26c49",
+          "sha256": "e6cbfba71bb6127cee420eb86674cb00fc69d9afd097ec225bfb9afc8d32a795",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "docs/player-preview-anchor-2026-10-23.md",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/docs/player-preview-anchor-2026-10-23.md",
+          "source_blob": "2f66a27fe0c95a914e8ea8a6f5819affc6a88452",
+          "sha256": "a78a2b6b89c058e172d76b757323f1bdc6386567241f82e69c8f5f5730303404",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "docs/stay-release-label-audit-2026-10-20.json",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/docs/stay-release-label-audit-2026-10-20.json",
+          "source_blob": "774d3dee4d8319533c6f7901328a65ca8cbe4284",
+          "sha256": "d006febb8265b4269c6864656de664fac3a04089962ffe479af68662aaa14a59",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "docs/tweaks.md",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/docs/tweaks.md",
+          "source_blob": "732ae6c849400420aad634dddcaf9f6e0365e40d",
+          "sha256": "10b6cce1bcdaf89d092b0bb8d3958e8bea74f28f0754f0017cfda30489682f65",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "harness/player/build.sh",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/harness/player/build.sh",
+          "source_blob": "df67098cb63f5981f78d8631d53c0a5b3af8fee4",
+          "sha256": "4b308fee4428f8ac41db91ad82d0603b39442625821160005a0e63ce7fb30082",
+          "source_mode": "100755"
+        },
+        {
+          "source_path": "harness/player/main.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/harness/player/main.m",
+          "source_blob": "02c218ba4e0418317255dd15d58c9fb0956bb9d3",
+          "sha256": "39cbf215c3343213e88849ee00237b3ffe7bdce47b6a6c11a321791c1d2a258f",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "harness/player/stubs.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/harness/player/stubs.m",
+          "source_blob": "429ed90c4ebe5309694e241da5c2431aaf80cd84",
+          "sha256": "78991d083891dac2cc321d30cf44940300df48ca697ad48b42f2135e7f1029fd",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "localization/zh-Hans.json",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/localization/zh-Hans.json",
+          "source_blob": "a7622bd6761d9606f9e181074392024bddaa15b0",
+          "sha256": "792be2d0f045dd1cdaa5dbe7cd1dd3a9258b02f2041a214af2bc70b3248e03df",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "scripts/app-icon-cache.py",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/scripts/app-icon-cache.py",
+          "source_blob": "136b05ffa8e30c1ee9ae7431aca7343bec0cc162",
+          "sha256": "9c9443944cfff4e0134f4e9e998172abe5ba3ede41ed857ca2aff7eeded5f659",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "scripts/app-icons.sh",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/scripts/app-icons.sh",
+          "source_blob": "4faa186b59fc4b0e508d5c6b2096e5138378d31c",
+          "sha256": "31f9e7e9467fcf8918e6b0af7672925b40532b1da6a87ba4e7c658945a572d73",
+          "source_mode": "100755"
+        },
+        {
+          "source_path": "scripts/audit-english-release-labels.py",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/scripts/audit-english-release-labels.py",
+          "source_blob": "d4afd2890543295364a14a12ead271eae0cf23c4",
+          "sha256": "081a32e8358a8ab08772f3e5f30a6808f2c887f63d6c1aa4dbfab5b8e30542f9",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "scripts/audit-qq-retry.py",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/scripts/audit-qq-retry.py",
+          "source_blob": "9ca0802343063c298e4672383de4e1dc22d5caa1",
+          "sha256": "3af2dfb697a48ba325262b92583ff5a737112d0f8d966ceeb7934349d241a7f2",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "scripts/audit-selective-lyrics.py",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/scripts/audit-selective-lyrics.py",
+          "source_blob": "8220d7f178930186780b2bc1dbd9a1c12015c96a",
+          "sha256": "36b3057abff910f078e77f659a25971fb1ad040dbf33245788cc5e86e2937be9",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "scripts/companion-macho.py",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/scripts/companion-macho.py",
+          "source_blob": "b9d1e8483d18d6b2531e36ce116e8a0a8a950165",
+          "sha256": "76bc9cf6da28a7bc1583b7672f807653df86fb26232901334109030c35e42009",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "scripts/finalize-companion.py",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/scripts/finalize-companion.py",
+          "source_blob": "df5faf8f984c5bdc18d7183f06e3c7c9a5204e5e",
+          "sha256": "d2603ec26ed6d30d18840fb49900b684e6f073d7aa0cec08f23a880033688271",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "scripts/generate-localization.py",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/scripts/generate-localization.py",
+          "source_blob": "04b625ca80ca5316d83989a2f5a013fb54fb132d",
+          "sha256": "9e20587b8d2e5942520a69eb0f8027904b1b5e7e267db6eb1a4cb24898ad6781",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "scripts/pipeline.sh",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/scripts/pipeline.sh",
+          "source_blob": "2ad4c95ce36ba0d305dc472d31747ceaf5158300",
+          "sha256": "e1761d1aacd7c381b8d66d0fd892f32f0a1c686b1e22e6e66982d223b5b69c70",
+          "source_mode": "100755"
+        },
+        {
+          "source_path": "scripts/probe-lyrics-catalogue.py",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/scripts/probe-lyrics-catalogue.py",
+          "source_blob": "b65a9f0c623bd3b2a6ebdb6d3d89c98f71714201",
+          "sha256": "81b75b6cec5ca0267a032b73ca2f757729fbd86ad727adf190bc645bca65587f",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "scripts/reuse-companion.py",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/scripts/reuse-companion.py",
+          "source_blob": "6eab7a903da8058b866a52eed703c6a21bbcdeba",
+          "sha256": "5c623e2f046cb6b9793be80986f8272a0f11e527f8f4fa6c26ff9b745b8a7c77",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "scripts/test-localization.py",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/scripts/test-localization.py",
+          "source_blob": "194034fe690d74c4a594c0973bfd8d3e1fd5c291",
+          "sha256": "c06337a1090f59ff62b5e55311bf2c0332a7d14c07a64e27cffff31ed7b7fb5f",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "scripts/test-lyrics-identity.py",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/scripts/test-lyrics-identity.py",
+          "source_blob": "d817a30ba552fab56afd2253b58512eef738d9d1",
+          "sha256": "a147cb518328a9db9abd85bec2d858061176098d193d7e78dcacfef7e4a20ee5",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "scripts/test-lyrics-order.py",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/scripts/test-lyrics-order.py",
+          "source_blob": "1a79b5431e521a9828711482c5175f44585c2c14",
+          "sha256": "0d7462787345c956d6bd85ff5b483bc9f83e836a9ff66b8a2896e7316399c857",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "scripts/test-lyrics-requests.py",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/scripts/test-lyrics-requests.py",
+          "source_blob": "93f7dcf60ce6c0dbac38df05d1e27bdea75cdfb2",
+          "sha256": "51889dcb8316f33cc655fdcc142c65913310f1d83a28d5602cf4a6e062c90190",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "scripts/test-performance.c",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/scripts/test-performance.c",
+          "source_blob": "2f6fd7bce2c948717d82474623d11898e9c14793",
+          "sha256": "1673fa2a30b4074ad25712cb0e237e83aea84917c162ce40092525ff96d96c2c",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "scripts/test-performance.sh",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/scripts/test-performance.sh",
+          "source_blob": "1daeace78a8630358e1d29280ef9f7deebf886cd",
+          "sha256": "864d4e0471a76ea3aa90f17622c7cd51e6dc5ca4518920c2b77288c3bce93967",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "scripts/test-preview-anchor.py",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/scripts/test-preview-anchor.py",
+          "source_blob": "876236c7994b14abe4d7657dd3057de42489ff4b",
+          "sha256": "be6ab0999d354d9c9504eaa585abdc9327d8164202d8de3cd20fe1e0e53f341e",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Makefile",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Makefile",
+          "source_blob": "fa04feae3af615e9dc1fd5181051956d18b38758",
+          "sha256": "6fe96849010a80db90581422964f322104f17b8bd93de671f928dc179ad8f657",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/App/About/AboutSettings.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/App/About/AboutSettings.m",
+          "source_blob": "f17d01c714900b7ab3d04e51625e670062e73267",
+          "sha256": "32d411b3ecb4a0721edb3b4249eda784db92721653438273f572131dd2638c87",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/App/About/AppIcon.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/App/About/AppIcon.m",
+          "source_blob": "d277f81d083cfb178fa6cfd271c1316c8580a550",
+          "sha256": "c86075e7e6431c7d0d4d92490d5e3c53b877986ea9189ec3dc078d3dcd5bd412",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/App/About/Backup.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/App/About/Backup.m",
+          "source_blob": "6ff2c169f484c8928ba87ddac2951bf2318eebcb",
+          "sha256": "4f277ee53b636b84073f0a23428aacda73ba35f624e96491f398ec228d76b3f1",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/App/About/Certificate.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/App/About/Certificate.m",
+          "source_blob": "12a7f944e8039683e7f1794285f6543a40e48a92",
+          "sha256": "65e2fc48aba005dc6ca4ec52ed30c0ddccc014b5aa8218ea5b05aaae54808359",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/App/About/Compatibility.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/App/About/Compatibility.m",
+          "source_blob": "e23ffe3ab43bc2cf3a19643b9604caef014f29dd",
+          "sha256": "02715226aa5ef6483c23cc874c1fe7588d1b282a22046072fd72d205f03432ee",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/App/About/Signing.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/App/About/Signing.m",
+          "source_blob": "eee735050b09d57bc8a0bb83106f55f5fd534353",
+          "sha256": "088fbcc045629643bee2113bbf134622362e49b8d754e9bb86c9fb9100b547b7",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/App/About/Update.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/App/About/Update.m",
+          "source_blob": "5a5367d841e680b823593ff39d55e597e732ebbb",
+          "sha256": "b1650426eae96a97ad2a91cbc689e7f5eac30951ca85c5e9cf1bb6c725a84202",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/App/About/UpdateNotice.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/App/About/UpdateNotice.m",
+          "source_blob": "fced3d244f049b6d14cdea1b2b6e0f450aaadbc7",
+          "sha256": "84b0356d6ae32acda5d85461c2161e62003a891bb7a77b2817b8f7214bd78241",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/App/About/UpdatePage.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/App/About/UpdatePage.m",
+          "source_blob": "f9e8c8ec50f1bad0ea94c0765aab84c20c11dbf6",
+          "sha256": "eb30940498e0057d38122fd6170297496c796e6827da1b430da5559758fce023",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/App/ModSettings.x",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/App/ModSettings.x",
+          "source_blob": "dcc84331a30fae7aba3974bff972927017f6a270",
+          "sha256": "00402f99ea121f82f3d16d7194556479a6ea3190c294764357b2de94ee35b0c0",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/App/Onboarding/Tour.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/App/Onboarding/Tour.m",
+          "source_blob": "3b4287c9c3159ddcf71b870064904ab9eb190a84",
+          "sha256": "88a28bca9ca7f3cb169fa805ef99171936a9267fe2cd1dd33c841feadbeb917b",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/App/Pages.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/App/Pages.m",
+          "source_blob": "2175c0a5df135e3ab027588ae8468c878c8aee92",
+          "sha256": "6346a233d27caa368bb67e56aea9ffc42e7011543ae8a88e2f9f738d3acc61e5",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/App/Performance/PerformancePage.h",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/tweak/Sources/App/Performance/PerformancePage.h",
+          "source_blob": "b20eacd8ced40282b943b4ff9413af8325b5c1c7",
+          "sha256": "f79d80adf1437d4b4647b28df787ab37b5f064816dab67f1bdcf3686112fd366",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/App/Performance/PerformancePage.m",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/tweak/Sources/App/Performance/PerformancePage.m",
+          "source_blob": "c32f290a83092ef572f813e9900e12973bc7d9e5",
+          "sha256": "8b2fcccfebf70a64040391e12fbf5281e7d699183784ce03d1058a7f6d8e75f2",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/App/Sheet/SGCardSheet.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/App/Sheet/SGCardSheet.m",
+          "source_blob": "dc130f0adf538dd66b3785a4c0702199d844a7b0",
+          "sha256": "f29be842048f35f5f6aa395791a5e94067c4c5c393177af4f289b22ed193342b",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Core/SGChinese.inc",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/tweak/Sources/Core/SGChinese.inc",
+          "source_blob": "418c4f521a9f21268480e1ddeb8ba56a05ed513c",
+          "sha256": "c6aca34202a8a29b4487f9cb9cb2702e2fc8b8313a2ecb9c4ea5177770925f57",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Core/SGCore.h",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Core/SGCore.h",
+          "source_blob": "df2dfa53a0a38f6fcd169de2b062706b0fa81655",
+          "sha256": "7c2921dc6c156e278dc403bc61951cfb23ec1ec820847738a975ba76eebb4ca8",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Core/SGLocalization.h",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/tweak/Sources/Core/SGLocalization.h",
+          "source_blob": "35a3bf561ea8c1e90b8858c83c91115c764c07eb",
+          "sha256": "d7628c05ee31231bec45d6f5e50aaf9030b56547f8924613a3e655f813be9fa8",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Core/SGLocalization.m",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/tweak/Sources/Core/SGLocalization.m",
+          "source_blob": "f8b5ae61bed90dde2a9f4197f0fc3ae143b8c5d3",
+          "sha256": "bfb19b9c6adcabf62cb8955029a31b8ca4c0b3044a9046da9881b4196ffecb15",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Core/SGLocalizationUI.h",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/tweak/Sources/Core/SGLocalizationUI.h",
+          "source_blob": "78efcbe87a2a341a3f56830bd55890ae62c4aa9d",
+          "sha256": "48d596658da9195cde8d47523618101017eec0fea764aff33c991290d0904a3e",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Core/SGLocalizationUI.m",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/tweak/Sources/Core/SGLocalizationUI.m",
+          "source_blob": "f4cabd98714724db849783dabaa2a53aca976ceb",
+          "sha256": "c624abda31a641bf26b85963fa1194e8cb94b80f63aea8ae08e2ba6ab410a964",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Diagnostics/SGHangSampler.h",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Diagnostics/SGHangSampler.h",
+          "source_blob": "db5b144c152a2893536857cf0700e50c4def6ac4",
+          "sha256": "69ba8b7a5f37f3b5873a64f37e46a2a03fbeba2fc81e2ae76ccd92d2baac09b8",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Diagnostics/SGHangSampler.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Diagnostics/SGHangSampler.m",
+          "source_blob": "f13e238f04e4f96ccce3a8254cfd2be0fa77c8a6",
+          "sha256": "643447504ff86dc840753e8cdb32aecab42d08c8c545f1816b131e51d7c90be9",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Diagnostics/SGPerformance.h",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/tweak/Sources/Diagnostics/SGPerformance.h",
+          "source_blob": "3628f81f8f61daae39c378fdc611396b8975388e",
+          "sha256": "609a1eab6c7d386667b5c1f12e275341b34b550b9ae22ecc2b28bb68d15df766",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Diagnostics/SGPerformance.m",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/tweak/Sources/Diagnostics/SGPerformance.m",
+          "source_blob": "7b05ee79e06b0e0131ee53ca28e0bb13273cab58",
+          "sha256": "5a221c0df4405d435a29b3ed952399586353c36da9b5a888d7a836e776289d01",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Diagnostics/SGPerformanceMath.h",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/tweak/Sources/Diagnostics/SGPerformanceMath.h",
+          "source_blob": "7244dbb6456baf42b0ed38bb45990bb07befa467",
+          "sha256": "5d8b7a5c04ad52be9d1e8e96bad4b090da9f2250ac0bbe326349d25211cc19bf",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Native/Appearance/AppearanceSettings.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Native/Appearance/AppearanceSettings.m",
+          "source_blob": "4fa1d6a9e0bfae17a17618d7506af4ea1f45e903",
+          "sha256": "42a9d5a06512a363e459328b9cac50c883eee483395aadd3acb2933c849d8973",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Native/Navbar/NavbarSettings.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Native/Navbar/NavbarSettings.m",
+          "source_blob": "1c6b28dd61cd058ac1349014d1d40cd49017a087",
+          "sha256": "6254ba89cd26113a49b24109d2b8fafa5716cf2090d97506231eb24040437cdc",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Native/Player/LyricsPreview.x",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/tweak/Sources/Native/Player/LyricsPreview.x",
+          "source_blob": "4df8cff523b14fa84d04427a7f5447b3bf9b296e",
+          "sha256": "210fba4402c20860b64dc59e69cf3e5954acd2e1fb74f8f69ead7a070440c54a",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Redesigned/Kit/SGRAppearanceSettings.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Redesigned/Kit/SGRAppearanceSettings.m",
+          "source_blob": "d5731f724e98d4caf74a06b58bcf56601ab7db23",
+          "sha256": "13b619975a6ef633a9ce9b7511e10b01d5daa7541e478ca73424f7c8348b3e46",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Redesigned/Kit/SGRWarp.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Redesigned/Kit/SGRWarp.m",
+          "source_blob": "9fa7a99f66166bbe1c351763e7187fc88f259f5e",
+          "sha256": "0012246038dffdb2735a9b34ed36ad7ad68216af8d8bf11975cfef78dce2b889",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Redesigned/Lyrics/SGRKaraokeView.h",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Redesigned/Lyrics/SGRKaraokeView.h",
+          "source_blob": "7cbd315ff66af0877afca8c8bf9d38f6770933c4",
+          "sha256": "92590f86bb44ada0685c0761187d3b8396c04d5f9d78250e01aa9bbee73ed6f3",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Redesigned/Lyrics/SGRKaraokeView.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Redesigned/Lyrics/SGRKaraokeView.m",
+          "source_blob": "043209f60ee7567752c23df77b5dbf772dc2a8af",
+          "sha256": "3e6d87eb03484f9c8a3315350a55e04336532ad2cc9d216fbffbc0433466e0f7",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Redesigned/Lyrics/SingSettings.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Redesigned/Lyrics/SingSettings.m",
+          "source_blob": "befaad7b626ddb4ff7b5bd16d409f56c9703772e",
+          "sha256": "c1af1f10b4b3b6d332b4d9064658add492b661436b5c91fe5edb7f2fd006f23a",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Redesigned/Navbar/NavbarSettings.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Redesigned/Navbar/NavbarSettings.m",
+          "source_blob": "5280bf592cc57efee34c345f053bf701711d0e85",
+          "sha256": "5949ca0e9326ae94494f39b55e3a2d300add0826848238f2fdf349dc819d09bb",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Redesigned/NowPlayingBar/NowPlayingBar.x",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Redesigned/NowPlayingBar/NowPlayingBar.x",
+          "source_blob": "67b14765b55d5a273d6eb1a95da198afc79d0513",
+          "sha256": "109797ca99f23a162cc2761da1e0eb8a2524413900c6dcbfeac7b2bbde646bad",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Redesigned/NowPlayingBar/NowPlayingBarSettings.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Redesigned/NowPlayingBar/NowPlayingBarSettings.m",
+          "source_blob": "9508e1831a2709921634a1d7174d21184a786dff",
+          "sha256": "2e7a108e0c183c1abcccd08c0442389febee775a6aaab5326dd00993ee1186c4",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Redesigned/Player/Player.h",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Redesigned/Player/Player.h",
+          "source_blob": "d4aa42ea0388a0c6df0ea4e887e3a705c7fab7ba",
+          "sha256": "796cb6fbc30b4d89bef4273dc3395a01cc275afa050783eb27f709a2d83799c5",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Redesigned/Player/PlayerArtwork.x",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Redesigned/Player/PlayerArtwork.x",
+          "source_blob": "a2b691565f443188bdbcd5e3e29deeb0c8baa7a7",
+          "sha256": "c015ee43750e5578912fecb55ac323738aedb6ca42a06bff2fe7a9a1f256abd0",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Redesigned/Player/PlayerLyrics.x",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Redesigned/Player/PlayerLyrics.x",
+          "source_blob": "c360a73999b138a276704c131259d2b082cb50fe",
+          "sha256": "405ce4f0ed1e013c3987834702a7e5b3938108af6c2a5468968515f2f1dd4aa2",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Redesigned/Player/PlayerPreview.x",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/tweak/Sources/Redesigned/Player/PlayerPreview.x",
+          "source_blob": "1350467ede22119bcb19af1a6f54bbf03b74a8ff",
+          "sha256": "20615928298f72dc1dfb3d268b249b8198b58178ee1aae01458e1617d00327e5",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Settings/SGGlowSwitch.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Settings/SGGlowSwitch.m",
+          "source_blob": "e7937bcb2302260ed4ac81fc021458c72355a1c2",
+          "sha256": "551a5e393c1ec2c14caaf5cd57eae358ef0430edde4d28fe2fa97d2fa1d37539",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Settings/SGModPage.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Settings/SGModPage.m",
+          "source_blob": "9f4333994ecc43f8c3be2570daf1bb35bee95b2a",
+          "sha256": "4b258be85d48844a8e299b9d0f0a9acb894087f37e397831c2332a9f2b4b9307",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Settings/SGOrderPage.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Settings/SGOrderPage.m",
+          "source_blob": "5d912416cf02d2678e26c73063fc8d4a8abd1437",
+          "sha256": "f677f32b38aab31676bac729612f512aacf216dafd9f3a40270101aa8c928dfa",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Settings/SGPage.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Settings/SGPage.m",
+          "source_blob": "6e1a8c66005fecfbab6c8cd075541af068ddf849",
+          "sha256": "1fa685baa55e54f1d8d0d7c2a3108aa2517d45590977524fafcab7bd0651085b",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Settings/SGPageStyle.h",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Settings/SGPageStyle.h",
+          "source_blob": "de69a28da79f4992ba52df9ba5b680385f7c3725",
+          "sha256": "f32889433a0bd1137350f6c146e5865c42ab7c95fff0969f15f51d80eaac4665",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Settings/SGPageStyle.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Settings/SGPageStyle.m",
+          "source_blob": "b72928f758e5eeab337adf08901c46ab19865891",
+          "sha256": "66edf00622b85dbee55b689a07a02079bfdec39aaa9d045f2d2652a96b4fd757",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/ArtistBlock/ArtistBlockSettings.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Shared/ArtistBlock/ArtistBlockSettings.m",
+          "source_blob": "1532f8deeb5b5c2e10a36bd9b80ea28e7bed0402",
+          "sha256": "6249853822128776f73d02a6020819d23cb244bbe0920761022b073fb7566436",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/AudioEffects/AudioEffectsLibraryPage.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Shared/AudioEffects/AudioEffectsLibraryPage.m",
+          "source_blob": "bdf752d914e26cff5e99731b3a712bf0d131fe61",
+          "sha256": "a405e60139928caf5a0b2db3bd2336eec94a0bb61a94676ed8d581ad96724c9e",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/AudioEffects/AudioEffectsPage.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Shared/AudioEffects/AudioEffectsPage.m",
+          "source_blob": "e3d2f9a24013cd4fa12c98b58e6efe599d7c7668",
+          "sha256": "1fafab96d5dde839a0f25faf07d44303c6bbfdc20703351e92cbe18e7b822672",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/Flags/FlagsPage.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Shared/Flags/FlagsPage.m",
+          "source_blob": "8bbe535a7eba4e3140c9465a9aeeee664a4dfd64",
+          "sha256": "ad5c6c92b8f5e585f7a87247795b73b817193537c6d8dadf0d8782e0f6362f1b",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/Gestures/GesturesSettings.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Shared/Gestures/GesturesSettings.m",
+          "source_blob": "9335061c1aa6f0e2ec9b1bc03636b79a9794cd1e",
+          "sha256": "3816273ebdca43843e1dab0124914e6595d7ab01cc444198c7715c149fe55ed3",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LockScreenArtwork/LockScreenArtworkSettings.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Shared/LockScreenArtwork/LockScreenArtworkSettings.m",
+          "source_blob": "37af00de8bb3859c6c971cb384f1c636feb55f39",
+          "sha256": "5660fb96a772d61fb3497f5aacfb586f23e3093d92863ee23a7cbc92a46a67e9",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/Lyrics/KaraokeSource.x",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Shared/Lyrics/KaraokeSource.x",
+          "source_blob": "f9fae13dcf4b7ed3e69c0de1280369f46d1c72f8",
+          "sha256": "5e686cf313fd9b22923659edbb7424d437f21ad51712bd4b49a387d77686afbd",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/Lyrics/Lyrics.h",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Shared/Lyrics/Lyrics.h",
+          "source_blob": "332c368e73b08d8b3b5df61afe2f3d643ee43182",
+          "sha256": "0b7525526344536956f915910411abc4e95a47890fcfbeb2f0bc0876ed196f80",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/Lyrics/NativeLyricsStatus.h",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/tweak/Sources/Shared/Lyrics/NativeLyricsStatus.h",
+          "source_blob": "cf4b8040a3c42e80e8d405cd257cb9954eba8c16",
+          "sha256": "3181edc9392d452547175556035c11d4fdae6b8dab82c65e272a9abb9c885a0f",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/BiniLyrics.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Shared/LyricsSources/BiniLyrics.m",
+          "source_blob": "c07bb865965d8fae9060a85a811ccebece3d327a",
+          "sha256": "a6089aca081cb4cba20387ae7a978e3ef46906bf6ef6da8fdd3566660e5aad8f",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/KuGou.m",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/tweak/Sources/Shared/LyricsSources/KuGou.m",
+          "source_blob": "48f718711814135927edcc102e0be215dc574f4a",
+          "sha256": "344be49440acc178100863a006576e82aa0de49ad85363e51c9cbb7fe8a5780e",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/LrcLib.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Shared/LyricsSources/LrcLib.m",
+          "source_blob": "3e13fcf7b65793fa4bd8179dc82d03e9acd6e1c7",
+          "sha256": "cdc92d0317d47a9aa9811379eedd34a39e62ff67b3d889712cfa1274d80d0713",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/LyricsDiagnostics.h",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/tweak/Sources/Shared/LyricsSources/LyricsDiagnostics.h",
+          "source_blob": "7dd6438c0c30f3a06fa65bfd17213aad0e4380c7",
+          "sha256": "3be808065755623f63f9a139536f5a3c18a7152fe22b66af2756a8be524a899f",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/LyricsDiagnostics.m",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/tweak/Sources/Shared/LyricsSources/LyricsDiagnostics.m",
+          "source_blob": "c2c443799021b6f2ce7d19341ff440ba8511abe6",
+          "sha256": "e5540bd17ab2cbef08fdec9a983a4b32edaa27c40aa4b407a1ce3abbd1b4bf49",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/LyricsHook.x",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Shared/LyricsSources/LyricsHook.x",
+          "source_blob": "b8c99432ce827c2289bfaa1288f19e829ef267a6",
+          "sha256": "cfbd6e086ea911c53169352869689ebe6708c58dc27ef6be3e641bdce56dd85a",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/LyricsMatching.m",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/tweak/Sources/Shared/LyricsSources/LyricsMatching.m",
+          "source_blob": "b07ad183f1623def1946a1a29ad28d9dcd768a0d",
+          "sha256": "0f7ac007533ba165c7e49de657693e03527d3a1541a569cfec4232deccf680b5",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/LyricsSources.h",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Shared/LyricsSources/LyricsSources.h",
+          "source_blob": "1102b5a098b013d91ca5304520351153ec18a0d9",
+          "sha256": "f1b199a7e32b5991ce3c0b31d821742f4cc4a60765a7b58aff6318f9833d0027",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/LyricsSources.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Shared/LyricsSources/LyricsSources.m",
+          "source_blob": "78c17c49faac1507ddcbac10e71eeca505b05741",
+          "sha256": "30c8010ec23af42bcded255af9840ae345e7e6890903bbe84ef60dc40b288e95",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/LyricsSourcesPage.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Shared/LyricsSources/LyricsSourcesPage.m",
+          "source_blob": "6051d30bfd778682666be07ef32d01fce5f470d8",
+          "sha256": "0003bc3b08ecc289ade7f03b63db22d18ec98e5b66141c2245f481f72106e5b0",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/Musixmatch.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Shared/LyricsSources/Musixmatch.m",
+          "source_blob": "c9344a93e2dc8dbaa139bdba5e14237516d9a4ba",
+          "sha256": "904207640555776999adba9d9a1f1e02a33dba88c9bc0a7805befa25ff5d4481",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/NetEase.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Shared/LyricsSources/NetEase.m",
+          "source_blob": "87205c7176b988c0af2469554216ffdfc9516369",
+          "sha256": "abb616cd7ef023d7dc4d228dfe358ae00f9408d0e3e3125326db8f1441b88619",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/QQMusic.m",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/tweak/Sources/Shared/LyricsSources/QQMusic.m",
+          "source_blob": "2814a28f971c546b4121ebd2a394be64b11a9660",
+          "sha256": "f8aabaa20529b1435766abc1b7400b9d315c19de64432062e9b220d37f1c49b0",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/QQMusicDecoder-LICENSE",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/tweak/Sources/Shared/LyricsSources/QQMusicDecoder-LICENSE",
+          "source_blob": "8bee70b20c1ca0f8848f56f1792661ad2c16560a",
+          "sha256": "5f75d0871a70c89cc0de3ec8adcc51927640d9dde5ecc70efca074c0545557ec",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/QQMusicQRC.c",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/tweak/Sources/Shared/LyricsSources/QQMusicQRC.c",
+          "source_blob": "d017eccc275840b338344809287a41b3e99d0a3b",
+          "sha256": "472c0f012028c2ab6a7b7563c9a1fa83f71f6e42b98e50022e9ff6c6e631070f",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/QQMusicQRC.h",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/final/tweak/Sources/Shared/LyricsSources/QQMusicQRC.h",
+          "source_blob": "0e1db399aa92a6a1b2d35b1ab4b50a3d13745985",
+          "sha256": "3f0e020b12df560a27375ba0a25d131f4f5bdb51a3f2cc2c6d01f656bdfa563d",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/LyricsSources/Unison.m",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Shared/LyricsSources/Unison.m",
+          "source_blob": "b46e7db352cd25059f2f5cb2eee6da71f37278ce",
+          "sha256": "e68197c1a242340ecd0e454de6e88a9cee96180a294e78799870ddebf60c17f8",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "tweak/Sources/Shared/Player/PlayerState.x",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/final/tweak/Sources/Shared/Player/PlayerState.x",
+          "source_blob": "b65742e6842d11e31da8f39078ab64cd918d4d3d",
+          "sha256": "e66bfddb0b25c05d49cde27b0dc9434d14087b92f46bc77469f47ec75585544f",
+          "source_mode": "100644"
+        }
+      ]
+    },
+    "parallel-ev1": {
+      "base": "425d68bc1761e90a6b5828864720511bcef79fa9",
+      "head": "22a7166633d6d5ca544480217b6ea8eaf939583f",
+      "expected_tree": "580631fd0b2aff3836afb4e1b9fd81df7d3ac965",
+      "consolidated_patch": "patches/consolidated/parallel-ev1.patch",
+      "files": [
+        {
+          "source_path": ".github/workflows/build-ipa.yml",
+          "status": "modified-upstream",
+          "archive_path": "snapshots/parallel-ev1/.github/workflows/build-ipa.yml",
+          "source_blob": "bed03ddee303fe287ed9b2f580469a50c57ec09e",
+          "sha256": "30ec539698fd93cc094b23642a9b5c9b96a4a9efd07700be819bbbb7d3d1aafa",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "docs/ev1-official-beta-pipeline.md",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/parallel-ev1/docs/ev1-official-beta-pipeline.md",
+          "source_blob": "c1bd58e0e46f062fcfdf5cd48fb818fa427436d1",
+          "sha256": "268c8966f149c81bcf2c2f65956922db59e19efd975ceff9b20527978b54c434",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "scripts/ev1-chain.py",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/parallel-ev1/scripts/ev1-chain.py",
+          "source_blob": "ad270f4c46af68b0d04718af5c7bce05154eddbe",
+          "sha256": "6f8e635e339b5db3f9e64c7069b09a6f3a1e68e9d9c2c2918a5498006ab9a064",
+          "source_mode": "100644"
+        },
+        {
+          "source_path": "scripts/test-ev1-chain.py",
+          "status": "added-in-custom-change",
+          "archive_path": "snapshots/parallel-ev1/scripts/test-ev1-chain.py",
+          "source_blob": "3ec514ba90daa3bc78d5c6400e0b5941b126b351",
+          "sha256": "3c30831ded215129e49596ed5f70f7b7fec4e7b7513ac50ba44cd979d291bc39",
+          "source_mode": "100644"
+        }
+      ]
+    }
+  },
+  "scope_note": "Archives custom changes and selected modified-file snapshots, not a standalone replacement for the upstream application. Added-file status does not establish independent authorship or a new license.",
+  "licenses": {
+    "upstream_original": "licenses/upstream-LICENSE.txt",
+    "upstream_contributor_agreement_reference": "licenses/upstream-CLA.md",
+    "qrc_decoder_notice": "licenses/QQMusicDecoder-LICENSE.txt"
+  }
+}

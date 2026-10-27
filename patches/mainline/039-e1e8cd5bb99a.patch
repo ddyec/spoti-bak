@@ -1,0 +1,439 @@
+From e1e8cd5bb99a024afe12f637eea9073e03f214e0 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 23 Oct 2026 09:01:13 +0000
+Subject: [PATCH] fix: anchor lyric preview artwork independently of native
+ lyric loading
+
+---
+ docs/player-preview-anchor-2026-10-23.md      |  51 ++++++++
+ scripts/test-lyrics-identity.py               |  16 +--
+ scripts/test-preview-anchor.py                | 111 ++++++++++++++++++
+ tweak/Sources/Redesigned/Player/Player.h      |   7 +-
+ .../Sources/Redesigned/Player/PlayerArtwork.x |  45 +++++--
+ .../Sources/Redesigned/Player/PlayerPreview.x |  66 ++++++++---
+ 6 files changed, 254 insertions(+), 42 deletions(-)
+ create mode 100644 docs/player-preview-anchor-2026-10-23.md
+ create mode 100644 scripts/test-preview-anchor.py
+
+diff --git a/docs/player-preview-anchor-2026-10-23.md b/docs/player-preview-anchor-2026-10-23.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..a6ef82e615e2b7c49ac82f9d416031e366d19b92
+--- /dev/null
++++ b/docs/player-preview-anchor-2026-10-23.md
+@@ -0,0 +1,51 @@
++# Stable player preview artwork anchor
++
++Base: `4e65689` on `feat/performance-diagnostics-20261021`. Applies to the
++Redesigned UI on Spotify 9.1.78; the Native UI is unchanged.
++
++The previous preview lift ran only when Spotify lyrics were known missing.
++That confused native catalogue availability with actual player space. A present
++or unknown verdict could leave a bilingual preview clipped under the artwork,
++as in the supplied Call of Silence screenshot. The screenshot alone does not
++establish that track's native availability verdict.
++
++The preview now reserves an 88-point bilingual band as soon as timed lyrics are
++available. It captures a header-safe cover centre in player coordinates, leaving
++an already sufficient gap alone. The artwork and shadow apply the same signed
++correction relative to their current native parent geometry. Repeated layout,
++late native lyrics and native movement in either direction cannot accumulate an
++extra lift. An unchanged anchor is reapplied without starting another spring.
++The existing cover layout hook and player layout hook enforce the anchor; no
++unverified Spotify selector or native availability network probe is added.
++
++The per-track reservation survives interludes, unknown playback positions and
++temporary same-track cache misses. Translation arrival cannot change the height
++budget. Track changes, disabling preview and host resizing invalidate the target.
++Actual movement of the information row recalculates it; a change in that row's
++height alone does not. Full lyrics, player transitions, animated artwork and
++backgrounding suspend the applied anchor. Returning restores the saved target.
++Pause/resume retains the existing cover scale around the anchored centre.
++Exceptionally tall lyric groups retain the existing scroll fallback.
++
++## Validation
++
++`python3 scripts/test-preview-anchor.py` compiles the actual production geometry
++and state predicates using CoreGraphics value-type shims. It simulates 500 late
++native parent-layout changes, signed compensation, playing/paused bounds,
++header-limited layouts, cache gaps, setting changes and track reset. It passes on
++Linux. Layer checks, performance arithmetic regressions and diff checks pass.
++The existing Foundation identity/layout suite has been updated to remove the
++obsolete native-status gate assertions. The macOS IPA workflow runs both suites
++in its existing check stage before packaging; its run is the compilation authority.
++These mathematical tests do not execute UIKit hooks or verify presentation-layer
++animation on a phone.
++
++## Device acceptance
++
++Install the resulting combined IPA with the usual signer, restart, and use
++Redesigned UI on the owner's iOS 27.2 / Spotify 9.1.78 device. Play Call of Silence
++and Moon Halo with translations. Check lyric/title separation, pause/resume,
++full lyrics open/close, interludes, skipping to a lyricless track and returning
++from background. Under slow networking, let custom and native lyrics arrive in
++either order: the cover should settle once and avoid an additional native lift.
++The source and companion component pin remain those of the baseline workflow.
+diff --git a/scripts/test-lyrics-identity.py b/scripts/test-lyrics-identity.py
+index bd4ea5eefd08097ed537fe64e3db3db673cc61de..ba97849338acc3a195cb9307f6e7901ce9dbac9c 100644
+--- a/scripts/test-lyrics-identity.py
++++ b/scripts/test-lyrics-identity.py
+@@ -9,6 +9,7 @@ import json
+ import sys
+ 
+ root = Path(__file__).resolve().parents[1]
++subprocess.run([sys.executable, str(root / 'scripts/test-preview-anchor.py')], check=True)
+ audit = json.loads((root / 'docs/lyrics-live-audit-round2-2026-10-18.json').read_text(encoding='utf-8'))
+ assert audit['all_passed'] and audit['reused_results'] == 0, 'Fresh multilingual audit did not pass'
+ qq_audit = json.loads((root / 'docs/lyrics-qq-retry-2026-10-18.json').read_text(encoding='utf-8'))
+@@ -60,14 +61,15 @@ int main(void) {
+             CGRectGetMaxY(bilingualRect) < CGRectGetMinY(info), @"bilingual preview uses available gap without moving artwork or overlapping title");
+         check(CGRectIsNull(sgrPreviewFrame(cover, CGRectMake(0, 490, 402, 64), player)), @"redesigned preview cannot overlap controls");
+         CGRect lowCover = CGRectMake(24, 162, 354, 354), area = CGRectMake(0, 110, 402, 466);
+-        CGFloat lift = sgrPreviewNeededLift(lowCover, info, player, area, 88, 0, YES);
+-        check(lift == 44, @"native missing + bilingual preview reserves only bounded header-safe space");
+-        check(sgrPreviewNeededLift(lowCover, info, player, area, 88, 1, YES) == 0, @"native present never gets a second lift");
+-        check(sgrPreviewNeededLift(lowCover, info, player, area, 88, -1, YES) == 0, @"unknown or failed probe never shifts artwork");
+-        check(sgrPreviewNeededLift(lowCover, info, player, area, 88, 0, NO) == 0, @"no custom preview/full lyrics/transition restores artwork");
+-        check(sgrPreviewNeededLift(cover, info, player, area, 88, 0, YES) == 0, @"existing native spacing is not pushed twice");
+-        for (int i = 0; i < 50; i++) check(sgrPreviewNeededLift(lowCover, info, player, area, 88, 0, YES) == lift,
++        CGFloat lift = sgrPreviewNeededLift(lowCover, info, player, area, 88, YES);
++        check(lift == 44, @"bilingual preview reserves bounded header-safe space regardless of native status");
++        check(sgrPreviewNeededLift(lowCover, info, player, area, 88, NO) == 0, @"disabled preview restores artwork");
++        check(sgrPreviewNeededLift(cover, info, player, area, 88, YES) == 0, @"existing spacing is not pushed twice");
++        for (int i = 0; i < 50; i++) check(sgrPreviewNeededLift(lowCover, info, player, area, 88, YES) == lift,
+             @"layout refresh computes an absolute offset, not cumulative movement");
++        check(sgrPreviewReservesSpace(YES, NO, YES, YES), @"same-track cache miss retains space");
++        check(!sgrPreviewReservesSpace(YES, NO, NO, YES), @"new track without lyrics releases space");
++        check(!sgrPreviewReservesSpace(NO, YES, YES, YES), @"disabling preview releases space");
+         check(SGNativeLyricsVerdict(404, NO, NO, NO) == 0, @"native 404 is absent");
+         check(SGNativeLyricsVerdict(200, NO, YES, YES) == 1, @"valid native lyrics are present");
+         check(SGNativeLyricsVerdict(200, NO, YES, NO) == 0, @"valid empty native lyrics are absent");
+diff --git a/scripts/test-preview-anchor.py b/scripts/test-preview-anchor.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..ffd287896cdf06b33376285c15e22635b681d101
+--- /dev/null
++++ b/scripts/test-preview-anchor.py
+@@ -0,0 +1,111 @@
++#!/usr/bin/env python3
++"""Compile production preview geometry on Linux or macOS (no Apple SDK needed).
++
++Only the CoreGraphics value types are shimmed. The layout and reservation
++functions are extracted unchanged from the shipping sources.
++"""
++from pathlib import Path
++import os
++import subprocess
++import tempfile
++
++root = Path(__file__).resolve().parents[1]
++player = root / 'tweak/Sources/Redesigned/Player'
++preview = (player / 'PlayerPreview.x').read_text()
++artwork = (player / 'PlayerArtwork.x').read_text()
++
++
++def section(source, start, end):
++    assert source.count(start) == source.count(end) == 1
++    return start + source.split(start)[1].split(end)[0]
++
++
++geometry = section(preview, 'static CGRect sgrPreviewFrame(', 'static BOOL sgrShowing(')
++offset = section(artwork, 'static CGFloat sgrPreviewAnchorOffset(', 'static void scaleCover(')
++shim = r'''
++#include <assert.h>
++#include <math.h>
++#include <stdio.h>
++typedef double CGFloat;
++typedef long NSInteger;
++typedef int BOOL;
++#define YES 1
++#define NO 0
++#define MAX(a,b) ((a) > (b) ? (a) : (b))
++#define MIN(a,b) ((a) < (b) ? (a) : (b))
++typedef struct { CGFloat x, y; } CGPoint;
++typedef struct { CGFloat width, height; } CGSize;
++typedef struct { CGPoint origin; CGSize size; } CGRect;
++#define CGPointMake(x,y) ((CGPoint){x,y})
++#define CGSizeMake(w,h) ((CGSize){w,h})
++#define CGSizeZero ((CGSize){0,0})
++#define CGRectMake(x,y,w,h) ((CGRect){{x,y},{w,h}})
++#define CGRectNull CGRectMake(INFINITY, INFINITY, 0, 0)
++#define CGRectGetMinX(r) ((r).origin.x)
++#define CGRectGetMinY(r) ((r).origin.y)
++#define CGRectGetMaxY(r) ((r).origin.y + (r).size.height)
++#define CGRectGetMidY(r) ((r).origin.y + (r).size.height / 2)
++#define CGRectIsNull(r) isinf((r).origin.x)
++static BOOL CGRectEqualToRect(CGRect a, CGRect b) {
++    return a.origin.x == b.origin.x && a.origin.y == b.origin.y &&
++        a.size.width == b.size.width && a.size.height == b.size.height;
++}
++'''
++tests = r'''
++int main(void) {
++    CGRect host = CGRectMake(0,0,402,874), info = CGRectMake(0,576,402,64);
++    CGRect area = CGRectMake(0,110,402,466), cover = CGRectMake(24,162,354,354);
++    CGFloat lift = sgrPreviewNeededLift(cover,info,host,area,88,YES);
++    assert(lift == 44);
++    CGFloat anchor = CGRectGetMidY(cover) - lift;
++    // A native response can arrive before or after any number of layout passes.
++    // Test upward/downward parent moves, and both playing/paused cover scales.
++    for (int pass=0; pass<500; pass++) {
++        CGFloat parentY = 118 + (pass % 5) * 22;
++        CGRect native = CGRectMake(24,parentY,354,354);
++        assert(!sgrPreviewAnchorNeedsUpdate(YES,info,info));
++        CGFloat correction = sgrPreviewAnchorOffset(native,anchor);
++        assert(fabs(CGRectGetMidY(native) + correction - anchor) < 0.001);
++        for (int paused=0; paused<2; paused++) {
++            CGFloat size = 354 * (paused ? 0.84 : 1);
++            CGRect shown = CGRectMake(24,anchor-size/2,size,size);
++            CGRect gap = sgrPreviewFrame(shown,info,host);
++            assert(!CGRectIsNull(gap) && gap.size.height >= 88);
++            assert(CGRectGetMinY(shown) >= CGRectGetMinY(area)+8);
++        }
++    }
++    // No redundant movement when there is already room; cramped screens respect header.
++    assert(sgrPreviewNeededLift(CGRectMake(24,118,354,354),info,host,area,88,YES) == 0);
++    assert(sgrPreviewNeededLift(cover,CGRectMake(0,530,402,64),host,area,88,YES) == 44);
++    assert(sgrPreviewNeededLift(cover,info,host,area,88,NO) == 0);
++    assert(sgrPreviewAnchorNeedsUpdate(NO,info,info));
++    assert(!sgrPreviewAnchorNeedsUpdate(YES,info,CGRectMake(0,576,402,80)));
++    assert(sgrPreviewAnchorNeedsUpdate(YES,info,CGRectMake(0,600,402,64)));
++    // Loading -> timed lyrics -> cache gaps/interludes -> track without lyrics -> disabled.
++    BOOL reserved = sgrPreviewReservesSpace(YES,NO,NO,NO);
++    assert(!reserved);
++    reserved = sgrPreviewReservesSpace(YES,YES,YES,reserved);
++    assert(reserved);
++    for (int pass=0; pass<100; pass++) {
++        reserved = sgrPreviewReservesSpace(YES,pass%3 == 0,YES,reserved);
++        assert(reserved);
++    }
++    assert(!sgrPreviewReservesSpace(YES,NO,NO,reserved));
++    assert(!sgrPreviewReservesSpace(NO,YES,YES,reserved));
++    // Full lyrics/transition suspension does not erase the per-track reservation.
++    assert(sgrPreviewReservesSpace(YES,NO,YES,reserved));
++    puts("Preview anchor regression passed: late native layouts, pause, header bounds, cache gaps and track reset");
++}
++'''
++# The preview must not request native availability just to decide its layout.
++assert 'SGLyricsSpotifyHas(' not in preview
++assert 'SGKaraokeProbeNativeLyrics(' not in preview
++assert 'SGRPlayerSetPreviewAnchor(host, track, self.anchorY)' in preview
++assert 'transform.ty = sgrPreviewAnchorOffset(tilt.bounds, target.y)' in artwork
++with tempfile.TemporaryDirectory(prefix='preview-anchor-') as directory:
++    source = Path(directory) / 'preview.c'
++    binary = Path(directory) / 'preview'
++    source.write_text(shim + geometry + offset + tests)
++    subprocess.run([os.environ.get('CC', 'cc'), '-std=c11', '-Wall', '-Wextra',
++                    '-Wno-unused-function', str(source), '-lm', '-o', str(binary)], check=True)
++    subprocess.run([str(binary)], check=True)
+diff --git a/tweak/Sources/Redesigned/Player/Player.h b/tweak/Sources/Redesigned/Player/Player.h
+index f505fe2cddc3839116729b44aa1946be9c935bab..d4aa42ea0388a0c6df0ea4e887e3a705c7fab7ba 100644
+--- a/tweak/Sources/Redesigned/Player/Player.h
++++ b/tweak/Sources/Redesigned/Player/Player.h
+@@ -97,12 +97,13 @@ UIView *SGRPlayerCoverList(void);
+ CGRect SGRPlayerCoverFrameIn(UIView *host);
+ // Smallest artwork layout, for a reading column stable through pause/resume.
+ CGRect SGRPlayerCompactCoverFrameIn(UIView *host);
+-// A preview-only vertical compensation; the upstream paused scale is unchanged.
+-CGFloat SGRPlayerPreviewLift(void);
++// Full-size native layout, excluding our anchor and the paused child scale.
++CGRect SGRPlayerCoverLayoutFrameIn(UIView *host);
+ // A bounded presentation-layer follower for artwork springs, including pause/resume reversal.
+ void SGRPlayerPreviewArtworkWillAnimate(void);
+ CGRect SGRPlayerCoverPresentationFrameIn(UIView *host);
+-void SGRPlayerSetPreviewLift(NSString *trackID, CGFloat lift);
++// Pin the cover centre in player coordinates; nil releases preview ownership.
++void SGRPlayerSetPreviewAnchor(UIView *host, NSString *trackID, CGFloat centerY);
+ // The band that cover sits in -- the room the player gives its artwork, between the header row and the
+ // title -- in `host`'s coordinates; CGRectNull when no cover has laid out.
+ CGRect SGRPlayerArtworkAreaIn(UIView *host);
+diff --git a/tweak/Sources/Redesigned/Player/PlayerArtwork.x b/tweak/Sources/Redesigned/Player/PlayerArtwork.x
+index 0ad22708a878997c9a001b1892edafd8d97c72d6..a2b691565f443188bdbcd5e3e29deeb0c8baa7a7 100644
+--- a/tweak/Sources/Redesigned/Player/PlayerArtwork.x
++++ b/tweak/Sources/Redesigned/Player/PlayerArtwork.x
+@@ -24,13 +24,9 @@ static NSHashTable<UIView *> *sg_tilts;
+ // The cover of each tilt view once found. A frame Spotify sets on a scaled view becomes its scaled
+ // size, leaving bounds that no longer match the tilt view's, so the cover is not looked for by size again.
+ static NSMapTable<UIView *, UIView *> *sg_covers;
+-static NSString *sg_previewLiftTrack;
+-static CGFloat sg_previewLift;
+-
+-CGFloat SGRPlayerPreviewLift(void) {
+-    if (SGRPlayerLyricsOpen() || SGRPlayerIsTransitioning()) return 0;
+-    return [sg_previewLiftTrack isEqualToString:SGKaraokePlayingTrack()] ? sg_previewLift : 0;
+-}
++static NSString *sg_previewAnchorTrack;
++static __weak UIView *sg_previewAnchorHost;
++static CGFloat sg_previewAnchorY;
+ 
+ static CGFloat currentScale(void) {
+     SPTPlayerState *state = SGPlayerState();
+@@ -60,12 +56,25 @@ static BOOL inCoverCell(UIView *tilt) {
+     return NO;
+ }
+ 
++// Signed correction: native layout can move either above or below the anchor.
++static CGFloat sgrPreviewAnchorOffset(CGRect layout, CGFloat anchorY) {
++    return anchorY - CGRectGetMidY(layout);
++}
++
+ static void scaleCover(UIView *tilt, CGFloat scale) {
+     UIView *cover = coverIn(tilt);
+     if (!cover) return;
+     SGRShadowPlate *plate = SGRShadowPlateIn(tilt, &kPlateKey);
+     CGAffineTransform transform = CGAffineTransformMakeScale(scale, scale);
+-    transform.ty = -SGRPlayerPreviewLift();
++    UIView *host = sg_previewAnchorHost;
++    if (host && [tilt isDescendantOfView:host] &&
++        [sg_previewAnchorTrack isEqualToString:SGKaraokePlayingTrack()] &&
++        !SGRPlayerLyricsOpen() && !SGRPlayerIsTransitioning()) {
++        // An absolute centre in player coordinates cancels late native layout changes.
++        // Work in tilt coordinates so parent offsets/scales are not added twice.
++        CGPoint target = [tilt convertPoint:CGPointMake(CGRectGetMidX(host.bounds), sg_previewAnchorY) fromView:host];
++        transform.ty = sgrPreviewAnchorOffset(tilt.bounds, target.y);
++    }
+     if (!CGAffineTransformEqualToTransform(cover.transform, transform)) cover.transform = transform;
+     if (!CGAffineTransformEqualToTransform(plate.transform, transform)) plate.transform = transform;
+ }
+@@ -213,11 +222,21 @@ static void scaleEveryCover(BOOL animated) {
+     else apply();
+ }
+ 
+-void SGRPlayerSetPreviewLift(NSString *trackID, CGFloat lift) {
+-    lift = MAX(0, lift);
+-    if ((sg_previewLiftTrack == trackID || [sg_previewLiftTrack isEqualToString:trackID]) && fabs(sg_previewLift - lift) < 0.5) return;
+-    sg_previewLiftTrack = [trackID copy]; sg_previewLift = lift;
+-    scaleEveryCover(YES);
++void SGRPlayerSetPreviewAnchor(UIView *host, NSString *trackID, CGFloat centerY) {
++    BOOL changed = host != sg_previewAnchorHost ||
++        !((!trackID && !sg_previewAnchorTrack) || [sg_previewAnchorTrack isEqualToString:trackID]) ||
++        fabs(centerY - sg_previewAnchorY) > 0.5;
++    sg_previewAnchorHost = host;
++    sg_previewAnchorTrack = [trackID copy];
++    sg_previewAnchorY = centerY;
++    // Reapply even an unchanged anchor: Spotify may have moved the tilt's ancestors.
++    // That correction must occur in the same layout pass, without another spring.
++    scaleEveryCover(changed);
++}
++
++CGRect SGRPlayerCoverLayoutFrameIn(UIView *host) {
++    UIView *tilt = showingTilt();
++    return tilt && host ? [host convertRect:tilt.bounds fromView:tilt] : CGRectNull;
+ }
+ 
+ %hook _TtC35CreativeWorkCommons_CoverArtTiltKit16CoverArtTiltView
+diff --git a/tweak/Sources/Redesigned/Player/PlayerPreview.x b/tweak/Sources/Redesigned/Player/PlayerPreview.x
+index 2c69b20208585d8fa5e075a81e8ef081403dfc2c..82fadb637de9486d59517c1a0e88022befd21d57 100644
+--- a/tweak/Sources/Redesigned/Player/PlayerPreview.x
++++ b/tweak/Sources/Redesigned/Player/PlayerPreview.x
+@@ -32,10 +32,10 @@ static CGRect sgrPreviewFrame(CGRect cover, CGRect info, CGRect host) {
+                       host.size.width - side * 2, height);
+ }
+ 
+-// Input is the unshifted cover. Recompute an absolute lift, never accumulate it.
++// Compute the initial target from geometry, independent of native lyric availability.
+ static CGFloat sgrPreviewNeededLift(CGRect cover, CGRect info, CGRect host, CGRect area,
+-                                    CGFloat neededHeight, NSInteger nativeStatus, BOOL ready) {
+-    if (!ready || nativeStatus != 0 || CGRectIsNull(cover) || CGRectIsNull(area) ||
++                                    CGFloat neededHeight, BOOL ready) {
++    if (!ready || CGRectIsNull(cover) || CGRectIsNull(area) ||
+         info.size.height <= 0 || cover.size.width < 200) return 0;
+     CGFloat gap = CGRectGetMinY(info) - CGRectGetMaxY(cover) - 16;
+     CGFloat firstSafeTop = MAX(CGRectGetMinY(host) + 8, CGRectGetMinY(area) + 8);
+@@ -43,6 +43,16 @@ static CGFloat sgrPreviewNeededLift(CGRect cover, CGRect info, CGRect host, CGRe
+     return MIN(limit, ceil(MAX(0, neededHeight - gap)));
+ }
+ 
++// Once timed lyrics have been seen, a transient cache miss or an instrumental gap
++// does not give layout ownership back to Spotify. Track/setting changes reset it.
++static BOOL sgrPreviewReservesSpace(BOOL enabled, BOOL timed, BOOL sameTrack, BOOL reserved) {
++    return enabled && (timed || (sameTrack && reserved));
++}
++
++static BOOL sgrPreviewAnchorNeedsUpdate(BOOL anchored, CGRect previousInfo, CGRect info) {
++    return !anchored || fabs(CGRectGetMinY(previousInfo) - CGRectGetMinY(info)) > 0.5;
++}
++
+ // Clip the transition to the text band, rather than exposing both lines in the entire gap.
+ static CGRect sgrPreviewViewport(CGRect gap, CGFloat textHeight) {
+     CGFloat height = MIN(gap.size.height, MAX(1, textHeight));
+@@ -96,6 +106,12 @@ static BOOL sgrShowing(UIView *view, UIView *host) {
+ @property (nonatomic) NSInteger position;
+ @property (nonatomic) CGSize measured;
+ @property (nonatomic) BOOL showing;
++@property (nonatomic, copy) NSString *layoutTrack;
++@property (nonatomic) BOOL reserved;
++@property (nonatomic) BOOL anchored;
++@property (nonatomic) CGRect layoutHostBounds;
++@property (nonatomic) CGRect layoutInformation;
++@property (nonatomic) CGFloat anchorY;
+ @property (nonatomic) CFTimeInterval artworkUntil;
+ @property (nonatomic) NSUInteger transitionID;
+ - (void)refresh;
+@@ -130,7 +146,7 @@ static BOOL sgrShowing(UIView *view, UIView *host) {
+     if (!self.window || UIApplication.sharedApplication.applicationState != UIApplicationStateActive) {
+         self.showing = NO;
+         self.alpha = 0;
+-        SGRPlayerSetPreviewLift(nil, 0);
++        SGRPlayerSetPreviewAnchor(nil, nil, 0);
+         return;
+     }
+     __weak SGRPlayerPreview *weakSelf = self;
+@@ -191,29 +207,41 @@ static BOOL sgrShowing(UIView *view, UIView *host) {
+     UIView *host = self.superview, *info = sgr_previewInfo;
+     if (!host) return;
+     BOOL timed = SGRPlayerPreviewAvailable();
+-    // Keep Spotify's artwork scale. Only supplement its absent native lyrics layout.
+     SGRPlayerLyricsChanged();
+     NSString *track = SGKaraokePlayingTrack();
++    BOOL sameLayoutTrack = [self.layoutTrack isEqualToString:track];
++    self.reserved = sgrPreviewReservesSpace(SGEnabled(SGRKeyPlayerLyricsPreview), timed,
++        sameLayoutTrack, self.reserved);
++    if (!sameLayoutTrack || !CGRectEqualToRect(self.layoutHostBounds, host.bounds)) self.anchored = NO;
++    self.layoutTrack = track;
++    self.layoutHostBounds = host.bounds;
++    if (!self.reserved) self.anchored = NO;
+     NSInteger ms = SGKaraokePositionMs();
+     NSArray<SGKaraokeLine *> *lines = SGKaraokeLinesForTrack(track);
+     NSInteger index = timed && ms >= 0 ? SGKaraokeLeadLine(lines, ms) : -1;
+     SGKaraokeLine *line = index >= 0 ? lines[index] : nil;
+     CGFloat clip = 0; SGRPlayerAnimatedShowing(&clip, NULL);
+-    BOOL ready = timed && line && ms <= SGKaraokeSungEnd(line) + 4000 &&
+-        !SGRPlayerLyricsOpen() && !SGRPlayerIsTransitioning() && clip < 0.01 &&
+-        UIApplication.sharedApplication.applicationState == UIApplicationStateActive;
+-    if (ready) SGKaraokeProbeNativeLyrics(track);
+-    CGRect cover = SGRPlayerCoverFrameIn(host);
++    BOOL ownsArtwork = self.reserved && !SGRPlayerLyricsOpen() && !SGRPlayerIsTransitioning() &&
++        clip < 0.01 && UIApplication.sharedApplication.applicationState == UIApplicationStateActive;
++    BOOL ready = timed && line && ms <= SGKaraokeSungEnd(line) + 4000 && ownsArtwork;
+     CGRect information = sgrShowing(info, host) ? [host convertRect:info.bounds fromView:info] : CGRectZero;
+-    CGRect baseline = cover;
+-    if (!CGRectIsNull(baseline)) baseline.origin.y += SGRPlayerPreviewLift();
+-    // Reserve a stable per-song budget, not a different cover position on each line.
+-    CGFloat needed = 64;
+-    for (SGKaraokeLine *candidate in lines) if (candidate.translation.length) { needed = 88; break; }
+-    CGFloat lift = sgrPreviewNeededLift(baseline, information, host.bounds, SGRPlayerArtworkAreaIn(host),
+-        needed, SGLyricsSpotifyHas(track), ready);
+-    SGRPlayerSetPreviewLift(track, lift);
+-    cover = SGRPlayerCoverFrameIn(host);
++    // Reserve translation space from the start, including when translation arrives late.
++    CGFloat needed = 88;
++    if (ownsArtwork && information.size.height > 0) {
++        CGRect baseline = SGRPlayerCoverLayoutFrameIn(host), area = SGRPlayerArtworkAreaIn(host);
++        if (!CGRectIsNull(baseline) && !CGRectIsNull(area) && baseline.size.width >= 200) {
++            if (sgrPreviewAnchorNeedsUpdate(self.anchored, self.layoutInformation, information)) {
++                CGFloat lift = sgrPreviewNeededLift(baseline, information, host.bounds, area, needed, YES);
++                self.anchorY = CGRectGetMidY(baseline) - lift;
++                self.layoutInformation = information;
++                self.anchored = YES;
++                SGLyricsLog(@"preview anchor track=%@ centerY=%.1f needed=%.0f nativeCover=%@ info=%@",
++                    track, self.anchorY, needed, NSStringFromCGRect(baseline), NSStringFromCGRect(information));
++            }
++            SGRPlayerSetPreviewAnchor(host, track, self.anchorY);
++        }
++    } else if (!ownsArtwork) SGRPlayerSetPreviewAnchor(nil, nil, 0);
++    CGRect cover = SGRPlayerCoverFrameIn(host);
+     CGRect frame = CGRectIsNull(cover) ? CGRectNull : sgrPreviewFrame(cover, information, host.bounds);
+     CGSize textSize = sgrPreviewTextSize(SGRPlayerCompactCoverFrameIn(host), host.bounds, needed);
+     BOOL visible = ready && !CGRectIsNull(frame) && textSize.width > 0;
+-- 
+2.34.1
+

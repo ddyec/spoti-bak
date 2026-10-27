@@ -1,0 +1,851 @@
+From 9add78b28c63621ed504bdf8fe3d6b8dade87e27 Mon Sep 17 00:00:00 2001
+From: Codex <codex@users.noreply.github.com>
+Date: Sun, 18 Oct 2026 22:05:08 +0800
+Subject: [PATCH] fix: normalize domestic lyrics searches and mixed duration
+ units
+
+---
+ docs/beta-lyrics-review-2026-10-18.md         |  36 ++
+ ...lyrics-live-audit-strategy-2026-10-18.json | 476 ++++++++++++++++++
+ scripts/audit-selective-lyrics.py             |  38 +-
+ scripts/test-lyrics-identity.py               |   6 +
+ tweak/Sources/Shared/LyricsSources/KuGou.m    |  18 +-
+ .../Shared/LyricsSources/LyricsMatching.m     |  14 +
+ .../Shared/LyricsSources/LyricsSources.h      |   2 +
+ .../Shared/LyricsSources/LyricsSources.m      |   4 +
+ tweak/Sources/Shared/LyricsSources/NetEase.m  |  16 +-
+ tweak/Sources/Shared/LyricsSources/QQMusic.m  |   7 +-
+ 10 files changed, 591 insertions(+), 26 deletions(-)
+ create mode 100644 docs/lyrics-live-audit-strategy-2026-10-18.json
+
+diff --git a/docs/beta-lyrics-review-2026-10-18.md b/docs/beta-lyrics-review-2026-10-18.md
+index 2ca43cc952344a82600e6ec6768ed1817cebb06f..3abf03a16fd730def1fe45a675c46325441b46a4 100644
+--- a/docs/beta-lyrics-review-2026-10-18.md
++++ b/docs/beta-lyrics-review-2026-10-18.md
+@@ -97,3 +97,39 @@ follow the detail page's word timing, and no 金坷垃 text should appear. Also
+ long original/translation lines, late translations, pause/resume, full lyrics
+ open/close, track changes, and Reduce Motion. Repeat with animated artwork disabled
+ when checking the cover preview, since animated artwork replaces the cover itself.
++
++## Follow-up: why the incomplete samples failed
++
++At the user's request, pushing and Actions were paused for further investigation.
++The original audit above remains unchanged as the before-state. The new
++`lyrics-live-audit-strategy-2026-10-18.json` retains the nine earlier verified samples
++and rechecks only the three incomplete samples with the adjusted strategy.
++
++| Sample | Observed failure | Targeted adjustment | New evidence |
++|---|---|---|---|
++| 水星記 / 郭頂 | KuGou returned no candidates for the traditional names, although NetEase matched | Simplify domestic search text to 水星记 / 郭顶; preserve displayed metadata | NetEase + KuGou original similarity 0.9924 |
++| Love Poem / IU | KuGou returned none for `Love Poem` or `love poem`, but candidates for `Love poem` | Use the selected recording's catalogue spelling in the one cross-check | NetEase + KuGou similarity 0.9802 |
++| Spring Day / BTS | KuGou returned durations `286` and `274` in seconds; the old `/1000` rejected both. NetEase's leading candidates were live/Japanese versions | Interpret mixed units using the known recording length; retain the 8-second tolerance, rejecting 286 and accepting 274 | KuGou + LRCLIB diagnostic reference similarity 0.9743 |
++
++All 12 sampled recordings now have an independently corroborated original-text
++result in the combined audit. LRCLIB was only an independent diagnostic reference
++for Spring Day; this experiment did not add it to the user's enabled providers or
++production fallback chain. QQ returned application code 2001 during these checks;
++that is an observed source rejection, not evidence of a particular quota cause.
++The strategy deliberately does not rely on repeatedly retrying QQ.
++
++Production changes corresponding to this experiment:
++
++- Search conversion happens on QQ/NetEase/KuGou query text, not the UI song names.
++- Successful provider results carry their actual catalogue spelling. The existing
++  optional single cross-check can reuse it rather than generate casing variants.
++- KuGou's duration normalization chooses the seconds/milliseconds interpretation
++  nearest the known track length; the existing recording tolerance remains intact.
++- Regression cases cover traditional queries, preserved Latin casing, both duration
++  units and rejection of the alternate 286-second recording.
++
++This is evidence for the search and matching strategy on the sampled recordings,
++not a universal catalogue guarantee or iOS device acceptance. No Action has run
++for this revision. The Objective-C regression suites and full IPA compilation still
++need the later Action; the Windows checks validate Python syntax, production-source
++extraction, layer imports and live source responses.
+diff --git a/docs/lyrics-live-audit-strategy-2026-10-18.json b/docs/lyrics-live-audit-strategy-2026-10-18.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..75dd440a61e905251ef2fafcebf937b4ddcb1776
+--- /dev/null
++++ b/docs/lyrics-live-audit-strategy-2026-10-18.json
+@@ -0,0 +1,476 @@
++{
++  "captured_at": "2026-10-18T14:03:12.580876+00:00",
++  "scope": "12 recordings, 6 languages, metadata replay and independent original-text comparison; no audio listening or device validation",
++  "tracks": [
++    {
++      "language": "zh",
++      "title": "鴻門宴",
++      "artist": "李榮浩",
++      "seconds": 204,
++      "reference": "provided Spotify device log, 2026-10-18",
++      "providers": [
++        {
++          "provider": "netease",
++          "status": "matched",
++          "candidate": {
++            "id": 2630191762,
++            "title": "鸿门宴",
++            "artist": "李荣浩",
++            "seconds": 204,
++            "aliases": [],
++            "original_characters": 360
++          }
++        },
++        {
++          "provider": "qqmusic",
++          "status": "request_error",
++          "error": "QQ search code 2001"
++        },
++        {
++          "provider": "kugou",
++          "status": "matched",
++          "candidate": {
++            "id": "294552097",
++            "title": "鸿门宴",
++            "artist": "李荣浩",
++            "seconds": 204,
++            "aliases": [],
++            "original_characters": 366
++          }
++        }
++      ],
++      "independent_text_similarity": 0.9862,
++      "status": "verified"
++    },
++    {
++      "language": "en",
++      "title": "Animals",
++      "artist": "Maroon 5",
++      "seconds": 231,
++      "reference": "provided Spotify device log, 2026-10-18",
++      "providers": [
++        {
++          "provider": "netease",
++          "status": "matched",
++          "candidate": {
++            "id": 28987626,
++            "title": "Animals",
++            "artist": "Maroon 5",
++            "seconds": 231,
++            "aliases": [],
++            "original_characters": 1788
++          }
++        },
++        {
++          "provider": "qqmusic",
++          "status": "matched",
++          "candidate": {
++            "id": 102689038,
++            "title": "Animals",
++            "artist": "Maroon 5",
++            "seconds": 229,
++            "aliases": [],
++            "original_characters": 2032
++          }
++        }
++      ],
++      "independent_text_similarity": 0.9241,
++      "status": "verified"
++    },
++    {
++      "language": "zh",
++      "title": "晴天",
++      "artist": "周杰倫",
++      "seconds": 270,
++      "album": "葉惠美",
++      "reference": "https://music.apple.com/tw/album/%E6%99%B4%E5%A4%A9/535824731?i=535824738&uo=4",
++      "providers": [
++        {
++          "provider": "netease",
++          "status": "no_match"
++        },
++        {
++          "provider": "qqmusic",
++          "status": "matched",
++          "candidate": {
++            "id": 97773,
++            "title": "晴天",
++            "artist": "周杰伦",
++            "seconds": 269,
++            "aliases": [],
++            "original_characters": 599
++          }
++        },
++        {
++          "provider": "kugou",
++          "status": "matched",
++          "candidate": {
++            "id": "461810434",
++            "title": "晴天",
++            "artist": "周杰伦",
++            "seconds": 265,
++            "aliases": [],
++            "original_characters": 526
++          }
++        }
++      ],
++      "independent_text_similarity": 0.8978,
++      "status": "verified"
++    },
++    {
++      "language": "zh",
++      "title": "水星記",
++      "artist": "郭頂",
++      "seconds": 325,
++      "album": "飛行器的執行週期",
++      "reference": "https://music.apple.com/tw/album/%E6%B0%B4%E6%98%9F%E8%A8%98/1443637757?i=1443638095&uo=4",
++      "providers": [
++        {
++          "provider": "netease",
++          "status": "matched",
++          "candidate": {
++            "id": 441491828,
++            "title": "水星记",
++            "artist": "郭顶",
++            "seconds": 325,
++            "aliases": [],
++            "original_characters": 327
++          }
++        },
++        {
++          "provider": "qqmusic",
++          "status": "matched",
++          "candidate": {
++            "id": 109291468,
++            "title": "水星记",
++            "artist": "郭顶",
++            "seconds": 325,
++            "aliases": [],
++            "original_characters": 332
++          }
++        }
++      ],
++      "independent_text_similarity": 0.9924,
++      "status": "verified"
++    },
++    {
++      "language": "en",
++      "title": "Yellow",
++      "artist": "Coldplay",
++      "seconds": 269,
++      "album": "Parachutes",
++      "reference": "https://music.apple.com/us/album/yellow/1122782080?i=1122782283&uo=4",
++      "providers": [
++        {
++          "provider": "netease",
++          "status": "matched",
++          "candidate": {
++            "id": 17177324,
++            "title": "Yellow",
++            "artist": "Coldplay",
++            "seconds": 266,
++            "aliases": [],
++            "original_characters": 718
++          }
++        },
++        {
++          "provider": "qqmusic",
++          "status": "matched",
++          "candidate": {
++            "id": 2156514,
++            "title": "Yellow",
++            "artist": "Coldplay",
++            "seconds": 266,
++            "aliases": [],
++            "original_characters": 874
++          }
++        }
++      ],
++      "independent_text_similarity": 0.8982,
++      "status": "verified"
++    },
++    {
++      "language": "en",
++      "title": "The Scientist",
++      "artist": "Coldplay",
++      "seconds": 309,
++      "album": "A Rush of Blood to the Head",
++      "reference": "https://music.apple.com/us/album/the-scientist/1122775993?i=1122776155&uo=4",
++      "providers": [
++        {
++          "provider": "netease",
++          "status": "matched",
++          "candidate": {
++            "id": 17177309,
++            "title": "The Scientist",
++            "artist": "Coldplay",
++            "seconds": 309,
++            "aliases": [],
++            "original_characters": 666
++          }
++        },
++        {
++          "provider": "qqmusic",
++          "status": "matched",
++          "candidate": {
++            "id": 2127846,
++            "title": "The Scientist",
++            "artist": "Coldplay",
++            "seconds": 309,
++            "aliases": [],
++            "original_characters": 835
++          }
++        }
++      ],
++      "independent_text_similarity": 0.8741,
++      "status": "verified"
++    },
++    {
++      "language": "ja",
++      "title": "夜に駆ける",
++      "artist": "YOASOBI",
++      "seconds": 261,
++      "album": "夜に駆ける - Single",
++      "reference": "https://music.apple.com/jp/album/%E5%A4%9C%E3%81%AB%E9%A7%86%E3%81%91%E3%82%8B/1490256978?i=1490256995&uo=4",
++      "providers": [
++        {
++          "provider": "netease",
++          "status": "matched",
++          "candidate": {
++            "id": 1409311773,
++            "title": "夜に駆ける",
++            "artist": "YOASOBI",
++            "seconds": 261,
++            "aliases": [
++              "向夜晚奔去"
++            ],
++            "original_characters": 709
++          }
++        },
++        {
++          "provider": "qqmusic",
++          "status": "no_match"
++        },
++        {
++          "provider": "kugou",
++          "status": "matched",
++          "candidate": {
++            "id": "260678224",
++            "title": "夜に駆ける",
++            "artist": "YOASOBI",
++            "seconds": 261,
++            "aliases": [],
++            "original_characters": 719
++          }
++        }
++      ],
++      "independent_text_similarity": 0.9902,
++      "status": "verified"
++    },
++    {
++      "language": "ja",
++      "title": "夏霞",
++      "artist": "あたらよ",
++      "seconds": 229,
++      "album": "夏霞 - Single",
++      "reference": "https://music.apple.com/jp/album/%E5%A4%8F%E9%9C%9E/1578238901?i=1578238903&uo=4",
++      "providers": [
++        {
++          "provider": "netease",
++          "status": "matched",
++          "candidate": {
++            "id": 1867150097,
++            "title": "夏霞",
++            "artist": "あたらよ",
++            "seconds": 228,
++            "aliases": [],
++            "original_characters": 300
++          }
++        },
++        {
++          "provider": "qqmusic",
++          "status": "matched",
++          "candidate": {
++            "id": 319904456,
++            "title": "夏霞",
++            "artist": "あたらよ",
++            "seconds": 228,
++            "aliases": [],
++            "original_characters": 306
++          }
++        }
++      ],
++      "independent_text_similarity": 0.9901,
++      "status": "verified"
++    },
++    {
++      "language": "ko",
++      "title": "Spring Day",
++      "artist": "BTS",
++      "seconds": 274,
++      "album": "YOU NEVER WALK ALONE",
++      "reference": "https://music.apple.com/us/album/spring-day/1596528839?i=1596529381&uo=4",
++      "providers": [
++        {
++          "provider": "netease",
++          "status": "no_match"
++        },
++        {
++          "provider": "qqmusic",
++          "status": "no_match"
++        },
++        {
++          "provider": "kugou",
++          "status": "matched",
++          "candidate": {
++            "id": "61737720",
++            "title": "Spring Day",
++            "artist": "BTS",
++            "seconds": 274,
++            "aliases": [],
++            "original_characters": 652
++          }
++        },
++        {
++          "provider": "lrclib-diagnostic-reference",
++          "status": "matched",
++          "candidate": {
++            "id": 942431,
++            "title": "Spring Day",
++            "artist": "BTS",
++            "seconds": 274.0,
++            "original_characters": 672
++          }
++        }
++      ],
++      "independent_text_similarity": 0.9743,
++      "status": "verified"
++    },
++    {
++      "language": "ko",
++      "title": "Love Poem",
++      "artist": "IU",
++      "seconds": 258,
++      "album": "Love Poem - EP",
++      "reference": "https://music.apple.com/us/album/love-poem/1488300927?i=1488300934&uo=4",
++      "providers": [
++        {
++          "provider": "netease",
++          "status": "matched",
++          "candidate": {
++            "id": 1400436688,
++            "title": "Love poem",
++            "artist": "IU",
++            "seconds": 258,
++            "aliases": [
++              "情诗"
++            ],
++            "original_characters": 322
++          }
++        },
++        {
++          "provider": "qqmusic",
++          "status": "matched",
++          "candidate": {
++            "id": 330274559,
++            "title": "Love poem",
++            "artist": "IU",
++            "seconds": 258,
++            "aliases": [],
++            "original_characters": 335
++          }
++        }
++      ],
++      "independent_text_similarity": 0.9802,
++      "status": "verified"
++    },
++    {
++      "language": "fr",
++      "title": "Dernière danse",
++      "artist": "Indila",
++      "seconds": 213,
++      "album": "Mini World",
++      "reference": "https://music.apple.com/fr/album/derni%C3%A8re-danse/1440830382?i=1440830407&uo=4",
++      "providers": [
++        {
++          "provider": "netease",
++          "status": "matched",
++          "candidate": {
++            "id": 28279675,
++            "title": "Dernière danse",
++            "artist": "Indila",
++            "seconds": 213,
++            "aliases": [
++              "最后一支舞"
++            ],
++            "original_characters": 1050
++          }
++        },
++        {
++          "provider": "qqmusic",
++          "status": "request_error",
++          "error": "QQ search code 2001"
++        },
++        {
++          "provider": "kugou",
++          "status": "matched",
++          "candidate": {
++            "id": "737010583",
++            "title": "Dernière danse",
++            "artist": "Indila",
++            "seconds": 213,
++            "aliases": [],
++            "original_characters": 1108
++          }
++        }
++      ],
++      "independent_text_similarity": 0.9694,
++      "status": "verified"
++    },
++    {
++      "language": "es",
++      "title": "La Camisa Negra",
++      "artist": "Juanes",
++      "seconds": 217,
++      "album": "Mi Sangre - Tour Edition / 2005",
++      "reference": "https://music.apple.com/mx/album/la-camisa-negra/1492138264?i=1492138460&uo=4",
++      "providers": [
++        {
++          "provider": "netease",
++          "status": "matched",
++          "candidate": {
++            "id": 18637632,
++            "title": "La Camisa Negra",
++            "artist": "Juanes",
++            "seconds": 216,
++            "aliases": [
++              "黑色衬衣"
++            ],
++            "original_characters": 1281
++          }
++        },
++        {
++          "provider": "qqmusic",
++          "status": "request_error",
++          "error": "QQ search code 2001"
++        },
++        {
++          "provider": "kugou",
++          "status": "matched",
++          "candidate": {
++            "id": "823215115",
++            "title": "La Camisa Negra",
++            "artist": "Juanes",
++            "seconds": 216,
++            "aliases": [],
++            "original_characters": 1281
++          }
++        }
++      ],
++      "independent_text_similarity": 1.0,
++      "status": "verified"
++    }
++  ],
++  "meme_regression_rejected": true,
++  "strategy": "Simplified Chinese search, reuse confirmed catalogue spelling, infer mixed duration unit; LRCLIB is diagnostic reference only"
++}
+\ No newline at end of file
+diff --git a/scripts/audit-selective-lyrics.py b/scripts/audit-selective-lyrics.py
+index 6680e8646b7ab32d2411d1c578745ce207f8f68c..14312ad2ec3723db6ba7c608c76c88c7869b3b2d 100644
+--- a/scripts/audit-selective-lyrics.py
++++ b/scripts/audit-selective-lyrics.py
+@@ -19,15 +19,18 @@ spec = importlib.util.spec_from_file_location('catalogue', ROOT/'scripts/probe-l
+ catalogue = importlib.util.module_from_spec(spec)
+ spec.loader.exec_module(catalogue)
+ 
+-def normalized(s):
+-    value = unicodedata.normalize('NFKC', s or '').casefold()
++def search_text(s):
++    value = unicodedata.normalize('NFKC', s or '')
+     if any('\u3400' <= c <= '\u9fff' for c in value):
+         # The Windows-native equivalent of the production Traditional-Simplified transform.
+         fn = ctypes.windll.kernel32.LCMapStringEx
+         out = ctypes.create_unicode_buffer(len(value)*3+1)
+         count = fn('zh-CN', 0x02000000, value, len(value), out, len(out), None, None, 0)
+         if count: value = out.value
+-    return ''.join(c for c in value if c.isalnum())
++    return value
++
++def normalized(s):
++    return ''.join(c for c in search_text(s).casefold() if c.isalnum())
+ 
+ def title_match(a,b):
+     ca,cb = catalogue.title_core(a),catalogue.title_core(b)
+@@ -61,8 +64,9 @@ def apple(title,artist,country):
+                         album=row.get('collectionName'),reference=row.get('trackViewUrl'))
+     raise ValueError('Apple reference recording not found')
+ 
+-def search(track,provider):
++def search(track,provider,strategy=False):
+     title,artist,seconds=track['title'],track['artist'],track['seconds']
++    if strategy:title,artist=search_text(title),search_text(artist)
+     lead=catalogue.SEP.split(artist)[0]
+     if provider=='netease':
+         root=catalogue.get('https://music.163.com/api/search/get',s=catalogue.title_core(title)+' '+lead,type=1,limit=12)
+@@ -84,7 +88,10 @@ def search(track,provider):
+         root=catalogue.get('https://krcs.kugou.com/search',ver=1,man='yes',client='mobi',hash='',album_audio_id='',
+                            keyword=lead+' - '+catalogue.title_core(title),duration=seconds*1000)
+         if root.get('status')!=200:raise ValueError('KuGou search status '+str(root.get('status')))
+-        rows=[dict(id=r.get('id'),title=r.get('song',''),artist=r.get('singer',''),seconds=r.get('duration',0)//1000,
++        def duration(raw):
++            if strategy:return raw if abs(raw-seconds)<abs(raw//1000-seconds) else raw//1000
++            return raw//1000
++        rows=[dict(id=r.get('id'),title=r.get('song',''),artist=r.get('singer',''),seconds=duration(r.get('duration',0)),
+                    aliases=[],accesskey=r.get('accesskey')) for r in root.get('candidates',[])]
+         slack=8
+     fitting=[r for r in rows if any(title_match(t,title) for t in [r['title']]+r['aliases']) and
+@@ -119,7 +126,8 @@ samples=[
+ 
+ if __name__=='__main__':
+     out=ROOT/'docs/lyrics-live-audit-2026-10-18.json'
+-    previous=json.loads(out.read_text(encoding='utf-8')) if '--retry-unverified' in sys.argv and out.exists() else {'tracks':[]}
++    strategy='--strategy-check' in sys.argv
++    previous=json.loads(out.read_text(encoding='utf-8')) if ('--retry-unverified' in sys.argv or strategy) and out.exists() else {'tracks':[]}
+     kept={(t['language'],normalized(t['title'])):t for t in previous['tracks'] if t['status']=='verified' or '--add-only' in sys.argv}
+     results=[]
+     for language,title,artist,country,seconds in samples:
+@@ -132,11 +140,23 @@ if __name__=='__main__':
+             matches=[]; providers=[]
+             for provider in ('netease','qqmusic','kugou'):
+                 try:
+-                    candidate=search(track,provider)
++                    lookup=dict(track)
++                    if strategy and matches:
++                        lookup.update(title=matches[0]['title'],artist=matches[0]['artist'])
++                    candidate=search(lookup,provider,strategy)
+                     if candidate:matches.append(candidate);providers.append({'provider':provider,'status':'matched','candidate':{k:v for k,v in candidate.items() if k!='text'}})
+                     else:providers.append({'provider':provider,'status':'no_match'})
+                 except Exception as exc:providers.append({'provider':provider,'status':'request_error','error':str(exc)[:150]})
+                 if len(matches)==2:break
++            # Independent reference only for this diagnostic experiment, not a new production fallback.
++            if strategy and len(matches)==1:
++                try:
++                    row=catalogue.get('https://lrclib.net/api/get',track_name=track['title'],artist_name=track['artist'],duration=track['seconds'])
++                    text=lyric_text(row.get('syncedLyrics',''))
++                    if title_match(row.get('trackName',''),track['title']) and artist_score(row.get('artistName',''),track['artist']) and abs(row.get('duration',0)-track['seconds'])<=3 and len(text)>=40:
++                        candidate=dict(id=row['id'],title=row['trackName'],artist=row['artistName'],seconds=row['duration'],text=text,original_characters=len(text))
++                        matches.append(candidate);providers.append({'provider':'lrclib-diagnostic-reference','status':'matched','candidate':{k:v for k,v in candidate.items() if k!='text'}})
++                except Exception as exc:providers.append({'provider':'lrclib-diagnostic-reference','status':'request_error','error':str(exc)[:150]})
+             track['providers']=providers
+             if len(matches)==2:
+                 ratio=difflib.SequenceMatcher(None,matches[0]['text'],matches[1]['text'],autojunk=False).ratio()
+@@ -148,6 +168,8 @@ if __name__=='__main__':
+         print(language,title,track['status'],track.get('independent_text_similarity',''),flush=True)
+     report={'captured_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'scope':'12 recordings, 6 languages, metadata replay and independent original-text comparison; no audio listening or device validation',
+             'tracks':results,'meme_regression_rejected':not title_match('Animals (金坷垃)','Animals')}
+-    out=ROOT/'docs/lyrics-live-audit-2026-10-18.json'
++    if strategy:
++        out=ROOT/'docs/lyrics-live-audit-strategy-2026-10-18.json'
++        report['strategy']='Simplified Chinese search, reuse confirmed catalogue spelling, infer mixed duration unit; LRCLIB is diagnostic reference only'
+     out.write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
+     print('REPORT',out,flush=True)
+diff --git a/scripts/test-lyrics-identity.py b/scripts/test-lyrics-identity.py
+index 6eee544c52814cdbc7c8178a8b41abb3aeb3407b..2e753d4e678158e1e07d003b5eef6b50e55cd538 100644
+--- a/scripts/test-lyrics-identity.py
++++ b/scripts/test-lyrics-identity.py
+@@ -77,6 +77,12 @@ int main(void) {
+         check(!SGLyricsTitleMatches(@"Animals（金坷垃）", @"Animals"), @"full-width qualifier rejected");
+         check(SGLyricsTitleMatches(@"鴻門宴", @"鸿门宴"), @"traditional and simplified song title");
+         check(SGLyricsArtistMatchCount(@"李荣浩", @"李榮浩") == 1, @"traditional and simplified artist");
++        check([SGLyricsSearchText(@"郭頂 - 水星記") isEqualToString:@"郭顶 - 水星记"], @"domestic query uses simplified Chinese");
++        check([SGLyricsSearchText(@"IU - Love poem") isEqualToString:@"IU - Love poem"], @"catalogue casing retained in search");
++        check(SGLyricsDurationSeconds(@274, 274) == 274, @"KuGou seconds are not divided twice");
++        check(SGLyricsDurationSeconds(@274000, 274) == 274, @"KuGou milliseconds normalized");
++        check(SGLyricsDurationSeconds(@258264, 258) == 258, @"KuGou millisecond precision");
++        check(SGLyricsDurationSeconds(@286, 274) == 286, @"alternate recording stays outside tolerance");
+         SGLyricsQuery *animal = [SGLyricsQuery new];
+         animal.title = @"Animals"; animal.artist = @"Maroon 5"; animal.seconds = 231;
+         check(SGLyricsMetadataConfident(@"Animals", @"Maroon 5", 231, 6, animal), @"exact metadata allows direct use without extra fallback");
+diff --git a/tweak/Sources/Shared/LyricsSources/KuGou.m b/tweak/Sources/Shared/LyricsSources/KuGou.m
+index 5577c9b374444358d209ed2d7b0172d0ac34ac6a..48f718711814135927edcc102e0be215dc574f4a 100644
+--- a/tweak/Sources/Shared/LyricsSources/KuGou.m
++++ b/tweak/Sources/Shared/LyricsSources/KuGou.m
+@@ -5,16 +5,15 @@
+ #import <zlib.h>
+ 
+ static BOOL matches(NSDictionary *candidate, SGLyricsQuery *query) {
+-    NSInteger duration = [candidate[@"duration"] respondsToSelector:@selector(integerValue)]
+-        ? [candidate[@"duration"] integerValue] : 0;
+-    SGLyricsDiagnosticCandidate(@"kugou", query, candidate[@"song"], candidate[@"singer"], duration / 1000, 8, YES);
++    NSInteger duration = SGLyricsDurationSeconds(candidate[@"duration"], query.seconds);
++    SGLyricsDiagnosticCandidate(@"kugou", query, candidate[@"song"], candidate[@"singer"], duration, 8, YES);
+     if (![candidate[@"accesskey"] isKindOfClass:NSString.class]) SGLyricsLog(@"kugou: candidate has no usable lyric access key");
+     if (!([candidate[@"id"] isKindOfClass:NSString.class] || [candidate[@"id"] isKindOfClass:NSNumber.class]) ||
+         ![candidate[@"accesskey"] isKindOfClass:NSString.class] ||
+         !(SGLyricsTitleMatches(candidate[@"song"], query.title) || SGLyricsTranslatedTitleCandidate(candidate[@"song"], query))) return NO;
+     if (!SGLyricsArtistMatchCount(candidate[@"singer"], query.artist) &&
+         !(duration > 0 && query.seconds > 0 && SGLyricsTitleEvidenceCandidate(candidate[@"song"], query))) return NO;
+-    return query.seconds <= 0 || duration <= 0 || labs(duration / 1000 - query.seconds) <= 8;
++    return query.seconds <= 0 || duration <= 0 || labs(duration - query.seconds) <= 8;
+ }
+ 
+ static NSString *decodeKRC(NSString *encoded) {
+@@ -150,7 +149,9 @@ static void deliverCandidate(NSDictionary *song, SGLyricsQuery *query, SGLyricsR
+             : (SGLyricsTitleMatches(song[@"song"], query.title) && SGLyricsArtistMatchCount(song[@"singer"], query.artist)));
+         dispatch_async(dispatch_get_main_queue(), ^{
+             SGLyricsLog(@"kugou: candidate %@ original-text evidence %@", song[@"id"], verified ? @"accepted" : @"rejected");
+-            result.metadataVerified = SGLyricsMetadataConfident(song[@"song"], song[@"singer"], [song[@"duration"] integerValue] / 1000, 8, query);
++            result.title = song[@"song"]; result.artist = song[@"singer"];
++            result.seconds = SGLyricsDurationSeconds(song[@"duration"], query.seconds);
++            result.metadataVerified = SGLyricsMetadataConfident(result.title, result.artist, result.seconds, 8, query);
+             done(verified ? result : nil);
+         });
+     });
+@@ -218,9 +219,8 @@ static void tryCandidates(NSArray<NSDictionary *> *songs, NSUInteger index, SGLy
+ 
+ static void searchAt(SGLyricsQuery *query, NSUInteger attempt, void (^done)(SGLyricsResult *)) {
+     if (!query.title.length || !query.artist.length) { done(nil); return; }
+-    NSArray *artists = SGLyricsSearchArtists(query.artist);
+     if (attempt) { done(nil); return; }
+-    NSString *keyword = attempt ? artists[attempt - 1] : [NSString stringWithFormat:@"%@ - %@", SGLyricsLeadArtist(query.artist) ?: query.artist, SGLyricsSearchTitle(query.title)];
++    NSString *keyword = [NSString stringWithFormat:@"%@ - %@", SGLyricsSearchText(SGLyricsLeadArtist(query.artist) ?: query.artist), SGLyricsSearchText(SGLyricsSearchTitle(query.title))];
+     NSURL *url = SGLyricsURL(@"https://krcs.kugou.com/search", @{
+         @"ver": @"1", @"man": @"yes", @"client": @"mobi", @"hash": @"", @"album_audio_id": @"",
+         @"keyword": keyword,
+@@ -235,8 +235,8 @@ static void searchAt(SGLyricsQuery *query, NSUInteger attempt, void (^done)(SGLy
+             NSUInteger aScore = SGLyricsArtistMatchCount(a[@"singer"], query.artist);
+             NSUInteger bScore = SGLyricsArtistMatchCount(b[@"singer"], query.artist);
+             if (aScore != bScore) return aScore > bScore ? NSOrderedAscending : NSOrderedDescending;
+-            NSInteger x = labs([a[@"duration"] integerValue] / 1000 - query.seconds);
+-            NSInteger y = labs([b[@"duration"] integerValue] / 1000 - query.seconds);
++            NSInteger x = labs(SGLyricsDurationSeconds(a[@"duration"], query.seconds) - query.seconds);
++            NSInteger y = labs(SGLyricsDurationSeconds(b[@"duration"], query.seconds) - query.seconds);
+             return x < y ? NSOrderedAscending : x > y ? NSOrderedDescending : NSOrderedSame;
+         }];
+         SGLyricsLog(@"kugou: %@ by %@ search status %ld, %lu candidates, %lu matching recordings",
+diff --git a/tweak/Sources/Shared/LyricsSources/LyricsMatching.m b/tweak/Sources/Shared/LyricsSources/LyricsMatching.m
+index eb0dd4f1d0c00b0a18c32b0609a506c29f09029d..dce64a6e1e122c34e8216c5422aef2e2d027aef3 100644
+--- a/tweak/Sources/Shared/LyricsSources/LyricsMatching.m
++++ b/tweak/Sources/Shared/LyricsSources/LyricsMatching.m
+@@ -14,6 +14,20 @@ static NSString *comparable(NSString *text) {
+     return out;
+ }
+ 
++NSString *SGLyricsSearchText(NSString *text) {
++    if (![text isKindOfClass:NSString.class]) return @"";
++    return SGLyricsContainsHan(text) ? [text stringByApplyingTransform:@"Traditional-Simplified" reverse:NO] : text;
++}
++
++NSInteger SGLyricsDurationSeconds(id value, NSInteger expected) {
++    NSInteger raw = [value respondsToSelector:@selector(integerValue)] ? [value integerValue] : 0;
++    if (raw <= 0) return 0;
++    // KuGou mixes seconds and milliseconds in the same endpoint. Interpret the unit,
++    // then keep the existing duration tolerance; do not loosen recording matching.
++    if (expected > 0) return labs(raw - expected) < labs(raw / 1000 - expected) ? raw : raw / 1000;
++    return raw < 10000 ? raw : raw / 1000;
++}
++
+ BOOL SGLyricsContainsHan(NSString *text) {
+     for (NSUInteger i = 0; i < text.length; i++) {
+         unichar c = [text characterAtIndex:i];
+diff --git a/tweak/Sources/Shared/LyricsSources/LyricsSources.h b/tweak/Sources/Shared/LyricsSources/LyricsSources.h
+index f4d100d6b5c32856ec99d269b29c5099bb40c141..a77a38384d3f8e39699a0d0e87b4ba2f1159e53b 100644
+--- a/tweak/Sources/Shared/LyricsSources/LyricsSources.h
++++ b/tweak/Sources/Shared/LyricsSources/LyricsSources.h
+@@ -168,6 +168,8 @@ void SGLyricsFetchChineseTranslations(NSString *trackID, NSArray<SGKaraokeLine *
+ // A bilingual local title may contain Spotify's title after a translated prefix.
+ BOOL SGLyricsTitleMatches(NSString *candidate, NSString *wanted);
+ NSString *SGLyricsSearchTitle(NSString *title);
++NSString *SGLyricsSearchText(NSString *text); // domestic search only; never changes display metadata
++NSInteger SGLyricsDurationSeconds(id value, NSInteger expected);
+ NSArray<NSString *> *SGLyricsSearchArtists(NSString *artists);
+ BOOL SGLyricsTitleEvidenceCandidate(NSString *candidate, SGLyricsQuery *query);
+ BOOL SGLyricsTranslatedTitleCandidate(NSString *candidate, SGLyricsQuery *query);
+diff --git a/tweak/Sources/Shared/LyricsSources/LyricsSources.m b/tweak/Sources/Shared/LyricsSources/LyricsSources.m
+index 958443143383174359a46a87d7d87eb4019e09b9..f2730e1b942434ac299673d1a459fd4c98b83797 100644
+--- a/tweak/Sources/Shared/LyricsSources/LyricsSources.m
++++ b/tweak/Sources/Shared/LyricsSources/LyricsSources.m
+@@ -652,6 +652,10 @@ static void step(SGLyricsWalk *walk) {
+                 return;
+             }
+             SGLyricsQuery *check = queryFor(query.trackID);
++            // Reuse the selected recording's catalogue spelling for the one cross-check.
++            // It can differ in case or script from Spotify; the visible metadata stays intact.
++            if (fresh.title.length) check.title = fresh.title;
++            if (fresh.artist.length) check.artist = fresh.artist;
+             check.referenceLines = fresh.karaokeLines;
+             SGLyricsLog(@"lyrics: %@ checking %@ against %@", query.trackID, provider.key, verifier.key);
+             verifier.ask(check, ^(SGLyricsResult *other) {
+diff --git a/tweak/Sources/Shared/LyricsSources/NetEase.m b/tweak/Sources/Shared/LyricsSources/NetEase.m
+index b7edb87743f12c7654c185125fe7017d9860796d..812081bc2bb83afa88a96646d02c4dd278da0091 100644
+--- a/tweak/Sources/Shared/LyricsSources/NetEase.m
++++ b/tweak/Sources/Shared/LyricsSources/NetEase.m
+@@ -102,9 +102,9 @@ static NSArray<SGKaraokeLine *> *linesFromYrc(NSString *yrc) {
+     return lines.count ? lines : nil;
+ }
+ 
+-static void tryLyrics(NSArray<NSDictionary *> *songs, NSUInteger index, SGLyricsQuery *query, void (^done)(NSArray<SGKaraokeLine *> *, BOOL)) {
++static void tryLyrics(NSArray<NSDictionary *> *songs, NSUInteger index, SGLyricsQuery *query, void (^done)(NSArray<SGKaraokeLine *> *, NSDictionary *)) {
+     if (index >= songs.count) {
+-        done(nil, NO);
++        done(nil, nil);
+         return;
+     }
+     NSDictionary *song = songs[index];
+@@ -135,7 +135,7 @@ static void tryLyrics(NSArray<NSDictionary *> *songs, NSUInteger index, SGLyrics
+             dispatch_async(dispatch_get_main_queue(), ^{
+                 SGLyricsLog(@"netease: song %@ has %lu lines (word timing %@), evidence %@", song[@"id"], (unsigned long)lines.count,
+                             SGKaraokeLinesTiming(lines) == SGKaraokeTimingWords ? @"yes" : @"no", verified ? @"accepted" : @"rejected");
+-                if (verified) done(lines, SGLyricsMetadataConfident(song[@"name"], artistsOf(song), [song[@"duration"] integerValue] / 1000, kLengthSlack, query));
++                if (verified) done(lines, song);
+                 else tryLyrics(songs, index + 1, query, done);
+             });
+         });
+@@ -145,8 +145,8 @@ static void tryLyrics(NSArray<NSDictionary *> *songs, NSUInteger index, SGLyrics
+ // A recording is only taken when its length is this close to the track's, so the words fall on the
+ // same beat as the recording Spotify is playing.
+ static void findSongsAt(SGLyricsQuery *query, BOOL requireTitle, NSUInteger attempt, void (^done)(NSArray<NSDictionary *> *ids)) {
+-    NSString *lead = SGLyricsLeadArtist(query.artist);
+-    NSString *title = SGLyricsSearchTitle(query.title);
++    NSString *lead = SGLyricsSearchText(SGLyricsLeadArtist(query.artist));
++    NSString *title = SGLyricsSearchText(SGLyricsSearchTitle(query.title));
+     NSInteger seconds = query.seconds;
+     if (!title.length || !lead.length || seconds <= 0) {
+         done(@[]);
+@@ -187,14 +187,16 @@ static void findSongsAt(SGLyricsQuery *query, BOOL requireTitle, NSUInteger atte
+ 
+ static void askAt(SGLyricsQuery *query, NSUInteger attempt, void (^done)(SGLyricsResult *result)) {
+     findSongsAt(query, YES, attempt, ^(NSArray<NSDictionary *> *ids) {
+-        tryLyrics(ids, 0, query, ^(NSArray<SGKaraokeLine *> *lines, BOOL confident) {
++        tryLyrics(ids, 0, query, ^(NSArray<SGKaraokeLine *> *lines, NSDictionary *recording) {
+             if (!lines.count) {
+                 done(nil);
+                 return;
+             }
+             SGLyricsResult *result = [SGLyricsResult new];
+             result.synced = YES;
+-            result.metadataVerified = confident;
++            result.title = recording[@"name"]; result.artist = artistsOf(recording);
++            result.seconds = [recording[@"duration"] integerValue] / 1000;
++            result.metadataVerified = SGLyricsMetadataConfident(result.title, result.artist, result.seconds, kLengthSlack, query);
+             result.wordTimed = SGKaraokeLinesTiming(lines) == SGKaraokeTimingWords;
+             result.karaokeLines = lines;
+             NSArray<NSNumber *> *starts;
+diff --git a/tweak/Sources/Shared/LyricsSources/QQMusic.m b/tweak/Sources/Shared/LyricsSources/QQMusic.m
+index 300efbe134610153366857b776532fe2a160f889..a442909d30e66ff2752de92cff4f0d20d1ba6de3 100644
+--- a/tweak/Sources/Shared/LyricsSources/QQMusic.m
++++ b/tweak/Sources/Shared/LyricsSources/QQMusic.m
+@@ -238,8 +238,8 @@ static void searchKeyword(NSString *keyword, void (^done)(NSArray<NSDictionary *
+ 
+ static void search(SGLyricsQuery *query, BOOL requireTitle, void (^done)(NSArray<NSDictionary *> *list)) {
+     if (!query.title.length || !query.artist.length) { done(@[]); return; }
+-    NSString *lead = SGLyricsLeadArtist(query.artist) ?: query.artist;
+-    NSString *title = SGLyricsSearchTitle(query.title);
++    NSString *lead = SGLyricsSearchText(SGLyricsLeadArtist(query.artist) ?: query.artist);
++    NSString *title = SGLyricsSearchText(SGLyricsSearchTitle(query.title));
+     searchKeyword([NSString stringWithFormat:@"%@ %@", title, lead], ^(NSArray<NSDictionary *> *list) {
+         if (!list) { done(@[]); return; }
+         for (NSDictionary *song in list) {
+@@ -301,6 +301,9 @@ static void tryLyrics(NSArray<NSDictionary *> *ids, NSUInteger index, SGLyricsQu
+             dispatch_async(dispatch_get_main_queue(), ^{
+                 SGLyricsLog(@"qqmusic: candidate %@ title '%@' recording evidence %@", song[@"id"], song[@"title"], verified ? @"accepted" : @"rejected");
+                 if (verified) {
++                    result.title = song[@"title"] ?: song[@"songname"];
++                    result.artist = singers(song);
++                    result.seconds = [song[@"interval"] integerValue];
+                     result.metadataVerified = SGLyricsMetadataConfident(song[@"title"] ?: song[@"songname"], singers(song),
+                         [song[@"interval"] integerValue], 6, query);
+                     done(result);
+-- 
+2.34.1
+

@@ -1,0 +1,26 @@
+From f875180c738061eb775007fdea8db260b797fb57 Mon Sep 17 00:00:00 2001
+From: Codex <codex@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 18:28:19 +0800
+Subject: [PATCH] test: upload built IPA as Actions artifact
+
+---
+ .github/workflows/build-ipa.yml | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/.github/workflows/build-ipa.yml b/.github/workflows/build-ipa.yml
+index 1b113a6d8927ae6e4c70b346fb9fbb76deb1d24e..f28c1250813bb1c9b9249f7812b640709d3b8e9d 100644
+--- a/.github/workflows/build-ipa.yml
++++ b/.github/workflows/build-ipa.yml
+@@ -41,3 +41,9 @@ jobs:
+           case "$(file --mime-type -b ipa/spotify.ipa)" in application/zip|application/x-ios-app) ;; *) echo "::error::Not an IPA"; exit 1 ;; esac
+ 
+       - run: make release
++
++      - uses: actions/upload-artifact@v5
++        with:
++          name: spoti-issue-144-test-ipa
++          path: out/*.ipa
++          if-no-files-found: error
+-- 
+2.34.1
+

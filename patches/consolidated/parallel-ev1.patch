@@ -1,0 +1,406 @@
+diff --git a/.github/workflows/build-ipa.yml b/.github/workflows/build-ipa.yml
+index 8d7bbd6b36c01d99b8f83320ab6c39c17d2f6694..bed03ddee303fe287ed9b2f580469a50c57ec09e 100644
+--- a/.github/workflows/build-ipa.yml
++++ b/.github/workflows/build-ipa.yml
+@@ -1,66 +1,77 @@
+-name: Build IPA from your own Spotify IPA
++name: EV1 then official spoti.pw Beta
+ 
+ on:
+   workflow_dispatch:
+     inputs:
+-      ipa_url:
+-        description: "Direct link to a decrypted Spotify IPA"
++      ev1_run_id:
++        description: Successful EV1 build run in ddyec/EeveeSpotifyReincarnated
+         required: true
+         type: string
+-      upload_method:
+-        description: "Where to put the result"
+-        default: artifacts
+-        type: choice
+-        options: [artifacts, filebin, both]
+ 
+-env:
+-  THEOS: ${{ github.workspace }}/theos
++permissions:
++  contents: read
++  actions: read
+ 
+ jobs:
+-  build:
++  patch:
+     runs-on: macos-latest
+     steps:
+-      - uses: actions/checkout@v5
+-
+-      - uses: levibostian/action-hide-sensitive-inputs@v1
+-
+-      - uses: maxim-lobanov/setup-xcode@v1
+-        with:
+-          xcode-version: latest-stable
+-
+-      - uses: actions/checkout@v5
++      - uses: actions/checkout@v4
++      - name: Check two-stage preservation and dependency handling
++        run: python3 scripts/test-ev1-chain.py
++      - uses: actions/setup-node@v4
+         with:
+-          repository: theos/theos
+-          path: theos
+-          submodules: recursive
++          node-version: '24'
+ 
+-      - name: Install tools
++      - name: Download the EV1 intermediate IPA
++        env:
++          GH_TOKEN: ${{ github.token }}
++          EV1_RUN_ID: ${{ inputs.ev1_run_id }}
+         run: |
+-          brew install make dpkg ldid
+-          python3 -m pip install --break-system-packages git+https://github.com/asdfzxcvbn/pyzule-rw.git
++          [[ "$EV1_RUN_ID" =~ ^[0-9]+$ ]]
++          gh run view "$EV1_RUN_ID" -R ddyec/EeveeSpotifyReincarnated --json conclusion,headBranch,headSha > ev1-run.json
++          python3 - <<'PY'
++          import json
++          run = json.load(open('ev1-run.json'))
++          assert run['conclusion'] == 'success', 'EV1 run must have succeeded'
++          assert run['headBranch'] == 'feat/ev1-spoti-companion-20261019', 'Wrong EV1 branch'
++          PY
++          gh run download "$EV1_RUN_ID" -R ddyec/EeveeSpotifyReincarnated -n EV1-IPA -D ev1
++          python3 - <<'PY'
++          from pathlib import Path
++          import shutil
++          ipas = list(Path('ev1').rglob('*.ipa'))
++          assert len(ipas) == 1, 'Expected one EV1 intermediate IPA'
++          shutil.copyfile(ipas[0], 'ev1.ipa')
++          PY
+ 
+-      - name: Download IPA
++      - name: Download official 1.0 Beta kit and patcher
++        env:
++          GH_TOKEN: ${{ github.token }}
+         run: |
+-          mkdir -p ipa
+-          curl -fsSL "${{ inputs.ipa_url }}" -o ipa/spotify.ipa
+-          case "$(file --mime-type -b ipa/spotify.ipa)" in application/zip|application/x-ios-app) ;; *) echo "::error::Not an IPA"; exit 1 ;; esac
++          gh release download v1.0.0-beta.1 -R skopevoj/spoti.pw -p '*-kit.zip' -O kit.zip
++          curl -fsSL https://chroma.pw/patcher.mjs -o patcher.mjs
++          python3 - <<'PY'
++          import json, plistlib, zipfile
++          with zipfile.ZipFile('kit.zip') as z:
++              kit = json.loads(z.read('kit.json'))
++          with zipfile.ZipFile('ev1.ipa') as z:
++              names = [n for n in z.namelist() if n.startswith('Payload/') and n.endswith('.app/Info.plist') and n.count('/') == 2]
++              assert len(names) == 1
++              version = plistlib.loads(z.read(names[0]))['CFBundleShortVersionString']
++          assert version in kit['spotifyVersions'], f'Official kit does not list Spotify {version}'
++          assert kit['version'] == '1.0.0-beta.1'
++          PY
+ 
+-      - run: make release
++      - name: Apply official Beta and enforce EV1 initialization first
++        run: |
++          node patcher.mjs ev1.ipa kit.zip patched
++          mkdir -p out
++          python3 scripts/ev1-chain.py ev1.ipa patched/chroma-1.0.0-beta.1.ipa out/EV1-spoti-1.0.0-beta.1.ipa
++          cp ev1-run.json out/
+ 
+-      - uses: actions/upload-artifact@v5
+-        if: inputs.upload_method != 'filebin'
++      - uses: actions/upload-artifact@v4
+         with:
+-          name: spoti.ipa
+-          path: out/*.ipa
++          name: EV1-spoti-official-beta-IPA
++          path: out/*
+           if-no-files-found: error
+-
+-      - name: Upload to filebin.net
+-        if: inputs.upload_method != 'artifacts'
+-        run: |
+-          BIN="spotifyglass-${{ github.run_id }}"
+-          echo "### filebin.net download" >> "$GITHUB_STEP_SUMMARY"
+-          for f in out/*.ipa; do
+-            curl -fsS -X POST -H "Content-Type: application/octet-stream" --data-binary "@$f" "https://filebin.net/$BIN/$(basename "$f")" >/dev/null
+-            echo "- https://filebin.net/$BIN/$(basename "$f")" >> "$GITHUB_STEP_SUMMARY"
+-          done
+-          echo "- _filebin deletes bins after a few days of inactivity, download promptly._" >> "$GITHUB_STEP_SUMMARY"
+diff --git a/docs/ev1-official-beta-pipeline.md b/docs/ev1-official-beta-pipeline.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..c1bd58e0e46f062fcfdf5cd48fb818fa427436d1
+--- /dev/null
++++ b/docs/ev1-official-beta-pipeline.md
+@@ -0,0 +1,31 @@
++# EV1 → official spoti.pw 1.0 Beta
++
++This branch adds packaging only. It does not compile the old public tag or bring
++in the prior custom lyrics branch. The official release kit supplies the actual
++1.0.0-beta.1 implementation, including QQ Music and KuGou.
++
++1. EEVEE branch: `ddyec/EeveeSpotifyReincarnated`,
++   `feat/ev1-spoti-companion-20261019`; run **Build IPA (NO PATCH)** with the
++   user's vanilla decrypted Spotify 9.1.90 URL. The artifact is `EV1-IPA`.
++2. On this branch run **EV1 then official spoti.pw Beta**, supplying that
++   successful EEVEE Action run ID. This downloads that exact intermediate IPA,
++   checks its provenance and kit-supported version, applies the official kit,
++   and uploads the final IPA and preservation report as an Actions artifact.
++
++The script verifies existing main-executable dependencies and compares EEVEE's
++binary/framework/resource bytes before and after patching. It adds a strong
++dependency from spotifyglass to the existing EEVEE load path. This gives the
++initializer order an explicit dependency: EEVEE writes `lyricsSource=4` before
++Chroma's constructors cache their decision about the lyrics owner. Only Mach-O
++header padding is modified; the official dylib's section contents are checked
++unchanged. If there is no padding, resources are missing, or dependencies were
++removed, packaging stops.
++
++The official Chroma kit still warns about EEVEE coexistence. Retaining the warning
++is appropriate until device acceptance. A build and preservation report do not
++prove that all remaining private-class hooks are compatible at runtime.
++
++Sign the completed IPA with the user's normal signer, then test playback/login,
++one appearance owner, QQ-only and QQ-first lyrics, track changes and a relaunch
++after old settings have been imported. Use the EV1 intermediate IPA to isolate
++EEVEE behavior from the combined app if a regression appears.
+diff --git a/scripts/ev1-chain.py b/scripts/ev1-chain.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..ad270f4c46af68b0d04718af5c7bce05154eddbe
+--- /dev/null
++++ b/scripts/ev1-chain.py
+@@ -0,0 +1,155 @@
++"""Validate EV1 preservation and establish an explicit initializer dependency.
++
++The official kit/patcher stays intact. After patching, add a strong Mach-O
++dependency from spotifyglass to the existing EV1 dylib. This makes EEVEE set the
++raw lyricsSource key before Chroma constructors inspect it, independent of the
++main executable's otherwise unspecified ordering between sibling dylibs.
++"""
++import argparse
++import json
++from pathlib import Path
++import plistlib
++import struct
++import zipfile
++
++DYLIBS = {0xC, 0x80000018, 0x8000001F, 0x80000023}
++
++
++def macho(data):
++    if len(data) < 32 or struct.unpack_from('<I', data)[0] != 0xFEEDFACF:
++        raise ValueError('Expected a thin 64-bit Mach-O')
++    count, size = struct.unpack_from('<II', data, 16)
++    end = 32 + size
++    if end > len(data):
++        raise ValueError('Truncated load commands')
++    off, libs, sections = 32, [], []
++    for _ in range(count):
++        cmd, length = struct.unpack_from('<II', data, off)
++        if length < 8 or off + length > end:
++            raise ValueError('Invalid load command')
++        if cmd in DYLIBS:
++            nameoff = struct.unpack_from('<I', data, off + 8)[0]
++            if not 8 <= nameoff < length:
++                raise ValueError('Invalid dylib name offset')
++            name = data[off + nameoff:off + length].split(b'\0')[0].decode()
++            libs.append((cmd, name))
++        if cmd == 0x19:
++            nsects = struct.unpack_from('<I', data, off + 64)[0]
++            if 72 + 80 * nsects > length:
++                raise ValueError('Truncated segment sections')
++            for i in range(nsects):
++                pos = off + 72 + i * 80
++                name = data[pos:pos + 16].split(b'\0')[0].decode()
++                segment = data[pos + 16:pos + 32].split(b'\0')[0].decode()
++                nbytes, offset = struct.unpack_from('<QI', data, pos + 40)
++                flags = struct.unpack_from('<I', data, pos + 64)[0]
++                # Zero-fill sections have no on-disk contents.
++                if offset and (flags & 0xFF) not in (1, 0xC, 0x12):
++                    if offset + nbytes > len(data):
++                        raise ValueError('Truncated section contents')
++                    sections.append((offset, nbytes, segment, name))
++        off += length
++    if off != end:
++        raise ValueError('Load-command count/size mismatch')
++    return count, size, libs, sections
++
++
++def add_dependency(data, dependency):
++    count, size, libs, sections = macho(data)
++    if not any(segment == '__TEXT' and name == '__text' for _, _, segment, name in sections):
++        raise ValueError('No executable text section')
++    existing = [cmd for cmd, name in libs if name == dependency]
++    if existing:
++        if 0xC not in existing:
++            raise ValueError('EEVEE dependency must be a strong LC_LOAD_DYLIB')
++        return data
++    name = dependency.encode() + b'\0'
++    length = (24 + len(name) + 7) & ~7
++    start = 32 + size
++    first = min((offset for offset, _, _, _ in sections), default=len(data))
++    if start + length > first or any(data[start:start + length]):
++        raise ValueError('No header padding for explicit EEVEE initializer dependency')
++    command = struct.pack('<6I', 0xC, length, 24, 2, 0, 0) + name
++    command = command.ljust(length, b'\0')
++    result = bytearray(data)
++    result[start:start + length] = command
++    struct.pack_into('<II', result, 16, count + 1, size + length)
++    # Only Mach-O header padding changes; executable sections remain identical.
++    for offset, nbytes, _, _ in sections:
++        if result[offset:offset + nbytes] != data[offset:offset + nbytes]:
++            raise ValueError('Unexpected section modification')
++    return bytes(result)
++
++
++def host(z):
++    names = z.namelist()
++    if len(names) != len(set(names)):
++        raise ValueError('Duplicate ZIP entries')
++    candidates = [n for n in names if n.startswith('Payload/') and
++                  n.endswith('.app/Info.plist') and n.count('/') == 2]
++    if len(candidates) != 1:
++        raise ValueError('Expected exactly one host app')
++    info = plistlib.loads(z.read(candidates[0]))
++    return candidates[0][:-len('Info.plist')], info
++
++
++def chain(before_path, after_path, output_path):
++    with zipfile.ZipFile(before_path) as before, zipfile.ZipFile(after_path) as after:
++        app, info = host(before)
++        out_app, out_info = host(after)
++        version = info['CFBundleShortVersionString']
++        if app != out_app or out_info['CFBundleShortVersionString'] != version:
++            raise ValueError('Host app/version changed during patching')
++        exe = app + info['CFBundleExecutable']
++        before_loads = macho(before.read(exe))[2]
++        loads = macho(after.read(exe))[2]
++        for entry in before_loads:
++            if entry not in loads:
++                raise ValueError('An existing dependency was removed')
++        deps = [name for _, name in before_loads if name.endswith('/EeveeSpotify.dylib')]
++        if len(deps) != 1:
++            raise ValueError('EV1 is not injected exactly once')
++        dependency = deps[0]
++        if any('spotifyglass' in name.lower() for name in before.namelist()):
++            raise ValueError('Stage-one input already contains spoti.pw')
++        protected = [n for n in before.namelist() if
++                     'EeveeSpotify.dylib' in n or 'EeveeSwiftProtobuf.framework/' in n
++                     or 'EeveeSpotify.bundle/' in n]
++        if not any(n.endswith('/EeveeSpotify.dylib') for n in protected):
++            raise ValueError('EV1 dylib missing')
++        if not any('EeveeSwiftProtobuf.framework/' in n for n in protected):
++            raise ValueError('EV1 protobuf framework missing')
++        if not any('EeveeSpotify.bundle/' in n for n in protected):
++            raise ValueError('EV1 resource bundle missing')
++        for name in protected:
++            if name not in after.namelist() or before.read(name) != after.read(name):
++                raise ValueError('EEVEE content was lost or changed: ' + name)
++        dylib = app + 'Frameworks/spotifyglass.dylib'
++        original = after.read(dylib)
++        fixed = add_dependency(original, dependency)
++        output = Path(output_path)
++        with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=6) as z:
++            for entry in after.infolist():
++                z.writestr(entry, fixed if entry.filename == dylib else after.read(entry))
++        # Verify the bytes actually written, rather than only the in-memory edit.
++        with zipfile.ZipFile(output) as z:
++            if (0xC, dependency) not in macho(z.read(dylib))[2]:
++                raise ValueError('Final IPA has no strong initializer dependency')
++            for name in protected:
++                if before.read(name) != z.read(name):
++                    raise ValueError('Final EV1 preservation failed: ' + name)
++        report = {'spotify': version, 'dependency': dependency,
++                  'eevee_files_preserved': len(protected),
++                  'official_chroma_sections_unchanged': True,
++                  'runtime_verified': False}
++        output.with_suffix('.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
++        print(json.dumps(report, indent=2))
++
++
++if __name__ == '__main__':
++    parser = argparse.ArgumentParser()
++    parser.add_argument('ev1')
++    parser.add_argument('patched')
++    parser.add_argument('output')
++    args = parser.parse_args()
++    chain(args.ev1, args.patched, args.output)
+diff --git a/scripts/test-ev1-chain.py b/scripts/test-ev1-chain.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..3ec514ba90daa3bc78d5c6400e0b5941b126b351
+--- /dev/null
++++ b/scripts/test-ev1-chain.py
+@@ -0,0 +1,74 @@
++import importlib.util
++from pathlib import Path
++import plistlib
++import struct
++import tempfile
++import zipfile
++
++spec = importlib.util.spec_from_file_location('chain', Path(__file__).with_name('ev1-chain.py'))
++module = importlib.util.module_from_spec(spec)
++spec.loader.exec_module(module)
++
++
++def binary(dependencies=(), padding=True):
++    segment = bytearray(152)
++    struct.pack_into('<II', segment, 0, 0x19, 152)
++    segment[8:14] = b'__TEXT'
++    struct.pack_into('<I', segment, 64, 1)
++    segment[72:78] = b'__text'
++    segment[88:94] = b'__TEXT'
++    struct.pack_into('<QI', segment, 112, 16, 512)
++    commands = [segment]
++    for dependency in dependencies:
++        name = dependency.encode() + b'\0'
++        size = (24 + len(name) + 7) & ~7
++        commands.append((struct.pack('<6I', 0xC, size, 24, 2, 0, 0) + name).ljust(size, b'\0'))
++    size = sum(map(len, commands))
++    result = bytearray(1024)
++    struct.pack_into('<8I', result, 0, 0xFEEDFACF, 0x100000C, 0, 6, len(commands), size, 0, 0)
++    result[32:32 + size] = b''.join(commands)
++    result[512:528] = b'official-code!!!?'
++    if not padding:
++        result[32 + size] = 1
++    return bytes(result)
++
++
++dependency = '@executable_path/Frameworks/EeveeSpotify.dylib'
++original = binary()
++fixed = module.add_dependency(original, dependency)
++assert module.macho(fixed)[2] == [(0xC, dependency)]
++assert fixed[512:] == original[512:]
++assert module.add_dependency(fixed, dependency) == fixed
++try:
++    module.add_dependency(binary(padding=False), dependency)
++    raise AssertionError('overwrote occupied header padding')
++except ValueError:
++    pass
++
++with tempfile.TemporaryDirectory() as temp:
++    temp = Path(temp)
++    app = 'Payload/Spotify.app/'
++    info = plistlib.dumps({'CFBundleExecutable': 'Spotify', 'CFBundleShortVersionString': '9.1.90'})
++    contents = {app + 'Info.plist': info, app + 'Spotify': binary([dependency]),
++                app + 'Frameworks/EeveeSpotify.dylib': b'EV1-data',
++                app + 'Frameworks/EeveeSwiftProtobuf.framework/EeveeSwiftProtobuf': b'protobuf',
++                app + 'EeveeSpotify.bundle/resource': b'resource'}
++    for filename, entries in [('ev1.ipa', contents), ('patched.ipa', {
++        **contents, app + 'Spotify': binary([dependency, '@rpath/spotifyglass.dylib']),
++        app + 'Frameworks/spotifyglass.dylib': original})]:
++        with zipfile.ZipFile(temp / filename, 'w') as z:
++            for name, data in entries.items():
++                z.writestr(name, data)
++    module.chain(temp / 'ev1.ipa', temp / 'patched.ipa', temp / 'combined.ipa')
++    # Lost EEVEE resources must fail closed.
++    with zipfile.ZipFile(temp / 'bad.ipa', 'w') as z:
++        for name, data in contents.items():
++            if not name.endswith('/resource'):
++                z.writestr(name, data)
++        z.writestr(app + 'Frameworks/spotifyglass.dylib', original)
++    try:
++        module.chain(temp / 'ev1.ipa', temp / 'bad.ipa', temp / 'bad-out.ipa')
++        raise AssertionError('accepted lost EV1 resources')
++    except ValueError:
++        pass
++print('PASS: initializer dependency, unchanged code sections, archive preservation, rejection of missing resources')

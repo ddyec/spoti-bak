@@ -1,0 +1,6 @@
+tree d6e1e2da656736562f9f49c5312198c15095778c
+parent bffa73667f86bca888bbe85295503501a4504f7b
+author Codex <codex@openai.com> 1792757460 +0000
+committer Codex <codex@openai.com> 1792757460 +0000
+
+fix: preserve artist names in localized selection actions

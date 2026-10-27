@@ -1,0 +1,167 @@
+From 78ee51343c64ea812850065d5f556bd5f8086f41 Mon Sep 17 00:00:00 2001
+From: ddyec <89333385+ddyec@users.noreply.github.com>
+Date: Wed, 21 Oct 2026 04:37:25 +0000
+Subject: [PATCH] fix: respect lyric edge anchors and restore continuous upward
+ transitions
+
+---
+ docs/performance-followup-20261021.md         | 16 +++++++-
+ scripts/test-lyrics-identity.py               | 35 ++++++++++++++++++
+ .../Sources/Redesigned/Player/PlayerPreview.x | 37 +++++++++++--------
+ 3 files changed, 70 insertions(+), 18 deletions(-)
+
+diff --git a/docs/performance-followup-20261021.md b/docs/performance-followup-20261021.md
+index b3c70b8865f59e6dcd2452d8b782b7283e87a832..f03eeafb31ed3c56d8c76044d1770d8339996b29 100644
+--- a/docs/performance-followup-20261021.md
++++ b/docs/performance-followup-20261021.md
+@@ -19,8 +19,8 @@ or visually verified motion is made without the owner's next device run.
+ 
+ - Preserve anchoring under the scaled artwork. Follow its presentation geometry during a
+   bounded spring interval, without repeatedly reflowing text mid-animation.
+-- Clip lyric groups to the text band; let the outgoing group finish its brief upward fade
+-  before admitting the incoming group. Superseded completions cannot restart old transitions.
++- Clip lyric groups to the text band and move outgoing/incoming groups upward together,
++  separated by a complete group height plus spacing. Superseded completions cannot restart old transitions.
+ - Full lyrics use a four-per-second metadata/position check while paused, static or awaiting
+   data. High-frequency rendering resumes for timed playback and transient interactions;
+   app inactivity and removal from the window stop both clocks.
+@@ -54,3 +54,15 @@ failed the existing CoreUI catalog validation (159 seconds); the shipped IPA the
+ the original icon. The build-only follow-up caches this unsupported outcome for the exact
+ source assets, templates and Xcode, so later runs can avoid the repeated failed work. An
+ asset/template/tool change invalidates it and retries; successful output is also cached.
++
++## Preview alignment regression fix
++
++The owner’s next screenshot revealed a half-width shift and right-side truncation. Karaoke line
++views use a leading/trailing layer anchor (x=0 or x=1), but the preview follower positioned them
++as though that anchor were centered. Positioning now accounts for the actual anchor point,
++without setting frame under an active transform. Sequential lines use the same simultaneous
++upward movement throughout the 280 ms transition; no root crossfade replaces that motion.
++Regression checks reconstruct the rendered bounds for left/center/right anchors at playing
++and paused widths, and verify that mixed single/multi-line groups cannot intersect throughout
++the upward transition. A mutation using the previous center assumption fails these checks.
++Visual acceptance remains on the owner’s device; no simulator or recording is used.
+diff --git a/scripts/test-lyrics-identity.py b/scripts/test-lyrics-identity.py
+index d46f52a7278482121a274d5086e1f5c9d75d15d0..e3156282a8c0f283c7b0b0c055a0f53eb8f697b3 100644
+--- a/scripts/test-lyrics-identity.py
++++ b/scripts/test-lyrics-identity.py
+@@ -81,6 +81,41 @@ int main(void) {
+             check(fabs(CGRectGetMidY(viewport) - CGRectGetMidY(bilingualRect)) < 0.001, @"short and bilingual lines keep the same anchor");
+             check(viewport.size.height <= groupHeight, @"empty artwork gap cannot expose an extra lyric group");
+         }
++        // Reconstruct the visible rectangle from the layer's actual edge anchor. The previous
++        // outer-frame-only checks missed a half-width displacement inside that rectangle.
++        for (NSNumber *width in @[@298, @354, @425]) {
++            CGSize viewport = CGSizeMake(width.doubleValue, 88);
++            for (NSNumber *edge in @[@0, @0.5, @1]) {
++                CGPoint anchor = CGPointMake(edge.doubleValue, 0.5);
++                for (NSNumber *height in @[@28, @56, @84, @140]) {
++                    CGSize text = CGSizeMake(viewport.width, height.doubleValue);
++                    CGPoint position = sgrPreviewLinePosition(viewport, text, anchor);
++                    CGRect rendered = CGRectMake(position.x - anchor.x * text.width,
++                        position.y - anchor.y * text.height, text.width, text.height);
++                    check(fabs(CGRectGetMinX(rendered)) < 0.001 &&
++                        fabs(CGRectGetMaxX(rendered) - viewport.width) < 0.001,
++                        @"left, centered and right anchored lyrics retain their entire horizontal width");
++                    check(CGRectGetMinY(rendered) >= 0 && (text.height > viewport.height ||
++                        fabs(CGRectGetMidY(rendered) - viewport.height / 2) < 0.001),
++                        @"short and translated lyric groups stay vertically placed inside their viewport");
++                    for (NSNumber *nextHeight in @[@28, @56, @84, @140]) {
++                        CGSize next = CGSizeMake(viewport.width, nextHeight.doubleValue);
++                        CGPoint nextPosition = sgrPreviewLinePosition(viewport, next, anchor);
++                        CGFloat oldTop = CGRectGetMinY(rendered), newTop = nextPosition.y - anchor.y * next.height;
++                        CGFloat travel = sgrPreviewRollDistance(viewport.height, text.height, next.height);
++                        check(newTop + travel >= viewport.height && oldTop + text.height - travel <= 0,
++                            @"incoming starts below clip and outgoing finishes above clip");
++                        for (NSUInteger frame = 0; frame <= 60; frame++) {
++                            CGFloat progress = frame / 60.0;
++                            CGFloat oldBottom = oldTop + text.height - travel * progress;
++                            CGFloat newStart = newTop + travel * (1 - progress);
++                            check(newStart - oldBottom >= 7.999,
++                                @"simultaneous upward transition never intersects lyric groups at any progress");
++                        }
++                    }
++                }
++            }
++        }
+         check(sgrPreviewShouldRoll(YES, 2, 3, 250, NO), @"sequential lyric change rolls upward");
+         check(!sgrPreviewShouldRoll(YES, 3, 2, 250, NO) && !sgrPreviewShouldRoll(YES, 2, 5, 250, NO), @"seeks do not replay intermediate lines");
+         check(!sgrPreviewShouldRoll(NO, 2, 3, 250, NO) && !sgrPreviewShouldRoll(YES, 2, 3, 250, YES), @"track change and reduced motion do not animate");
+diff --git a/tweak/Sources/Redesigned/Player/PlayerPreview.x b/tweak/Sources/Redesigned/Player/PlayerPreview.x
+index 4b79d06851d2d07d6e89cce90102f95bf3f68c6c..04f2d849b83251bda902fc4c4e2488c606cb6fa6 100644
+--- a/tweak/Sources/Redesigned/Player/PlayerPreview.x
++++ b/tweak/Sources/Redesigned/Player/PlayerPreview.x
+@@ -49,6 +49,17 @@ static CGRect sgrPreviewViewport(CGRect gap, CGFloat textHeight) {
+     return CGRectMake(gap.origin.x, gap.origin.y + (gap.size.height - height) / 2, gap.size.width, height);
+ }
+ 
++// Karaoke line views anchor at their leading/trailing edge, not at (0.5, 0.5).
++// Position the layer's anchor so the untransformed text starts at x=0 in the viewport.
++static CGPoint sgrPreviewLinePosition(CGSize viewport, CGSize text, CGPoint anchor) {
++    return CGPointMake(text.width * anchor.x,
++        MAX(0, (viewport.height - text.height) / 2) + text.height * anchor.y);
++}
++
++static CGFloat sgrPreviewRollDistance(CGFloat viewportHeight, CGFloat outgoingHeight, CGFloat incomingHeight) {
++    return MAX(viewportHeight, MAX(outgoingHeight, incomingHeight)) + 8;
++}
++
+ static BOOL sgrPreviewShouldRoll(BOOL sameTrack, NSInteger oldIndex, NSInteger newIndex,
+                                  NSInteger elapsed, BOOL reducedMotion) {
+     return sameTrack && oldIndex >= 0 && newIndex == oldIndex + 1 &&
+@@ -131,7 +142,7 @@ static BOOL sgrShowing(UIView *view, UIView *host) {
+         UIView *text = i == 0 ? self.lineView : self.retiring;
+         if (!text) continue;
+         // Changing frame while a roll transform is active produces undefined UIKit geometry.
+-        text.center = CGPointMake(text.bounds.size.width / 2, MAX(self.bounds.size.height, text.bounds.size.height) / 2);
++        text.layer.position = sgrPreviewLinePosition(self.bounds.size, text.bounds.size, text.layer.anchorPoint);
+     }
+     self.scroll.contentSize = CGSizeMake(self.bounds.size.width, MAX(self.bounds.size.height, height));
+ }
+@@ -228,34 +239,28 @@ static BOOL sgrShowing(UIView *view, UIView *host) {
+         [self updateGeometry];
+         if (rolls && outgoing) {
+             UIView *incoming = self.lineView;
+-            // Exit, then enter: two full multi-line groups never pass through each other.
+-            CGFloat travel = MIN(16, self.bounds.size.height / 3);
+-            incoming.alpha = 0;
+-            incoming.transform = CGAffineTransformMakeTranslation(0, travel);
++            // Both groups move upward on one timeline. Keep a full group plus breathing
++            // room between them, with their entry/exit outside the clipped text band.
+             self.retiring = outgoing;
+             [self updateGeometry];
++            CGFloat travel = sgrPreviewRollDistance(self.bounds.size.height,
++                outgoing.bounds.size.height, incoming.bounds.size.height);
++            incoming.transform = CGAffineTransformMakeTranslation(0, travel);
+             __weak SGRPlayerPreview *weakSelf = self;
+-            [UIView animateWithDuration:0.12 delay:0 options:UIViewAnimationOptionCurveEaseIn | UIViewAnimationOptionAllowUserInteraction
++            [UIView animateWithDuration:0.28 delay:0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionAllowUserInteraction
+                 animations:^{
+-                    outgoing.alpha = 0;
+                     outgoing.transform = CGAffineTransformMakeTranslation(0, -travel);
++                    incoming.transform = CGAffineTransformIdentity;
+                 } completion:^(BOOL finished) {
+                     [outgoing removeFromSuperview];
+                     SGRPlayerPreview *preview = weakSelf;
+                     if (!preview || preview.transitionID != transition) return;
+                     preview.retiring = nil;
+                     [preview updateGeometry];
+-                    [UIView animateWithDuration:0.16 delay:0 options:UIViewAnimationOptionCurveEaseOut | UIViewAnimationOptionAllowUserInteraction
+-                        animations:^{ incoming.alpha = 1; incoming.transform = CGAffineTransformIdentity; } completion:nil];
+                 }];
+-        } else {
+-            [outgoing removeFromSuperview];
+-            if (sameTrack && !UIAccessibilityIsReduceMotionEnabled()) {
+-                self.lineView.alpha = 0;
+-                [UIView animateWithDuration:0.16 animations:^{ self.lineView.alpha = 1; }];
+-            }
+-        }
++        } else [outgoing removeFromSuperview];
+     }
++
+     self.track = track; self.lineIndex = index; self.position = ms;
+     [self animateText];
+     [self updateGeometry];
+-- 
+2.34.1
+

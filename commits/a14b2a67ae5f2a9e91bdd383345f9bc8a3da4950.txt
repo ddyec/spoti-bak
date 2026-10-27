@@ -1,0 +1,6 @@
+tree 5575c1860fc157e67071ea4b855e4a82272bae3c
+parent 358d2a7aaeae9149903534a2fde217fc121df878
+author Codex <codex@users.noreply.github.com> 1790768250 +0800
+committer Codex <codex@users.noreply.github.com> 1790768250 +0800
+
+fix: show translations and wrap long player preview lyrics

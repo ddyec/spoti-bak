@@ -1,0 +1,6 @@
+tree b45ac8f1e8aa67e6b8735f757db43289ac6bab76
+parent 61b0de901f5844795a56b07a3ab88cb1b31c02ad
+author Codex <codex@users.noreply.github.com> 1790606516 +0800
+committer Codex <codex@users.noreply.github.com> 1790606516 +0800
+
+fix: align shifted lyric translations without borrowing adjacent lines
